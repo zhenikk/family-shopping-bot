@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from .categories import CATEGORIES, infer_category
 from .speech import SpeechError, transcribe
 from .store import DEFAULT_STORE, STORES, Store, parse_items
 from .telegram import Telegram, TelegramError
@@ -145,7 +146,8 @@ class ShoppingBot:
         for name, selected_store in items:
             existing = self.store.product_by_name(name)
             preferred = selected_store or (existing["preferred_store"] if existing else DEFAULT_STORE)
-            lines.append(f"• {name} — {preferred}")
+            category = existing["category"] if existing else infer_category(name)
+            lines.append(f"• {name} — {preferred} · {CATEGORIES.get(category, CATEGORIES["other"])}")
         self.send(user_id, "\n".join(lines), reply_markup=buttons(
             [("✅ Додати все", f"confirm:{draft_id}"), ("Скасувати", f"cancel:{draft_id}")]
         ))
@@ -203,9 +205,15 @@ class ShoppingBot:
             if not group:
                 continue
             lines.append(f"\n{title}:")
+            order = list(CATEGORIES)
+            group = sorted(group, key=lambda row: (order.index(row["category"]) if row["category"] in order else len(order), row["name"].casefold()))
+            previous_category = None
             for row in group:
                 if len(keyboard) >= 40:
                     break
+                if row["category"] != previous_category:
+                    lines.append(CATEGORIES.get(row["category"], CATEGORIES["other"]))
+                    previous_category = row["category"]
                 suffix = " 📷" if row["photo_file_id"] else ""
                 shown_name = row["name"][:70] + ("…" if len(row["name"]) > 70 else "")
                 lines.append(f"• {shown_name}{suffix}")
@@ -267,11 +275,12 @@ class ShoppingBot:
         if not product:
             self.send(user_id, "Товар не знайдено.")
             return
-        text = f"{product['name']}\nУлюблений магазин: {product['preferred_store']}"
+        text = f"{product['name']}\nУлюблений магазин: {product['preferred_store']}\nКатегорія: {CATEGORIES.get(product['category'], CATEGORIES['other'])}"
         self.send(user_id, text, reply_markup=buttons(
             [("➕ До списку", f"readd:{product_id}")],
             [(f"⭐ {store}", f"setstore:{product_id}:{CODE_FOR_STORE[store]}") for store in STORES],
             [("📷 Показати фото", f"photo:{product_id}")],
+            [("🗂 Змінити категорію", f"categories:{product_id}")],
         ))
 
     def show_history(self, user_id: int) -> None:
@@ -398,6 +407,16 @@ class ShoppingBot:
                         self.refresh_views()
                 else:
                     answer = "Товар не знайдено"
+            elif action == "categories" and len(parts) == 2:
+                product_id = int(parts[1])
+                if self.store.product(product_id):
+                    self.send(user_id, "Оберіть категорію:", reply_markup=buttons(*[
+                        [(label, f"setcategory:{product_id}:{key}")] for key, label in CATEGORIES.items()
+                    ]))
+            elif action == "setcategory" and len(parts) == 3:
+                self.store.set_category(int(parts[1]), parts[2])
+                self.show_item(user_id, int(parts[1]))
+                self.refresh_views()
             elif action == "setstore" and len(parts) == 3:
                 self.store.set_store(int(parts[1]), STORE_CODES[parts[2]])
                 self.show_item(user_id, int(parts[1]))

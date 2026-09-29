@@ -1,8 +1,10 @@
+import sqlite3
 import tempfile
 import tarfile
 import unittest
 from pathlib import Path
 
+from shopping_bot.categories import infer_category
 from shopping_bot.app import ShoppingBot
 from shopping_bot.backup import backup
 from shopping_bot.store import Store, parse_items
@@ -119,6 +121,39 @@ class ShoppingBotTests(unittest.TestCase):
             ("яйця", None), ("молоко", None), ("хліб", None),
         ])
         self.assertEqual(parse_items("Кава і вершки", split_conjunctions=False), [("Кава і вершки", None)])
+
+    def test_categories_group_list_and_preserve_manual_choice(self):
+        for name, expected in [("картоплю", "vegetables"), ("Мандарини", "fruit"),
+                               ("кондиціонер для білизни", "cleaning"),
+                               ("кондиціонер для волосся", "care"),
+                               ("Leite Hacendado", "dairy"), ("невідома пачка", "other"),
+                               ("шоколадне морозиво", "frozen"), ("кава з молоком", "drinks")]:
+            self.assertEqual(infer_category(name), expected)
+        potato = self.store.ensure_product("картопля")
+        fruit = self.store.ensure_product("мандарини")
+        self.store.add_need(potato, 1)
+        self.store.add_need(fruit, 2)
+        content, _ = self.bot.list_content("Mercadona")
+        self.assertIn("🥕 Овочі\n• картопля", content)
+        self.assertIn("🍊 Фрукти\n• мандарини", content)
+        self.bot.handle_callback(callback(2, f"setcategory:{potato}:other"))
+        self.store.ensure_product("картопля")
+        self.assertEqual(self.store.product(potato)["category"], "other")
+        reopened = Store(self.store.path)
+        self.assertEqual(reopened.product(potato)["category"], "other")
+
+    def test_category_migration_preserves_existing_products(self):
+        old_path = self.root / "old.sqlite3"
+        with sqlite3.connect(old_path) as db:
+            db.execute("CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT NOT NULL, "
+                       "normalized TEXT UNIQUE, preferred_store TEXT, photo_file_id TEXT, "
+                       "photo_path TEXT, created_at TEXT)")
+            db.execute("INSERT INTO products VALUES (7, 'мандарини', 'мандарини', 'Lidl', 'photo', NULL, 'old')")
+        migrated = Store(old_path)
+        row = migrated.product(7)
+        self.assertEqual(row["category"], "fruit")
+        self.assertEqual(row["photo_file_id"], "photo")
+        self.assertEqual(row["preferred_store"], "Lidl")
 
     def test_backup_contains_consistent_db_and_product_photo(self):
         self.bot.handle_message(message(1, caption="Кава", photo=[{"file_id": "photo"}]))

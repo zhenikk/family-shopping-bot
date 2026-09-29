@@ -8,6 +8,8 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from .categories import CATEGORIES, infer_category
+
 STORES = ("Mercadona", "Lidl", "Auchan")
 DEFAULT_STORE = "Mercadona"
 
@@ -125,6 +127,18 @@ class Store:
                 CREATE INDEX IF NOT EXISTS idx_events_time ON events(happened_at DESC);
             """)
 
+            columns = {row[1] for row in db.execute("PRAGMA table_info(products)")}
+            if "category" not in columns:
+                db.execute("ALTER TABLE products ADD COLUMN category TEXT NOT NULL DEFAULT 'other'")
+                for row in db.execute("SELECT id, name FROM products").fetchall():
+                    db.execute("UPDATE products SET category=? WHERE id=?", (infer_category(row["name"]), row["id"]))
+
+    def set_category(self, product_id: int, category: str) -> None:
+        if category not in CATEGORIES:
+            raise ValueError("Unknown category")
+        with self.db() as db:
+            db.execute("UPDATE products SET category=? WHERE id=?", (category, product_id))
+
     def is_member(self, user_id: int) -> bool:
         with self.db() as db:
             return db.execute("SELECT 1 FROM members WHERE user_id=?", (user_id,)).fetchone() is not None
@@ -164,8 +178,8 @@ class Store:
             raise ValueError("Invalid product name")
         with self.db() as db:
             db.execute(
-                "INSERT OR IGNORE INTO products(name, normalized, preferred_store, created_at) VALUES (?, ?, ?, ?)",
-                (name.strip(), normalized, preferred_store or DEFAULT_STORE, now()),
+                "INSERT OR IGNORE INTO products(name, normalized, preferred_store, created_at, category) VALUES (?, ?, ?, ?, ?)",
+                (name.strip(), normalized, preferred_store or DEFAULT_STORE, now(), infer_category(name)),
             )
             row = db.execute("SELECT id FROM products WHERE normalized=?", (normalized,)).fetchone()
             if preferred_store:
