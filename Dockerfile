@@ -7,7 +7,7 @@ RUN git clone --depth 1 --branch "${WHISPER_CPP_REF}" \
     https://github.com/ggml-org/whisper.cpp.git /src/whisper.cpp
 RUN cmake -S /src/whisper.cpp -B /src/whisper.cpp/build \
     -DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_TESTS=OFF -DGGML_NATIVE=OFF \
-    && cmake --build /src/whisper.cpp/build --target whisper-cli -j 2
+    && cmake --build /src/whisper.cpp/build --target whisper-cli -j 1
 RUN cd /src/whisper.cpp && bash models/download-ggml-model.sh base
 
 FROM python:3.12-slim-bookworm

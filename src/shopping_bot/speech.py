@@ -33,7 +33,7 @@ def transcribe(
                 check=True, timeout=60, capture_output=True,
             )
             subprocess.run(
-                [str(whisper_cli), "-m", str(whisper_model), "-f", str(wav), "-l", "auto",
+                [str(whisper_cli), "-m", str(whisper_model), "-f", str(wav), "-l", "auto", "-t", "2",
                  "-otxt", "-of", str(output_prefix)],
                 check=True, timeout=timeout, capture_output=True,
             )
