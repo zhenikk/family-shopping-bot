@@ -404,7 +404,10 @@ class ShoppingBot:
                 self.refresh_views()
             else:
                 answer = "Кнопка застаріла"
-        except (ValueError, KeyError, IndexError, TelegramError):
+        except TelegramError as exc:
+            LOG.warning("Callback Telegram error for user %s: %s", user_id, exc)
+            answer = "Не вдалося виконати дію"
+        except (ValueError, KeyError, IndexError):
             LOG.exception("Callback failed for user %s", user_id)
             answer = "Не вдалося виконати дію"
         finally:
