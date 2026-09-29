@@ -34,9 +34,9 @@ class Telegram:
                 description = payload.get("description", "Telegram HTTP error")
             except (ValueError, OSError):
                 description = "Telegram HTTP error"
-            raise TelegramError(str(description)) from exc
-        except urllib.error.URLError as exc:
-            raise TelegramError("Telegram network error") from exc
+            raise TelegramError(str(description)) from None
+        except urllib.error.URLError:
+            raise TelegramError("Telegram network error") from None
         if not payload.get("ok"):
             raise TelegramError(str(payload.get("description", "Telegram API error")))
         return payload["result"]
@@ -60,6 +60,6 @@ class Telegram:
                 if remaining <= 0:
                     destination.unlink(missing_ok=True)
                     raise TelegramError("Файл завеликий для бота")
-        except urllib.error.URLError as exc:
+        except urllib.error.URLError:
             destination.unlink(missing_ok=True)
-            raise TelegramError("Не вдалося завантажити файл із Telegram") from exc
+            raise TelegramError("Не вдалося завантажити файл із Telegram") from None
