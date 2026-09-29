@@ -18,9 +18,9 @@
 
 Код живе в GitHub. Його можна змінити звідусіль, зробити commit і оновити сервер через `git pull` та `docker compose up -d --build`. Сам бот доступний у Telegram звідусіль незалежно від вашого комп'ютера.
 
-Для цього проєкту рекомендовано **netcup VPS nano G11.5s** у Нюрнберзі: 2 vCore x86, 2 ГБ RAM, 60 ГБ SSD, IPv4/IPv6, без плати за створення. На 29 вересня 2026 сторінка замовлення показує €3,69/міс із німецьким ПДВ 19%; для адреси в Португалії остаточний ПДВ і суму покаже кошик (орієнтовно €3,81/міс за ставкою 23%). Мінімальний термін і розрахунковий період — **6 місяців**. Оберіть Ubuntu 24.04 x86_64. 2 ГБ достатньо для бота й орієнтовно для локального `whisper.cpp base`, але швидкість голосу треба виміряти на реальних повідомленнях після запуску. [Тариф netcup](https://www.netcup.com/en/server/vps/vps-nano-g11.5s-iv-6m-nue)
+Перший запуск планується на **Oracle Cloud Always Free Ampere A1**: одна Ubuntu ARM64 VM із 2 OCPU і 4 ГБ RAM у межах безкоштовного ліміту 2 OCPU/12 ГБ. Oracle може не мати вільної місткості у вибраному Home Region і може вилучати малоактивні безкоштовні VM; розмір 4 ГБ не гарантує, що інстанс не буде визнано неактивним. Штучне навантаження для обходу цієї політики не використовується. [Oracle Always Free](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)
 
-Безкоштовний Oracle Cloud Always Free Ampere A1 має більше пам'яті, проте Oracle може вилучити інстанс, якщо він довго неактивний; також у домашньому регіоні може не вистачити вільних машин. Поточний безкоштовний ліміт — 2 OCPU і 12 ГБ RAM, а не старі 4 OCPU/24 ГБ. Через це для постійного сімейного бота netcup є передбачуванішим вибором. [Oracle Always Free](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)
+Якщо Oracle не дасть створити VM або робота бота перерветься, запасний платний варіант — **netcup VPS nano G11.5s** (2 vCore, 2 ГБ RAM, 60 ГБ SSD, приблизно €3,81/міс для Португалії, оплата за 6 місяців). На 2 ГБ швидкість голосу треба виміряти окремо. [Тариф netcup](https://www.netcup.com/en/server/vps/vps-nano-g11.5s-iv-6m-nue), [порівняння хостингів](docs/hosting-research.md)
 
 ## Локальна розробка та Git
 
@@ -34,7 +34,9 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 
 ## Розгортання на Linux VM
 
-Потрібні Docker Engine із Compose plugin, Git і приватний доступ до репозиторію. На рекомендованому netcup VPS оберіть Ubuntu 24.04 x86_64. Доступ до приватного GitHub-репозиторію на сервері налаштуйте через окремий read-only deploy key або GitHub CLI; персональний токен не зберігайте в коді.
+Для першого створення Oracle VM запустіть локальний [майстер Oracle](scripts/oracle-vm-wizard.sh): `bash scripts/oracle-vm-wizard.sh`. Він проведе через акаунт, SSH, Always Free ARM VM, read-only deploy key GitHub і BotFather; публічну IP-адресу збереже в `.oracle-setup.env`, секрети — у локальному `.env`. Обидва файли виключені з Git. Коли майстер завершиться, передайте помічнику лише публічну IP-адресу для налаштування сервера.
+
+Потрібні Docker Engine із Compose plugin, Git і приватний доступ до репозиторію. Для Oracle оберіть Ubuntu 24.04 ARM64; для netcup — Ubuntu 24.04 x86_64. Доступ до приватного GitHub-репозиторію на сервері налаштуйте через окремий read-only deploy key або GitHub CLI; персональний токен не зберігайте в коді.
 
 1. У [@BotFather](https://t.me/BotFather) створіть бота командою `/newbot`. Збережіть HTTP API token. Не надсилайте токен у чат і не додавайте в Git.
 2. Клонуйте репозиторій на сервер і відкрийте папку:
