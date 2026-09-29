@@ -78,8 +78,8 @@ class ShoppingBotTests(unittest.TestCase):
         milk = self.store.product_by_name("молоко")
         bread = self.store.product_by_name("хліб")
         self.assertEqual(milk["preferred_store"], "Mercadona")
-        self.assertEqual(bread["preferred_store"], "Lidl")
-        self.assertEqual([r["name"] for r in self.store.needs_for_store("Lidl")], ["Хліб", "Молоко"])
+        self.assertEqual(bread["note"], "Купити в Lidl")
+        self.assertEqual([r["name"] for r in self.store.needs_for_store("Lidl")], ["Молоко", "Хліб"])
 
         self.bot.handle_callback(callback(1, f"buy:{bread['id']}:L"))
         first_notice = [p for method, p in self.telegram.calls if method == "sendMessage" and p["chat_id"] == 2 and "купив" in p["text"]]
@@ -102,7 +102,7 @@ class ShoppingBotTests(unittest.TestCase):
     def test_photo_is_saved_on_reusable_product(self):
         self.bot.handle_message(message(1, caption="Кава @Auchan", photo=[{"file_id": "small"}, {"file_id": "large"}]))
         coffee = self.store.product_by_name("кава")
-        self.assertEqual(coffee["preferred_store"], "Auchan")
+        self.assertEqual(coffee["note"], "Купити в Auchan")
         self.assertEqual(coffee["photo_file_id"], "large")
         self.assertTrue(Path(coffee["photo_path"]).is_file())
         self.bot.handle_callback(callback(2, f"photo:{coffee['id']}"))
@@ -141,6 +141,29 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual(self.store.product(potato)["category"], "other")
         reopened = Store(self.store.path)
         self.assertEqual(reopened.product(potato)["category"], "other")
+
+    def test_unified_list_notes_and_persistent_edit(self):
+        self.bot.handle_message(message(1, "картопля :: купити в Mercadona, молоко"))
+        with self.store.db() as db:
+            draft = db.execute("SELECT id FROM drafts WHERE actor_id=1").fetchone()[0]
+        self.bot.handle_callback(callback(1, f"confirm:{draft}"))
+        potato = self.store.product_by_name("картопля")
+        milk = self.store.product_by_name("молоко")
+        self.assertEqual(potato["note"], "купити в Mercadona")
+        self.assertEqual(milk["note"], "")
+        self.assertEqual(self.bot.list_content("Lidl"), self.bot.list_content("Mercadona"))
+        text, markup = self.bot.list_content()
+        self.assertIn("купити в Mercadona", text)
+        self.assertNotIn("Улюблений магазин", text)
+        self.assertEqual(self.bot.menu()["keyboard"][0], [{"text": "🛒 Список"}])
+        self.bot.handle_callback(callback(2, f"note:{potato['id']}"))
+        self.bot.handle_message(message(2, "велика пачка, жовта упаковка"))
+        self.store.ensure_product("картопля")
+        self.assertEqual(self.store.product(potato["id"])["note"], "велика пачка, жовта упаковка")
+        self.bot.handle_callback(callback(1, f"buy:{potato['id']}:all"))
+        self.assertEqual([row["id"] for row in self.store.needs()], [milk["id"]])
+        self.bot.handle_callback(callback(1, f"clearnote:{potato['id']}"))
+        self.assertEqual(self.store.product(potato["id"])["note"], "")
 
     def test_category_migration_preserves_existing_products(self):
         old_path = self.root / "old.sqlite3"

@@ -46,6 +46,11 @@ def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str,
             part = part[: match.start()].strip()
         if not part or len(part) > 120:
             continue
+        if "::" in part:
+            part, note = (value.strip() for value in part.split("::", 1))
+            if not part or len(note) > 200:
+                continue
+            store = note or None
         normalized = key_for(part)
         if normalized not in seen:
             seen.add(normalized)
@@ -133,6 +138,21 @@ class Store:
                 for row in db.execute("SELECT id, name FROM products").fetchall():
                     db.execute("UPDATE products SET category=? WHERE id=?", (infer_category(row["name"]), row["id"]))
 
+            if "note" not in columns:
+                db.execute("ALTER TABLE products ADD COLUMN note TEXT NOT NULL DEFAULT ''")
+                # The old default Mercadona was automatic, not an explicit request.
+                db.execute("UPDATE products SET note='Купити в ' || preferred_store WHERE preferred_store != 'Mercadona'")
+
+    def set_note(self, product_id: int, note: str) -> None:
+        if len(note) > 200:
+            raise ValueError("Note too long")
+        with self.db() as db:
+            db.execute("UPDATE products SET note=? WHERE id=?", (note.strip(), product_id))
+
+    def needs(self) -> list[sqlite3.Row]:
+        with self.db() as db:
+            return db.execute("SELECT p.*, n.added_by, n.added_at FROM needs n JOIN products p ON p.id=n.product_id ORDER BY p.name COLLATE NOCASE").fetchall()
+
     def set_category(self, product_id: int, category: str) -> None:
         if category not in CATEGORIES:
             raise ValueError("Unknown category")
@@ -171,19 +191,19 @@ class Store:
             return db.execute("SELECT * FROM products WHERE normalized=?", (key_for(name),)).fetchone()
 
     def ensure_product(self, name: str, preferred_store: str | None = None) -> int:
-        if preferred_store is not None and preferred_store not in STORES:
-            raise ValueError("Unknown store")
+        if preferred_store is not None and len(preferred_store) > 200:
+            raise ValueError("Note too long")
         normalized = key_for(name)
         if not normalized or len(name) > 120:
             raise ValueError("Invalid product name")
         with self.db() as db:
             db.execute(
                 "INSERT OR IGNORE INTO products(name, normalized, preferred_store, created_at, category) VALUES (?, ?, ?, ?, ?)",
-                (name.strip(), normalized, preferred_store or DEFAULT_STORE, now(), infer_category(name)),
+                (name.strip(), normalized, DEFAULT_STORE, now(), infer_category(name)),
             )
             row = db.execute("SELECT id FROM products WHERE normalized=?", (normalized,)).fetchone()
             if preferred_store:
-                db.execute("UPDATE products SET preferred_store=? WHERE id=?", (preferred_store, row[0]))
+                db.execute("UPDATE products SET note=? WHERE id=?", ("Купити в " + preferred_store if preferred_store in STORES else preferred_store, row[0]))
             return row[0]
 
     def add_need(self, product_id: int, actor_id: int) -> bool:
@@ -253,7 +273,7 @@ class Store:
             db.execute("DELETE FROM drafts WHERE id=? AND actor_id=?", (draft_id, actor_id))
 
     def purchase(self, product_id: int, actor_id: int, store: str) -> tuple[bool, int | None, int | None]:
-        if store not in STORES:
+        if store not in (*STORES, ""):
             raise ValueError("Unknown store")
         with self.db() as db:
             cursor = db.execute("DELETE FROM needs WHERE product_id=?", (product_id,))
