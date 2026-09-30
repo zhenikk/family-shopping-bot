@@ -1,3 +1,4 @@
+from contextlib import closing
 import sqlite3
 import tempfile
 import tarfile
@@ -224,9 +225,16 @@ class ShoppingBotTests(unittest.TestCase):
         feedback_id = self.bot.purchase_feedback[1]
         self.assertTrue(any(m == "editMessageText" and p["message_id"] == feedback_id for m, p in self.telegram.calls))
 
+    def test_mini_app_uses_authenticated_inline_launch(self):
+        with patch.dict("os.environ", {"SHOPPING_WEB_URL": "https://shopping.example"}):
+            self.assertNotIn("web_app", str(self.bot.menu()))
+            self.bot.handle_message(message(1, "/app"))
+            markup = self.telegram.calls[-1][1]["reply_markup"]
+            self.assertEqual(markup["inline_keyboard"][0][0]["web_app"]["url"], "https://shopping.example")
+
     def test_category_migration_preserves_existing_products(self):
         old_path = self.root / "old.sqlite3"
-        with sqlite3.connect(old_path) as db:
+        with closing(sqlite3.connect(old_path)) as db, db:
             db.execute("CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT NOT NULL, "
                        "normalized TEXT UNIQUE, preferred_store TEXT, photo_file_id TEXT, "
                        "photo_path TEXT, created_at TEXT)")

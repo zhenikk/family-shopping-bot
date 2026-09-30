@@ -6,6 +6,7 @@ import argparse
 import sqlite3
 import tarfile
 import tempfile
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,7 +20,7 @@ def backup(data_dir: Path, output_dir: Path) -> Path:
     archive = output_dir / f"family-shopping-{stamp}.tar.gz"
     with tempfile.TemporaryDirectory(prefix="shopping-backup-") as temporary:
         snapshot = Path(temporary) / "shopping.sqlite3"
-        with sqlite3.connect(database) as source, sqlite3.connect(snapshot) as target:
+        with closing(sqlite3.connect(database)) as source, closing(sqlite3.connect(snapshot)) as target:
             source.backup(target)
         with tarfile.open(archive, "w:gz") as tar:
             tar.add(snapshot, arcname="shopping.sqlite3")

@@ -4,6 +4,7 @@ import hmac
 import logging
 import os
 import time
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -49,6 +50,7 @@ class ShoppingBot:
         self.pending_notes: dict[int, int] = {}
         self.note_panels: dict[int, int] = {}
         self.purchase_feedback: dict[int, int] = {}
+        self.notification_lock = threading.Lock()
         self.voice_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="local-voice")
 
     def send(self, chat_id: int, text: str, **kwargs):
@@ -67,7 +69,7 @@ class ShoppingBot:
         return self.send(user_id, text, reply_markup=markup)["message_id"]
 
     def menu(self) -> dict:
-        return {
+        markup = {
             "keyboard": [
                 [{"text": "🛒 Список"}],
                 [{"text": "➕ Додати"}, {"text": "📚 Каталог"}, {"text": "🕘 Історія"}],
@@ -76,6 +78,22 @@ class ShoppingBot:
             "resize_keyboard": True,
             "is_persistent": True,
         }
+
+        web_url = os.getenv("SHOPPING_WEB_URL", "")
+        if web_url.startswith("https://"):
+            markup["keyboard"].insert(0, [{"text": "🛍 Застосунок"}])
+        return markup
+
+    def show_web_app(self, user_id: int) -> None:
+        url = os.getenv("SHOPPING_WEB_URL", "")
+        if url.startswith("https://"):
+            # Inline/menu launches carry authenticated initData; reply-keyboard
+            # web_app launches do not (Telegram's documented launch semantics).
+            self.send(user_id, "🛍 Наші покупки · список, фото та нотатки", reply_markup={
+                "inline_keyboard": [[{"text": "Відкрити застосунок", "web_app": {"url": url}}]]
+            })
+        else:
+            self.send(user_id, "Застосунок ще не під’єднаний. Поки користуйтеся списком у чаті.")
 
     def handle_update(self, update: dict) -> None:
         if "message" in update:
@@ -114,13 +132,15 @@ class ShoppingBot:
                 "Нотатку можна додати так: картопля :: купити в Mercadona. "
                 "Або відкрийте картку товару та натисніть «Нотатка».",
                 reply_markup=self.menu())
+            if os.getenv("SHOPPING_WEB_URL", "").startswith("https://"):
+                self.show_web_app(user_id)
             return
         if text.startswith("/cancel"):
             self.pending_photos.pop(user_id, None)
             self.pending_notes.pop(user_id, None)
             self.send(user_id, "Дію скасовано.")
             return
-        if text in ("🛒 Список", "📚 Каталог", "🕘 Історія", "➕ Додати", *STORES) or text.startswith(("/list", "/catalog", "/history")):
+        if text in ("🛒 Список", "📚 Каталог", "🕘 Історія", "➕ Додати", "🛍 Застосунок", *STORES) or text.startswith(("/list", "/catalog", "/history", "/app")):
             self.pending_notes.pop(user_id, None)
             self.pending_photos.pop(user_id, None)
         if user_id in self.pending_notes and text:
@@ -147,7 +167,9 @@ class ShoppingBot:
             file_id = self.pending_photos.pop(user_id)
             self.save_photo(user_id, text, file_id)
             return
-        if text in STORES or text == "🛒 Список":
+        if text == "🛍 Застосунок" or text == "/app":
+            self.show_web_app(user_id)
+        elif text in STORES or text == "🛒 Список":
             self.show_list(user_id)
         elif text == "➕ Додати":
             self.send(user_id, "Надішліть товари через кому, наприклад: молоко, яйця, картопля :: купити в Mercadona. Можна також голосом.")
@@ -352,6 +374,11 @@ class ShoppingBot:
         self.send(user_id, "\n".join(lines))
 
     def notify_partner(self, batch_id: int) -> None:
+        # Web requests can arrive concurrently; keep one notification per batch.
+        with self.notification_lock:
+            self._notify_partner(batch_id)
+
+    def _notify_partner(self, batch_id: int) -> None:
         batch = self.store.batch(batch_id)
         if not batch:
             return
@@ -546,6 +573,16 @@ def main() -> None:
         Path(os.getenv("WHISPER_CLI", "./whisper.cpp/build/bin/whisper-cli")),
         Path(os.getenv("WHISPER_MODEL", "./whisper.cpp/models/ggml-base.bin")),
     )
+    from .webserver import make_server
+    server = make_server(bot, token, os.getenv("SHOPPING_WEB_HOST", "127.0.0.1"),
+                         int(os.getenv("SHOPPING_WEB_PORT", "8080")))
+    threading.Thread(target=server.serve_forever, daemon=True, name="mini-app").start()
+    web_url = os.getenv("SHOPPING_WEB_URL", "")
+    if web_url.startswith("https://"):
+        try:
+            bot.telegram.call("setChatMenuButton", menu_button={"type": "web_app", "text": "Покупки", "web_app": {"url": web_url}})
+        except TelegramError:
+            LOG.warning("Could not configure Mini App menu button")
     bot.run()
 
 

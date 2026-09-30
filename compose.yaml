@@ -3,6 +3,10 @@ services:
     build:
       context: .
     env_file: .env
+    environment:
+      SHOPPING_WEB_HOST: 0.0.0.0
+    ports:
+      - "127.0.0.1:8080:8080"
     restart: unless-stopped
     init: true
     read_only: true
@@ -12,3 +16,11 @@ services:
       - no-new-privileges:true
     volumes:
       - ./data:/data
+  tunnel:
+    image: cloudflare/cloudflared@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c
+    profiles: [miniapp]
+    command: tunnel --no-autoupdate --url http://bot:8080
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true

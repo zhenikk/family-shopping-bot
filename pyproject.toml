@@ -13,3 +13,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+shopping_bot = ["web/*.html", "web/*.css", "web/*.js"]

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f1f7f6"><title>Наші покупки</title>
+<link rel="stylesheet" href="/style.css">
+<script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+<script src="/app.js" defer></script>
+</head>
+<body>
+<div class="shell">
+<header><div class="eyebrow">ДЛЯ НАС ДВОХ <span id="connection">● Спільний список</span></div>
+<div class="headline"><h1 id="title">Покупки</h1><button id="refresh" class="icon-button" aria-label="Оновити список">↻</button></div>
+<p id="subtitle">Завантажуємо ваш список…</p></header>
+<div id="demo-banner" hidden>Перегляд дизайну · демонстраційні товари</div>
+<div class="tools"><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Знайти товар" aria-label="Знайти товар"></label><button class="add-button" id="add" aria-label="Додати товари">＋</button></div>
+<div id="filters" class="filters" aria-label="Категорії"></div>
+<main id="content" aria-live="polite"><div class="loading">Завантаження…</div></main>
+<nav aria-label="Основна навігація"><button data-tab="shopping" aria-current="page"><span aria-hidden="true">☑</span>Покупки</button><button data-tab="catalog"><span aria-hidden="true">▦</span>Каталог</button><button data-tab="history"><span aria-hidden="true">◷</span>Історія</button></nav>
+</div>
+<dialog id="product-dialog"><form id="product-form"><div class="sheet-top"><span>КАРТКА ТОВАРУ</span><button type="button" class="icon-button close" aria-label="Закрити картку">×</button></div><div id="product-photo"></div><h2 id="product-name"></h2><p id="product-status" class="muted"></p><label>Нотатка<textarea id="note" maxlength="200" rows="3" placeholder="Наприклад: купити в Mercadona"></textarea></label><label>Категорія<select id="category"></select></label><p id="photo-hint" class="hint">Фото упаковки можна додати в чаті: надішліть фото з назвою товару.</p><div class="sheet-actions"><button type="submit" class="primary">Зберегти</button><button type="button" id="product-action" class="secondary"></button></div></form></dialog>
+<dialog id="add-dialog"><div class="sheet-top"><span>ДОДАТИ ДО СПИСКУ</span><button type="button" class="icon-button close" aria-label="Закрити додавання">×</button></div><h2>Що потрібно купити?</h2><form id="add-form"><label>Товари<textarea id="items" rows="4" maxlength="2400" placeholder="Молоко, яйця, картопля" required></textarea></label><p class="hint">Через кому або з нового рядка. Нотатка: картопля :: купити в Mercadona.</p><div id="draft" hidden></div><button class="primary full" id="add-submit" type="submit">Перевірити список</button></form><button type="button" class="text-button" id="voice">🎙 Додати голосом у чаті</button></dialog>
+<div id="toast" role="status" hidden><span></span><button id="undo" hidden>Скасувати</button></div>
+</body></html>
