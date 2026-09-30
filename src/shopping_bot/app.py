@@ -47,10 +47,24 @@ class ShoppingBot:
         self.whisper_model = whisper_model
         self.pending_photos: dict[int, str] = {}
         self.pending_notes: dict[int, int] = {}
+        self.note_panels: dict[int, int] = {}
+        self.purchase_feedback: dict[int, int] = {}
         self.voice_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="local-voice")
 
     def send(self, chat_id: int, text: str, **kwargs):
         return self.telegram.call("sendMessage", chat_id=chat_id, text=text, **kwargs)
+
+    def panel(self, user_id: int, text: str, markup: dict, message_id: int | None = None) -> int:
+        if message_id is not None:
+            self.store.forget_view(user_id, message_id)
+            try:
+                self.telegram.call("editMessageText", chat_id=user_id, message_id=message_id,
+                                   text=text, reply_markup=markup)
+                return message_id
+            except TelegramError as exc:
+                if "message is not modified" in str(exc).lower():
+                    return message_id
+        return self.send(user_id, text, reply_markup=markup)["message_id"]
 
     def menu(self) -> dict:
         return {
@@ -58,6 +72,7 @@ class ShoppingBot:
                 [{"text": "🛒 Список"}],
                 [{"text": "➕ Додати"}, {"text": "📚 Каталог"}, {"text": "🕘 Історія"}],
             ],
+            "input_field_placeholder": "Товари через кому або голосом",
             "resize_keyboard": True,
             "is_persistent": True,
         }
@@ -105,13 +120,16 @@ class ShoppingBot:
             self.pending_notes.pop(user_id, None)
             self.send(user_id, "Дію скасовано.")
             return
+        if text in ("🛒 Список", "📚 Каталог", "🕘 Історія", "➕ Додати", *STORES) or text.startswith(("/list", "/catalog", "/history")):
+            self.pending_notes.pop(user_id, None)
+            self.pending_photos.pop(user_id, None)
         if user_id in self.pending_notes and text:
             if len(text) > 200:
                 self.send(user_id, "Нотатка має бути до 200 символів. Спробуйте коротше або /cancel.")
                 return
             product_id = self.pending_notes.pop(user_id)
             self.store.set_note(product_id, text)
-            self.show_item(user_id, product_id)
+            self.show_item(user_id, product_id, self.note_panels.pop(user_id, None))
             self.refresh_views()
             return
         if message.get("photo"):
@@ -180,7 +198,7 @@ class ShoppingBot:
                 self.store.set_note(note_product_id, transcript)
                 self.pending_notes.pop(user_id, None)
                 self.send(user_id, f"Нотатку збережено: {transcript}")
-                self.show_item(user_id, note_product_id)
+                self.show_item(user_id, note_product_id, self.note_panels.pop(user_id, None))
                 self.refresh_views()
                 return
             self.send(user_id, f"Почув: {transcript}")
@@ -239,15 +257,16 @@ class ShoppingBot:
             lines.append(f"• {row['name'][:70]}{suffix}")
             if row["note"]:
                 lines.append(f"  📝 {row['note']}")
-            controls = [(f"✅ {row['name'][:28]}", f"buy:{row['id']}:all"), ("📝", f"item:{row['id']}")]
+            controls = [(row["name"][:28], f"item:{row['id']}"), ("✅ Куплено", f"buy:{row['id']}:all")]
             if row["photo_file_id"]:
                 controls.append(("📷", f"photo:{row['id']}"))
             keyboard.append(controls)
         if not rows:
-            lines.append("Список порожній. Надішліть назви товарів або голосове повідомлення.")
+            lines.append("Список порожній для вас обох. Додайте товари текстом чи голосом.")
+            keyboard.append([("➕ Додати товари", "add")])
         if len(rows) > shown:
             lines.append(f"\nПоказано {shown} із {len(rows)} товарів. Куплені зникатимуть, решта з’являться далі.")
-        keyboard.append([("🔄 Оновити", "list:all")])
+        keyboard.append([("🔄 Оновити", "list:all"), ("📚 Каталог", "catalog:0")])
         return "\n".join(lines), buttons(*keyboard)
 
     def show_list(self, user_id: int, store_name: str = "", message_id: int | None = None) -> None:
@@ -277,10 +296,10 @@ class ShoppingBot:
                 if "message is not modified" not in str(exc).lower():
                     LOG.warning("Could not refresh shopping list: %s", exc)
 
-    def show_catalog(self, user_id: int, offset: int = 0) -> None:
+    def show_catalog(self, user_id: int, offset: int = 0, message_id: int | None = None) -> None:
         count = self.store.catalog_count()
         rows = self.store.catalog(offset)
-        lines = [f"📚 Каталог товарів ({count})", "Оберіть товар, щоб побачити фото й налаштування."]
+        lines = [f"📚 Каталог · {count} товарів · {offset // 10 + 1}/{max(1, (count + 9) // 10)}", "Оберіть товар для повторної покупки, фото чи нотатки."]
         keyboard = [[(f"{r['name'][:36]}{' ✅' if r['active'] else ''}", f"item:{r['id']}")] for r in rows]
         pages = []
         if offset > 0:
@@ -291,20 +310,30 @@ class ShoppingBot:
             keyboard.append(pages)
         if not rows:
             lines.append("Ще немає товарів. Надішліть назви або фото з підписом.")
-        self.send(user_id, "\n".join(lines), reply_markup=buttons(*keyboard))
+        keyboard.append([("🛒 До списку", "list:all")])
+        self.panel(user_id, "\n".join(lines), buttons(*keyboard), message_id)
 
-    def show_item(self, user_id: int, product_id: int) -> None:
+    def show_item(self, user_id: int, product_id: int, message_id: int | None = None) -> None:
         product = self.store.product(product_id)
         if not product:
             self.send(user_id, "Товар не знайдено.")
             return
-        text = f"{product['name']}\nНотатка: {product['note'] or '—'}\nКатегорія: {CATEGORIES.get(product['category'], CATEGORIES['other'])}"
-        self.send(user_id, text, reply_markup=buttons(
-            [("➕ До списку", f"readd:{product_id}")],
-            [("📝 Нотатка", f"note:{product_id}"), ("🗑 Прибрати нотатку", f"clearnote:{product_id}")],
-            [("📷 Показати фото", f"photo:{product_id}")],
-            [("🗂 Змінити категорію", f"categories:{product_id}")],
-        ))
+        active = any(row["id"] == product_id for row in self.store.needs())
+        text = f"{product['name']}\n{CATEGORIES.get(product['category'], CATEGORIES['other'])}"
+        text += "\nУ списку покупок" if active else "\nЗбережено в каталозі"
+        if product["note"]:
+            text += f"\n\n📝 {product['note']}"
+        rows = [[("✅ Куплено", f"buy:{product_id}:all")] if active else [("➕ До списку", f"readd:{product_id}")]]
+        rows.append([("📝 Змінити нотатку" if product["note"] else "📝 Додати нотатку", f"note:{product_id}")])
+        if product["note"]:
+            rows[-1].append(("Прибрати", f"clearnote:{product_id}"))
+        if product["photo_file_id"]:
+            rows.append([("📷 Фото упаковки", f"photo:{product_id}")])
+        else:
+            text += "\n\n📷 Щоб додати фото, надішліть його з назвою цього товару в підписі."
+        rows.append([("🗂 Категорія", f"categories:{product_id}")])
+        rows.append([("🛒 До списку", "list:all"), ("📚 Каталог", "catalog:0")])
+        self.panel(user_id, text, buttons(*rows), message_id)
 
     def show_history(self, user_id: int) -> None:
         events = self.store.recent_history()
@@ -366,7 +395,15 @@ class ShoppingBot:
         try:
             parts = data.split(":")
             action = parts[0]
-            if action == "list" and len(parts) == 2:
+            if action in {"list", "catalog", "item", "categories", "buy", "readd", "add"}:
+                self.pending_notes.pop(user_id, None)
+            panel_id = message.get("message_id")
+            if panel_id == self.purchase_feedback.get(user_id) and action != "undo":
+                self.purchase_feedback.pop(user_id, None)
+            if action == "add":
+                self.panel(user_id, "➕ Надішліть товари через кому або голосове українською.\nНаприклад: молоко, яйця, хліб.\nБот покаже список для підтвердження.",
+                           buttons([("🛒 До списку", "list:all")]), panel_id)
+            elif action == "list" and len(parts) == 2:
                 self.show_list(user_id, message_id=message.get("message_id"))
             elif action == "confirm" and len(parts) == 2:
                 items = self.store.take_draft(user_id, int(parts[1]))
@@ -377,20 +414,25 @@ class ShoppingBot:
                     for name, preferred in items:
                         product_id = self.store.ensure_product(name, preferred)
                         added += self.store.add_need(product_id, user_id)
-                    self.send(user_id, f"Додано {added} товарів. Уже були в списку: {len(items) - added}.")
+                    self.panel(user_id, f"✅ Додано: {added}. Уже у списку: {len(items) - added}.",
+                               buttons([("🛒 Відкрити список", "list:all")]), panel_id)
                     if added:
                         self.refresh_views()
             elif action == "cancel" and len(parts) == 2:
                 self.store.cancel_draft(user_id, int(parts[1]))
                 answer = "Скасовано"
+                self.panel(user_id, "Додавання скасовано.", buttons([("🛒 До списку", "list:all")]), panel_id)
             elif action == "buy" and len(parts) == 3:
                 product_id, store_name = int(parts[1]), ""
                 product = self.store.product(product_id)
                 bought, batch_id, event_id = self.store.purchase(product_id, user_id, store_name)
                 if bought:
-                    self.send(user_id, f"Куплено: {product['name']}", reply_markup=buttons(
-                        [("↩️ Скасувати покупку", f"undo:{event_id}:{batch_id}")]
-                    ))
+                    answer = f"Куплено: {product['name']}"[:180]
+                    self.purchase_feedback[user_id] = self.panel(user_id,
+                        f"✅ Остання покупка: {product['name']}",
+                        buttons([("↩️ Скасувати останню покупку", f"undo:{event_id}:{batch_id}")]),
+                        self.purchase_feedback.get(user_id))
+                    self.show_list(user_id, message_id=panel_id)
                     try:
                         self.notify_partner(batch_id)
                     except TelegramError as exc:
@@ -408,7 +450,8 @@ class ShoppingBot:
                         self.notify_partner(int(parts[2]))
                     except TelegramError as exc:
                         LOG.warning("Undo saved; notification failed: %s", exc)
-                    self.send(user_id, f"Повернуто до списку: {self.store.product(product_id)['name']}")
+                    self.panel(user_id, f"↩️ Повернуто до списку: {self.store.product(product_id)['name']}",
+                               buttons([("🛒 До списку", "list:all")]), panel_id)
                     self.refresh_views()
             elif action == "photo" and len(parts) == 2:
                 product = self.store.product(int(parts[1]))
@@ -418,14 +461,15 @@ class ShoppingBot:
                 else:
                     answer = "Фото ще немає"
             elif action == "catalog" and len(parts) == 2:
-                self.show_catalog(user_id, max(0, int(parts[1])))
+                self.show_catalog(user_id, max(0, int(parts[1])), panel_id)
             elif action == "item" and len(parts) == 2:
-                self.show_item(user_id, int(parts[1]))
+                self.show_item(user_id, int(parts[1]), panel_id)
             elif action == "readd" and len(parts) == 2:
                 product = self.store.product(int(parts[1]))
                 if product:
                     added = self.store.add_need(product["id"], user_id)
                     answer = "Додано" if added else "Уже у списку"
+                    self.show_item(user_id, product["id"], panel_id)
                     if added:
                         self.refresh_views()
                 else:
@@ -433,25 +477,26 @@ class ShoppingBot:
             elif action == "categories" and len(parts) == 2:
                 product_id = int(parts[1])
                 if self.store.product(product_id):
-                    self.send(user_id, "Оберіть категорію:", reply_markup=buttons(*[
-                        [(label, f"setcategory:{product_id}:{key}")] for key, label in CATEGORIES.items()
-                    ]))
+                    choices = [[(label, f"setcategory:{product_id}:{key}")] for key, label in CATEGORIES.items()]
+                    choices.append([("⬅️ До товару", f"item:{product_id}")])
+                    self.panel(user_id, f"Категорія · {self.store.product(product_id)['name']}", buttons(*choices), panel_id)
             elif action == "setcategory" and len(parts) == 3:
                 self.store.set_category(int(parts[1]), parts[2])
-                self.show_item(user_id, int(parts[1]))
+                self.show_item(user_id, int(parts[1]), panel_id)
                 self.refresh_views()
             elif action == "note" and len(parts) == 2:
                 product_id = int(parts[1])
                 if self.store.product(product_id):
                     self.pending_notes[user_id] = product_id
-                    self.send(user_id, "Надішліть нотатку текстом або голосом (до 200 символів), наприклад: купити в Mercadona. Скасування: /cancel.")
+                    self.note_panels[user_id] = self.panel(user_id, f"📝 Нотатка · {self.store.product(product_id)['name']}\n\nНадішліть текст або голосове українською (до 200 символів).\nНаприклад: купити в Mercadona.",
+                               buttons([("Скасувати", f"item:{product_id}")]), panel_id)
             elif action == "clearnote" and len(parts) == 2:
                 self.store.set_note(int(parts[1]), "")
-                self.show_item(user_id, int(parts[1]))
+                self.show_item(user_id, int(parts[1]), panel_id)
                 self.refresh_views()
             elif action == "setstore" and len(parts) == 3:
                 self.store.set_note(int(parts[1]), "Купити в " + STORE_CODES[parts[2]])
-                self.show_item(user_id, int(parts[1]))
+                self.show_item(user_id, int(parts[1]), panel_id)
                 self.refresh_views()
             else:
                 answer = "Кнопка застаріла"

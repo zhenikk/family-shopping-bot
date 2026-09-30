@@ -191,6 +191,39 @@ class ShoppingBotTests(unittest.TestCase):
         with self.store.db() as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM drafts").fetchone()[0], 0)
 
+    def test_panel_navigation_does_not_overwrite_card_with_list(self):
+        product_id = self.store.ensure_product("молоко")
+        self.store.add_need(product_id, 1)
+        self.bot.show_list(1)
+        view_id = self.store.views()[0]["message_id"]
+        before = len([c for c in self.telegram.calls if c[0] == "sendMessage"])
+        self.bot.handle_callback(callback(1, f"item:{product_id}", view_id))
+        self.assertEqual(self.store.views(), [])
+        self.bot.handle_callback(callback(1, f"categories:{product_id}", view_id))
+        self.bot.handle_callback(callback(1, f"setcategory:{product_id}:other", view_id))
+        after = len([c for c in self.telegram.calls if c[0] == "sendMessage"])
+        self.assertEqual(before, after)
+        edits = [p for m, p in self.telegram.calls if m == "editMessageText"]
+        self.assertIn("Додати нотатку", str(edits[-1]["reply_markup"]))
+        self.bot.handle_callback(callback(1, f"note:{product_id}", view_id))
+        self.bot.handle_message(message(1, "📚 Каталог"))
+        self.assertNotIn(1, self.bot.pending_notes)
+        self.assertEqual(self.store.product(product_id)["note"], "")
+
+    def test_purchase_feedback_is_one_message_and_draft_is_retired(self):
+        self.bot.make_draft(1, "молоко, яйця")
+        with self.store.db() as db:
+            draft_id = db.execute("SELECT id FROM drafts").fetchone()[0]
+        self.bot.handle_callback(callback(1, f"confirm:{draft_id}", 80))
+        retired = [p for m, p in self.telegram.calls if m == "editMessageText" and p["message_id"] == 80]
+        self.assertNotIn("confirm:", str(retired[-1]["reply_markup"]))
+        for row in self.store.needs():
+            self.bot.handle_callback(callback(1, f"buy:{row['id']}:all", 80))
+        notices = [p for m, p in self.telegram.calls if m == "sendMessage" and p["chat_id"] == 1 and "Остання покупка" in p["text"]]
+        self.assertEqual(len(notices), 1)
+        feedback_id = self.bot.purchase_feedback[1]
+        self.assertTrue(any(m == "editMessageText" and p["message_id"] == feedback_id for m, p in self.telegram.calls))
+
     def test_category_migration_preserves_existing_products(self):
         old_path = self.root / "old.sqlite3"
         with sqlite3.connect(old_path) as db:

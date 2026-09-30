@@ -340,6 +340,10 @@ class Store:
                 ON CONFLICT(user_id, store) DO UPDATE SET message_id=excluded.message_id
             """, (user_id, store, message_id))
 
+    def forget_view(self, user_id: int, message_id: int) -> None:
+        with self.db() as db:
+            db.execute("DELETE FROM views WHERE user_id=? AND message_id=?", (user_id, message_id))
+
     def views(self) -> list[sqlite3.Row]:
         with self.db() as db:
             return db.execute("SELECT * FROM views").fetchall()
