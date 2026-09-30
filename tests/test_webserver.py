@@ -6,6 +6,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urlencode
@@ -117,9 +118,27 @@ class MiniAppTests(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=2) as pool:
             results = list(pool.map(lambda product: self.request("/api/buy", {"id": product}), products))
         self.assertTrue(all(status == 200 for status, body in results))
+        self.server.sync_pool.submit(lambda: None).result(timeout=5)
         sent = [params for method, params in self.bot.telegram.calls if method == "sendMessage" and params["chat_id"] == 2]
         self.assertEqual(len(sent), 1)
         edits = [params for method, params in self.bot.telegram.calls if method == "editMessageText" and params["chat_id"] == 2]
         self.assertTrue(edits)
         self.assertIn("молоко", edits[-1]["text"])
         self.assertIn("яйця", edits[-1]["text"])
+
+    def test_purchase_response_does_not_wait_for_telegram(self):
+        product = self.store.ensure_product("молоко")
+        self.store.add_need(product, 1)
+        called = threading.Event()
+        def slow_telegram(batch):
+            called.set()
+            time.sleep(1)
+        with patch.object(self.bot, "notify_partner", side_effect=slow_telegram):
+            started = time.monotonic()
+            status, body = self.request("/api/buy", {"id": product})
+            elapsed = time.monotonic() - started
+            self.assertEqual(status, 200)
+            self.assertTrue(json.loads(body)["bought"])
+            self.assertTrue(called.wait(1))
+            self.assertLess(elapsed, 0.4, "API waits for Telegram instead of returning the saved purchase")
+            print(f"Purchase response with 1s Telegram delay: {elapsed * 1000:.1f}ms")

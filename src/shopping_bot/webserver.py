@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
@@ -47,6 +48,26 @@ def validate_init_data(raw: str, token: str, now: float | None = None) -> int:
 
 
 def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
+    class MiniAppServer(ThreadingHTTPServer):
+        def __init__(self, *args, **kwargs):
+            self.sync_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mini-app-sync")
+            super().__init__(*args, **kwargs)
+
+        def server_close(self):
+            super().server_close()
+            self.sync_pool.shutdown(wait=True)
+
+    def sync_changes(batch_id=None):
+        if batch_id:
+            try:
+                bot.notify_partner(batch_id)
+            except TelegramError:
+                LOG.warning("Mini App saved; partner notification failed")
+        try:
+            bot.refresh_views()
+        except TelegramError:
+            LOG.warning("Mini App saved; chat refresh failed")
+
     class Handler(BaseHTTPRequestHandler):
         server_version = "ShoppingMiniApp"
 
@@ -54,12 +75,12 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
             # Never log query strings, launch credentials, or personal payloads.
             pass
 
-        def respond(self, status, value, content_type="application/json; charset=utf-8"):
+        def respond(self, status, value, content_type="application/json; charset=utf-8", cache="no-store"):
             data = json.dumps(value, ensure_ascii=False).encode() if isinstance(value, (dict, list)) else value
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
-            self.send_header("Cache-Control", "no-store")
+            self.send_header("Cache-Control", cache)
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors https://web.telegram.org https://*.telegram.org")
@@ -100,7 +121,12 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                           "/style.css": ("style.css", "text/css; charset=utf-8")}
                 if path in assets:
                     filename, mime = assets[path]
-                    self.respond(200, (STATIC / filename).read_bytes(), mime)
+                    data = (STATIC / filename).read_bytes()
+                    if filename == "index.html":
+                        for asset in ("app.js", "style.css"):
+                            version = hashlib.sha256((STATIC / asset).read_bytes()).hexdigest()[:12]
+                            data = data.replace(("/" + asset).encode(), ("/" + asset + "?v=" + version).encode())
+                    self.respond(200, data, mime, "no-store" if filename == "index.html" else "public, max-age=31536000, immutable")
                     return
                 self.member()
                 if path == "/api/state":
@@ -136,6 +162,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 user_id = self.member()
                 path = urlsplit(self.path).path
                 data = self.body()
+                notification_batch = None
                 if path == "/api/draft":
                     items = parse_items(str(data.get("text", "")))
                     if not items:
@@ -159,10 +186,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                         with bot.store.db() as db:
                             row = db.execute("SELECT batch_id FROM events WHERE id=?", (int(data["event_id"]),)).fetchone()
                         if row and row[0]:
-                            try:
-                                bot.notify_partner(row[0])
-                            except TelegramError:
-                                LOG.warning("Mini App undo notification failed")
+                            notification_batch = row[0]
                     result = {"restored": bool(restored)}
                 elif path in ("/api/buy", "/api/readd", "/api/edit"):
                     product_id = int(data["id"])
@@ -172,10 +196,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     if path == "/api/buy":
                         bought, batch_id, event_id = bot.store.purchase(product_id, user_id, "")
                         if bought:
-                            try:
-                                bot.notify_partner(batch_id)
-                            except TelegramError:
-                                LOG.warning("Mini App purchase notification failed")
+                            notification_batch = batch_id
                         result = {"bought": bought, "event_id": event_id}
                     elif path == "/api/readd":
                         result = {"added": bot.store.add_need(product_id, user_id)}
@@ -190,10 +211,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 else:
                     self.respond(404, {"error": "Не знайдено"})
                     return
-                try:
-                    bot.refresh_views()
-                except TelegramError:
-                    LOG.warning("Mini App saved; chat refresh failed")
+                self.server.sync_pool.submit(sync_changes, notification_batch)
                 self.respond(200, result)
             except AccessError:
                 self.respond(401, {"error": "Сесія завершилась. Закрийте застосунок і відкрийте знову через бота."})
@@ -203,6 +221,6 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 LOG.error("Mini App mutation failed")
                 self.respond(500, {"error": "Не вдалося зберегти. Оновіть список перед повторною спробою."})
 
-    server = ThreadingHTTPServer((host, port), Handler)
+    server = MiniAppServer((host, port), Handler)
     server.daemon_threads = True
     return server

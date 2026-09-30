@@ -37,6 +37,20 @@ with tempfile.TemporaryDirectory() as directory:
             page.get_by_role('button',name='Зберегти',exact=True).click()
             page.get_by_role('dialog').wait_for(state='hidden')
             assert store.product_by_name('Картопля')['note']=='Велика упаковка з Mercadona'
+            # Hold the actual purchase request: the check must react before the server.
+            blocked = []
+            page.route('**/api/buy', lambda route: blocked.append(route))
+            page.get_by_role('button',name='Куплено: Картопля',exact=True).click()
+            check = page.locator('.is-buying .product-check')
+            check.wait_for()
+            assert check.get_attribute('aria-pressed') == 'true'
+            page.screenshot(path='/tmp/shopping-miniapp-check.png',full_page=False)
+            page.get_by_role('button',name='Відкрити Картопля',exact=True).wait_for(state='hidden')
+            assert blocked
+            blocked[0].fulfill(status=503,content_type='application/json',body='{"error":"Тестова помилка мережі"}')
+            page.get_by_role('button',name='Відкрити Картопля',exact=True).wait_for()
+            assert any(row['id'] == store.product_by_name('Картопля')['id'] for row in store.needs())
+            page.unroute('**/api/buy')
             page.get_by_role('button',name='Куплено: Картопля',exact=True).click()
             page.get_by_role('button',name='Відкрити Картопля',exact=True).wait_for(state='hidden')
             page.get_by_role('button',name='Скасувати',exact=True).click()
@@ -60,7 +74,7 @@ with tempfile.TemporaryDirectory() as directory:
             page.evaluate('document.getElementById("toast").hidden=true')
             page.screenshot(path='/tmp/shopping-miniapp-dark.png',full_page=False,animations='disabled')
             assert not errors,errors
-            print('PASS: real API mobile add/confirm, notes, buy/undo, readd, history, 320px layout, dark theme; no JS errors')
+            print('PASS: immediate animated check before server response, failed request restores item; add/confirm, notes, buy/undo, readd, history, 320px layout, dark theme; no JS errors')
             browser.close()
     finally:
         server.shutdown();server.server_close();thread.join();bot.voice_pool.shutdown()

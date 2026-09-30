@@ -4,8 +4,10 @@ const demo = new URLSearchParams(location.search).get('demo') === '1';
 const $ = id => document.getElementById(id);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 let state = {products: [], categories: {}, history: []}, tab = 'shopping', filter = '', selected = null, draftText = null, lastEvent = null;
-let signature = '', loading = false, toastTimer;
-const pending = new Set(), photos = new Map();
+let signature = '', loading = false, reloadNeeded = false, revision = 0, toastTimer;
+const pending = new Set(), operations = new Map(), photos = new Map();
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const fallbackCategories = {vegetables:'🥕 Овочі',fruit:'🍊 Фрукти',dairy:'🥛 Молочне та яйця',meat:'🥩 М’ясо та риба',bakery:'🍞 Хліб та випічка',pantry:'🥫 Бакалія',drinks:'🥤 Напої',frozen:'🧊 Заморожене',cleaning:'🧽 Побутова хімія',care:'🧴 Особиста гігієна',other:'📦 Інше'};
 const demoData = {categories:fallbackCategories, products:[
 {id:1,name:'Молоко',note:'Улюблена упаковка, 1 л',category:'dairy',active:true,photo:false},
@@ -26,14 +28,16 @@ async function api(path, body){
   const result=await response.json(); if(!response.ok) throw new Error(result.error||'Не вдалося виконати дію.'); return result;
 }
 async function load(quiet=false){
-  if(loading)return; loading=true;
-  try{const next=demo?structuredClone(demoData):await api('/api/state');const nextSignature=JSON.stringify(next);state=next;if(nextSignature!==signature){signature=nextSignature;render();} $('connection').textContent=demo?'● Перегляд дизайну':'● Спільний список';}
+  if(loading){reloadNeeded=true;return;} loading=true; const startedRevision=revision;
+  try{const next=demo?structuredClone(demoData):await api('/api/state');if(startedRevision!==revision){reloadNeeded=true;return;}const nextSignature=JSON.stringify(next);for(const [id,op] of operations){const product=next.products.find(p=>p.id===id);if(product)product.active=op.phase==='hidden'?op.action==='readd':op.previousActive;}state=next;if(nextSignature!==signature){signature=nextSignature;render();} $('connection').textContent=demo?'● Перегляд дизайну':'● Спільний список';}
   catch(error){$('connection').textContent='○ Немає зв’язку';if(!signature){$('subtitle').textContent='Ваші дані захищені';$('content').innerHTML=`<div class="empty"><div class="symbol">↗</div><h2>Відкрийте через Telegram</h2><p>${escape(error.message)}</p><button class="primary" id="retry">Спробувати ще раз</button></div>`;$('retry').onclick=()=>load();}else if(!quiet)toast(error.message);}
-  finally{loading=false;}
+  finally{loading=false;if(reloadNeeded){reloadNeeded=false;queueMicrotask(()=>load(true));}}
 }
 function visible(){const term=$('search').value.trim().toLocaleLowerCase('uk');return state.products.filter(p=>(tab==='catalog'||p.active)&&(!filter||p.category===filter)&&(!term||(p.name+' '+p.note).toLocaleLowerCase('uk').includes(term)));}
-function row(p){const emoji=(state.categories[p.category]||'📦').split(' ')[0];return `<article class="product-row"><button class="product-open" data-open="${p.id}" aria-label="Відкрити ${escape(p.name)}"><span class="thumb">${p.photo?`<img data-photo="${p.id}" alt="Упаковка ${escape(p.name)}">`:escape(emoji)}</span><span class="product-copy"><strong>${escape(p.name)}</strong>${p.note?`<small>${escape(p.note)}</small>`:''}</span></button>${tab==='catalog'&&p.active?'<span class="in-list">У списку</span>':`<button class="product-check ${tab==='catalog'?'add-again':''}" data-action="${p.id}" aria-label="${tab==='catalog'?'Додати до списку':'Куплено'}: ${escape(p.name)}" ${pending.has(p.id)?'disabled':''}>${tab==='catalog'?'＋':''}</button>`}</article>`;}
+function row(p){const emoji=(state.categories[p.category]||'📦').split(' ')[0];const buying=operations.get(p.id)?.action==='buy';return `<article class="product-row ${buying?'is-buying':''}" data-product="${p.id}"><button class="product-open" data-open="${p.id}" aria-label="Відкрити ${escape(p.name)}"><span class="thumb">${p.photo?`<img data-photo="${p.id}" alt="Упаковка ${escape(p.name)}">`:escape(emoji)}</span><span class="product-copy"><strong>${escape(p.name)}</strong>${p.note?`<small>${escape(p.note)}</small>`:''}</span></button>${tab==='catalog'&&p.active?'<span class="in-list">У списку</span>':`<button class="product-check ${tab==='catalog'?'add-again':''}" data-action="${p.id}" aria-label="${tab==='catalog'?'Додати до списку':'Куплено'}: ${escape(p.name)}" ${pending.has(p.id)?'disabled':''} aria-pressed="${buying}">${tab==='catalog'?'＋':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17 19 7"/></svg>'}</button>`}</article>`;}
 function render(){
+  photoObserver.disconnect();
+  const previousRects = new Map([...document.querySelectorAll('[data-product]')].map(node=>[node.dataset.product,node.getBoundingClientRect()]));
   $('title').textContent={shopping:'Покупки',catalog:'Наші товари',history:'Історія'}[tab];
   const count=state.products.filter(p=>p.active).length;
   $('subtitle').textContent=tab==='shopping'?`${count} у списку · спільний для вас двох`:tab==='catalog'?`${state.products.length} збережено · фото й нотатки залишаються`:'Хто купив і коли';
@@ -54,14 +58,67 @@ function render(){
   document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openProduct(Number(b.dataset.open)));
   document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>mutateProduct(Number(b.dataset.action),tab==='catalog'?'readd':'buy'));
   hydratePhotos();
+  if(!reducedMotion.matches){
+    document.querySelectorAll('[data-product]').forEach(node=>{
+      const before=previousRects.get(node.dataset.product);
+      if(before){const delta=before.top-node.getBoundingClientRect().top;if(Math.abs(delta)>1)node.animate([{transform:`translateY(${delta}px)`},{transform:'translateY(0)'}],{duration:240,easing:'cubic-bezier(.2,.8,.2,1)'});}
+    });
+  }
 }
 async function photoURL(id){if(photos.has(id))return photos.get(id);const promise=(async()=>{const response=await fetch('/api/photo/'+id,{headers:{Authorization:'tma '+(tg?.initData||'')},cache:'no-store'});if(!response.ok)throw new Error('Фото недоступне');return URL.createObjectURL(await response.blob());})();photos.set(id,promise);try{return await promise;}catch(error){photos.delete(id);throw error;}}
-function hydratePhotos(){document.querySelectorAll('[data-photo]').forEach(async img=>{try{img.src=await photoURL(Number(img.dataset.photo));}catch{img.parentElement.textContent='📷';}});}
+const photoObserver = new IntersectionObserver(entries=>{
+  for(const entry of entries){if(entry.isIntersecting){photoObserver.unobserve(entry.target);loadPhoto(entry.target);}}
+},{rootMargin:'150px'});
+async function loadPhoto(img){try{img.src=await photoURL(Number(img.dataset.photo));}catch{img.parentElement.textContent='📷';}}
+function hydratePhotos(){document.querySelectorAll('[data-photo]').forEach(img=>{if(!img.src)photoObserver.observe(img);});}
 function closeDialogs(){document.querySelectorAll('dialog[open]').forEach(d=>d.close());tg?.BackButton?.hide();}
 function showDialog(id){closeDialogs();$(id).showModal();tg?.BackButton?.show();}
 function openProduct(id){selected=state.products.find(p=>p.id===id);if(!selected)return;$('product-name').textContent=selected.name;$('product-status').textContent=selected.active?'У списку покупок':'Збережено для наступних покупок';$('note').value=selected.note;$('category').innerHTML=Object.entries(state.categories).map(([key,label])=>`<option value="${key}">${escape(label)}</option>`).join('');$('category').value=selected.category;$('product-action').textContent=selected.active?'Куплено':'До списку';$('product-photo').innerHTML=selected.photo?`<img class="detail-photo" data-photo="${selected.id}" alt="Упаковка ${escape(selected.name)}">`:'';$('photo-hint').hidden=selected.photo;showDialog('product-dialog');hydratePhotos();}
 function openAdd(){draftText=null;$('items').value='';$('draft').hidden=true;$('add-submit').textContent='Перевірити список';showDialog('add-dialog');}
-async function mutateProduct(id,action){if(pending.has(id))return;pending.add(id);render();try{let result;if(demo){const p=demoData.products.find(p=>p.id===id);p.active=action==='readd';result={bought:action==='buy',event_id:id};}else result=await api('/api/'+action,{id});if(action==='buy'&&result.bought){lastEvent=result.event_id;toast('Куплено. Прибрали зі спільного списку.',true);tg?.HapticFeedback?.notificationOccurred('success');}else toast(action==='readd'?'Додано до спільного списку':'Товар уже куплено');closeDialogs();await load();}catch(error){toast(error.message);}finally{pending.delete(id);render();}}
+async function purchaseMotion(id, op){
+  if(!reducedMotion.matches){
+    await wait(200);
+    if(operations.get(id)!==op)return;
+    const node=document.querySelector(`[data-product="${id}"]`);
+    if(node){await node.animate([{opacity:1,transform:'translateX(0)'},{opacity:0,transform:'translateX(18px)'}],{duration:150,easing:'ease-in',fill:'forwards'}).finished.catch(()=>{});}
+  }
+  if(operations.get(id)!==op)return;
+  op.phase='hidden';
+  const product=state.products.find(p=>p.id===id);
+  if(product)product.active=false;
+  render();
+}
+async function mutateProduct(id,action){
+  if(pending.has(id))return;
+  const product=state.products.find(p=>p.id===id);
+  if(!product)return;
+  const op={action,phase:action==='buy'?'checking':'hidden',previousActive:product.active};
+  revision++;operations.set(id,op);pending.add(id);
+  if(action==='readd')product.active=true;
+  render();
+  closeDialogs();
+  tg?.HapticFeedback?.impactOccurred?.('light');
+  const motion=action==='buy'?purchaseMotion(id,op):Promise.resolve();
+  try{
+    let result;
+    if(demo){demoData.products.find(p=>p.id===id).active=action==='readd';result={bought:action==='buy',event_id:id};}
+    else result=await api('/api/'+action,{id});
+    await motion;
+    if(action==='buy'&&result.bought){lastEvent=result.event_id;toast('Куплено. Прибрали зі спільного списку.',true);}
+    else toast(action==='readd'?'Додано до спільного списку':'Товар уже куплено');
+    if(action==='buy')product.active=false;
+  }catch(error){
+    operations.delete(id);
+    const current=state.products.find(p=>p.id===id);
+    if(current)current.active=op.previousActive;
+    toast('Не підтверджено: '+error.message);
+    tg?.HapticFeedback?.notificationOccurred?.('error');
+  }finally{
+    revision++;operations.delete(id);pending.delete(id);render();
+    // Reconcile in the background; a second round-trip never blocks the tap.
+    load(true);
+  }
+}
 $('product-form').onsubmit=async event=>{event.preventDefault();const button=event.submitter;button.disabled=true;try{if(demo){Object.assign(demoData.products.find(p=>p.id===selected.id),{note:$('note').value,category:$('category').value});}else await api('/api/edit',{id:selected.id,note:$('note').value,category:$('category').value});closeDialogs();toast('Зміни збережено');await load();}catch(error){toast(error.message);}finally{button.disabled=false;}};
 $('product-action').onclick=()=>mutateProduct(selected.id,selected.active?'buy':'readd');
 $('items').oninput=()=>{draftText=null;$('draft').hidden=true;$('add-submit').textContent='Перевірити список';};
