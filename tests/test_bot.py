@@ -2,6 +2,7 @@ import sqlite3
 import tempfile
 import tarfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from shopping_bot.categories import infer_category
@@ -164,6 +165,31 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual([row["id"] for row in self.store.needs()], [milk["id"]])
         self.bot.handle_callback(callback(1, f"clearnote:{potato['id']}"))
         self.assertEqual(self.store.product(potato["id"])["note"], "")
+
+    def test_voice_note_saves_to_product_without_creating_draft(self):
+        product_id = self.store.ensure_product("чіпси")
+        self.bot.handle_callback(callback(1, f"note:{product_id}"))
+        with patch("shopping_bot.app.transcribe", return_value="Купити в Mercadona."), \
+             patch.object(self.bot.voice_pool, "submit", side_effect=lambda fn, *args: fn(*args)):
+            self.bot.handle_message(message(1, voice={"file_id": "voice-note"}))
+        self.assertEqual(self.store.product(product_id)["note"], "Купити в Mercadona.")
+        self.assertNotIn(1, self.bot.pending_notes)
+        with self.store.db() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM drafts").fetchone()[0], 0)
+        self.assertEqual(self.store.catalog_count(), 1)
+
+    def test_cancelled_or_long_voice_note_does_not_change_product(self):
+        product_id = self.store.ensure_product("чіпси")
+        self.bot.handle_callback(callback(1, f"note:{product_id}"))
+        with patch("shopping_bot.app.transcribe", return_value="а" * 201):
+            self.bot.process_voice(1, "voice-note", product_id)
+        self.assertEqual(self.bot.pending_notes[1], product_id)
+        self.bot.handle_message(message(1, "/cancel"))
+        with patch("shopping_bot.app.transcribe", return_value="Купити в Lidl"):
+            self.bot.process_voice(1, "voice-note", product_id)
+        self.assertEqual(self.store.product(product_id)["note"], "")
+        with self.store.db() as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM drafts").fetchone()[0], 0)
 
     def test_category_migration_preserves_existing_products(self):
         old_path = self.root / "old.sqlite3"

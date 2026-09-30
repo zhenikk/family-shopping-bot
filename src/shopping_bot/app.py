@@ -119,7 +119,8 @@ class ShoppingBot:
             return
         if message.get("voice"):
             self.send(user_id, "Розпізнаю голосове повідомлення локально…")
-            self.voice_pool.submit(self.process_voice, user_id, message["voice"]["file_id"])
+            self.voice_pool.submit(self.process_voice, user_id, message["voice"]["file_id"],
+                                   self.pending_notes.get(user_id))
             return
         if not text:
             self.send(user_id, "Надішліть список текстом, голосове або фото товару з підписом.")
@@ -163,16 +164,29 @@ class ShoppingBot:
             [("✅ Додати все", f"confirm:{draft_id}"), ("Скасувати", f"cancel:{draft_id}")]
         ))
 
-    def process_voice(self, user_id: int, file_id: str) -> None:
+    def process_voice(self, user_id: int, file_id: str, note_product_id: int | None = None) -> None:
         try:
             transcript = transcribe(self.telegram, file_id, self.whisper_cli, self.whisper_model)
             if not transcript:
-                self.send(user_id, "Не вдалося почути назви товарів. Спробуйте коротший список.")
+                self.send(user_id, "Не вдалося розпізнати повідомлення. Спробуйте ще раз або надішліть текст.")
+                return
+            if note_product_id is not None:
+                # A delayed transcription must not replace a cancelled or edited note.
+                if self.pending_notes.get(user_id) != note_product_id:
+                    return
+                if len(transcript) > 200:
+                    self.send(user_id, "Нотатка має бути до 200 символів. Надішліть коротше голосове або текст, або /cancel.")
+                    return
+                self.store.set_note(note_product_id, transcript)
+                self.pending_notes.pop(user_id, None)
+                self.send(user_id, f"Нотатку збережено: {transcript}")
+                self.show_item(user_id, note_product_id)
+                self.refresh_views()
                 return
             self.send(user_id, f"Почув: {transcript}")
             self.make_draft(user_id, transcript)
         except (SpeechError, TelegramError) as exc:
-            self.send(user_id, f"{exc}. Список можна надіслати текстом.")
+            self.send(user_id, f"{exc}. Повідомлення можна надіслати текстом.")
         except Exception:
             LOG.exception("Voice processing failed for user %s", user_id)
             self.send(user_id, "Помилка розпізнавання. Спробуйте текстовий список.")
@@ -430,7 +444,7 @@ class ShoppingBot:
                 product_id = int(parts[1])
                 if self.store.product(product_id):
                     self.pending_notes[user_id] = product_id
-                    self.send(user_id, "Надішліть нотатку до товару (до 200 символів), наприклад: купити в Mercadona. Скасування: /cancel.")
+                    self.send(user_id, "Надішліть нотатку текстом або голосом (до 200 символів), наприклад: купити в Mercadona. Скасування: /cancel.")
             elif action == "clearnote" and len(parts) == 2:
                 self.store.set_note(int(parts[1]), "")
                 self.show_item(user_id, int(parts[1]))
