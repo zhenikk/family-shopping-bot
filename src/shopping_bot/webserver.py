@@ -118,7 +118,9 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 path = urlsplit(self.path).path
                 assets = {"/": ("index.html", "text/html; charset=utf-8"),
                           "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-                          "/style.css": ("style.css", "text/css; charset=utf-8")}
+                          "/style.css": ("style.css", "text/css; charset=utf-8"),
+                          "/fonts/onest.woff2": ("fonts/onest.woff2", "font/woff2"),
+                          "/fonts/manrope.woff2": ("fonts/manrope.woff2", "font/woff2")}
                 if path in assets:
                     filename, mime = assets[path]
                     data = (STATIC / filename).read_bytes()

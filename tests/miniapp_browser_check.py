@@ -29,6 +29,9 @@ with tempfile.TemporaryDirectory() as directory:
             page.route('https://telegram.org/js/telegram-web-app.js',lambda route:route.fulfill(body=''))
             page.add_init_script('window.Telegram={WebApp:{initData:'+json.dumps(signed_data())+',ready(){},expand(){},onEvent(){},colorScheme:"light",BackButton:{onClick(){},show(){},hide(){}},HapticFeedback:{notificationOccurred(){}}}};')
             page.goto(f'http://127.0.0.1:{server.server_port}/');page.wait_for_load_state('networkidle')
+            page.evaluate('document.fonts.ready')
+            faces=page.evaluate('Array.from(document.fonts).map(f=>({family:f.family,status:f.status}))')
+            assert {f['family'] for f in faces if f['status']=='loaded'} >= {'Onest','Manrope'},faces
             page.get_by_role('button',name='Відкрити Картопля',exact=True).wait_for()
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             page.screenshot(path='/tmp/shopping-miniapp-mobile.png',full_page=False)
