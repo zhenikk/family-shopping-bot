@@ -34,6 +34,7 @@ with tempfile.TemporaryDirectory() as directory:
             assert {f['family'] for f in faces if f['status']=='loaded'} >= {'Onest','Manrope'},faces
             page.get_by_role('button',name='Відкрити Картопля',exact=True).wait_for()
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            assert page.locator('.product-check svg').first.evaluate('(el)=>getComputedStyle(el).opacity') == '0'
             page.screenshot(path='/tmp/shopping-miniapp-mobile.png',full_page=False)
             page.get_by_role('button',name='Відкрити Картопля',exact=True).click()
             page.get_by_label('Нотатка',exact=True).fill('Велика упаковка з Mercadona')
@@ -76,6 +77,12 @@ with tempfile.TemporaryDirectory() as directory:
             page.wait_for_timeout(250)
             page.evaluate('document.getElementById("toast").hidden=true')
             page.screenshot(path='/tmp/shopping-miniapp-dark.png',full_page=False,animations='disabled')
+            for product in list(store.needs()):
+                store.purchase(product['id'],1,'')
+            page.get_by_role('button',name='Оновити список',exact=True).click()
+            page.get_by_role('heading',name='Усе куплено',exact=True).wait_for()
+            page.get_by_role('button',name='Купити знову',exact=True).click()
+            page.get_by_role('heading',name='Наші товари',exact=True).wait_for()
             assert not errors,errors
             print('PASS: immediate animated check before server response, failed request restores item; add/confirm, notes, buy/undo, readd, history, 320px layout, dark theme; no JS errors')
             browser.close()

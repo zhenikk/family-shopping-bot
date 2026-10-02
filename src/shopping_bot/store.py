@@ -251,7 +251,7 @@ class Store:
         with self.db() as db:
             db.execute("UPDATE products SET photo_file_id=?, photo_path=? WHERE id=?", (file_id, path, product_id))
 
-    def save_draft(self, actor_id: int, items: list[tuple[str, str | None]]) -> int:
+    def save_draft(self, actor_id: int, items: list) -> int:
         with self.db() as db:
             db.execute("DELETE FROM drafts WHERE actor_id=?", (actor_id,))
             cursor = db.execute(
@@ -260,13 +260,53 @@ class Store:
             )
             return cursor.lastrowid
 
-    def take_draft(self, actor_id: int, draft_id: int) -> list[tuple[str, str | None]] | None:
+    def _draft_items(self, items: list) -> list[dict]:
+        result = []
+        for index, item in enumerate(items):
+            if isinstance(item, dict):
+                result.append(item)
+            else:
+                name, note = item
+                existing = self.product_by_name(name)
+                result.append({"key": str(index), "name": name,
+                               "note": ("Купити в " + note if note in STORES else note) or (existing["note"] if existing else ""),
+                               "category": existing["category"] if existing else infer_category(name)})
+        return result
+
+    def draft(self, actor_id: int, draft_id: int) -> list[dict] | None:
+        with self.db() as db:
+            row = db.execute("SELECT items_json FROM drafts WHERE id=? AND actor_id=?", (draft_id, actor_id)).fetchone()
+        return self._draft_items(json.loads(row[0])) if row else None
+
+    def change_draft(self, actor_id: int, draft_id: int, key: str, changes: dict | None = None, *, remove=False) -> bool:
+        with self.db() as db:
+            row = db.execute("SELECT items_json FROM drafts WHERE id=? AND actor_id=?", (draft_id, actor_id)).fetchone()
+            if not row:
+                return False
+            items = self._draft_items(json.loads(row[0]))
+            item = next((item for item in items if item["key"] == key), None)
+            if item is None:
+                return False
+            if remove:
+                items.remove(item)
+            elif changes:
+                if "category" in changes and changes["category"] not in CATEGORIES:
+                    raise ValueError("Unknown category")
+                if "name" in changes and (not changes["name"].strip() or len(changes["name"]) > 120):
+                    raise ValueError("Invalid name")
+                if "note" in changes and len(changes["note"]) > 200:
+                    raise ValueError("Invalid note")
+                item.update(changes)
+            db.execute("UPDATE drafts SET items_json=? WHERE id=? AND actor_id=?", (json.dumps(items, ensure_ascii=False), draft_id, actor_id))
+            return True
+
+    def take_draft(self, actor_id: int, draft_id: int) -> list[dict] | None:
         with self.db() as db:
             row = db.execute("SELECT items_json FROM drafts WHERE id=? AND actor_id=?", (draft_id, actor_id)).fetchone()
             if not row:
                 return None
             db.execute("DELETE FROM drafts WHERE id=?", (draft_id,))
-            return [(str(name), store) for name, store in json.loads(row[0])]
+            return self._draft_items(json.loads(row[0]))
 
     def cancel_draft(self, actor_id: int, draft_id: int) -> None:
         with self.db() as db:

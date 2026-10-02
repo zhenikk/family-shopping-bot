@@ -49,6 +49,7 @@ class ShoppingBot:
         self.pending_photos: dict[int, str] = {}
         self.pending_notes: dict[int, int] = {}
         self.note_panels: dict[int, int] = {}
+        self.pending_draft_edits: dict[int, tuple] = {}
         self.purchase_feedback: dict[int, int] = {}
         self.notification_lock = threading.Lock()
         self.voice_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="local-voice")
@@ -69,20 +70,12 @@ class ShoppingBot:
         return self.send(user_id, text, reply_markup=markup)["message_id"]
 
     def menu(self) -> dict:
-        markup = {
-            "keyboard": [
-                [{"text": "🛒 Список"}],
-                [{"text": "➕ Додати"}, {"text": "📚 Каталог"}, {"text": "🕘 Історія"}],
-            ],
-            "input_field_placeholder": "Товари через кому або голосом",
-            "resize_keyboard": True,
-            "is_persistent": True,
+        return {
+            "keyboard": [[{"text": "🛍 Покупки"}],
+                         [{"text": "🎙 Додати голосом"}, {"text": "📋 Список у чаті"}]],
+            "input_field_placeholder": "Товари текстом або голосом",
+            "resize_keyboard": True, "is_persistent": True,
         }
-
-        web_url = os.getenv("SHOPPING_WEB_URL", "")
-        if web_url.startswith("https://"):
-            markup["keyboard"].insert(0, [{"text": "🛍 Застосунок"}])
-        return markup
 
     def show_web_app(self, user_id: int) -> None:
         url = os.getenv("SHOPPING_WEB_URL", "")
@@ -127,22 +120,34 @@ class ShoppingBot:
             self.send(user_id, "Це приватний сімейний бот. Для доступу надішліть /join КОД.")
             return
         if text.startswith("/start") or text.startswith("/help"):
+            self.pending_photos.pop(user_id, None)
+            self.pending_notes.pop(user_id, None)
+            self.pending_draft_edits.pop(user_id, None)
             self.send(user_id,
-                "Надішліть товари через кому або голосом. Фото надсилайте з назвою товару. "
-                "Нотатку можна додати так: картопля :: купити в Mercadona. "
-                "Або відкрийте картку товару та натисніть «Нотатка».",
+                "Ваш спільний список покупок. Відкрийте застосунок або надішліть товари текстом чи голосом.",
                 reply_markup=self.menu())
             if os.getenv("SHOPPING_WEB_URL", "").startswith("https://"):
                 self.show_web_app(user_id)
             return
         if text.startswith("/cancel"):
+            edit = self.pending_draft_edits.pop(user_id, None)
             self.pending_photos.pop(user_id, None)
             self.pending_notes.pop(user_id, None)
-            self.send(user_id, "Дію скасовано.")
+            if edit:
+                self.show_draft(user_id, edit[0], edit[2])
+            else:
+                self.send(user_id, "Дію скасовано.")
             return
-        if text in ("🛒 Список", "📚 Каталог", "🕘 Історія", "➕ Додати", "🛍 Застосунок", *STORES) or text.startswith(("/list", "/catalog", "/history", "/app")):
+        if text in ("🛒 Список", "📚 Каталог", "🕘 Історія", "➕ Додати", "🛍 Застосунок", "🛍 Покупки", "🎙 Додати голосом", "📋 Список у чаті", *STORES) or text.startswith(("/list", "/catalog", "/history", "/app")):
             self.pending_notes.pop(user_id, None)
             self.pending_photos.pop(user_id, None)
+            self.pending_draft_edits.pop(user_id, None)
+        if user_id in self.pending_draft_edits:
+            if text:
+                self.finish_draft_edit(user_id, text)
+            else:
+                self.send(user_id, "Надішліть виправлення текстом або /cancel, щоб повернутися до чернетки.")
+            return
         if user_id in self.pending_notes and text:
             if len(text) > 200:
                 self.send(user_id, "Нотатка має бути до 200 символів. Спробуйте коротше або /cancel.")
@@ -167,12 +172,13 @@ class ShoppingBot:
             file_id = self.pending_photos.pop(user_id)
             self.save_photo(user_id, text, file_id)
             return
-        if text == "🛍 Застосунок" or text == "/app":
+        if text in ("🛍 Застосунок", "🛍 Покупки", "/app"):
             self.show_web_app(user_id)
-        elif text in STORES or text == "🛒 Список":
+        elif text in STORES or text in ("🛒 Список", "📋 Список у чаті"):
             self.show_list(user_id)
-        elif text == "➕ Додати":
-            self.send(user_id, "Надішліть товари через кому, наприклад: молоко, яйця, картопля :: купити в Mercadona. Можна також голосом.")
+        elif text in ("➕ Додати", "🎙 Додати голосом"):
+            self.send(user_id, "🎙 Надішліть голосове українською: «молоко, яйця, хліб». Покажу чернетку для перевірки.",
+                      reply_markup=buttons([("Скасувати", "list:all")]))
         elif text == "📚 Каталог" or text.startswith("/catalog"):
             self.show_catalog(user_id)
         elif text == "🕘 Історія" or text.startswith("/history"):
@@ -191,18 +197,55 @@ class ShoppingBot:
         if not items:
             self.send(user_id, "Не знайшов товарів. Спробуйте: молоко, яйця, хліб.")
             return
-        draft_id = self.store.save_draft(user_id, items)
-        lines = ["Додати до спільного списку?"]
-        for name, selected_store in items:
+        draft_items = []
+        for name, note in items:
             existing = self.store.product_by_name(name)
-            note = selected_store if selected_store is not None else (existing["note"] if existing else "")
-            if selected_store in STORES:
-                note = "Купити в " + selected_store
-            category = existing["category"] if existing else infer_category(name)
-            lines.append(f"• {name} · {CATEGORIES[category]}" + (f" — {note}" if note else ""))
-        self.send(user_id, "\n".join(lines), reply_markup=buttons(
-            [("✅ Додати все", f"confirm:{draft_id}"), ("Скасувати", f"cancel:{draft_id}")]
-        ))
+            draft_items.append({"key": uuid.uuid4().hex[:8], "name": name,
+                                "note": ("Купити в " + note if note in STORES else note) or (existing["note"] if existing else ""),
+                                "category": existing["category"] if existing else infer_category(name)})
+        self.pending_draft_edits.pop(user_id, None)
+        draft_id = self.store.save_draft(user_id, draft_items)
+        self.show_draft(user_id, draft_id)
+
+    def show_draft(self, user_id: int, draft_id: int, panel_id=None, editing=False) -> None:
+        items = self.store.draft(user_id, draft_id)
+        if items is None:
+            self.panel(user_id, "Цю чернетку вже оброблено.", buttons([("До списку", "list:all")]), panel_id)
+            return
+        lines = [f"Додати до спільного списку? · {len(items)} товарів"]
+        for index, item in enumerate(items, 1):
+            lines.append(f"{index}. {item['name']} · {CATEGORIES[item['category']]}" + (f"\n   📝 {item['note']}" if item['note'] else ""))
+        controls = []
+        if editing:
+            lines.append("\nОберіть товар для виправлення:")
+            controls += [[(item["name"][:35], f"ditem:{draft_id}:{item['key']}")] for item in items]
+        if items:
+            controls.append([("✅ Додати", f"confirm:{draft_id}"), ("✏️ Виправити", f"dedit:{draft_id}")])
+        else:
+            lines.append("Чернетка порожня. Надішліть новий список.")
+        controls.append([("Скасувати", f"cancel:{draft_id}")])
+        self.panel(user_id, "\n".join(lines)[:3900], buttons(*controls), panel_id)
+
+    def show_draft_item(self, user_id, draft_id, key, panel_id):
+        items = self.store.draft(user_id, draft_id)
+        item = next((item for item in items or [] if item["key"] == key), None)
+        if item is None:
+            self.show_draft(user_id, draft_id, panel_id, editing=True)
+            return
+        self.panel(user_id, f"✏️ {item['name']}\n{CATEGORIES[item['category']]}\nНотатка: {item['note'] or '—'}", buttons(
+            [("Назва", f"dname:{draft_id}:{key}"), ("Нотатка", f"dnote:{draft_id}:{key}")],
+            [("Категорія", f"dcats:{draft_id}:{key}"), ("Прибрати", f"ddel:{draft_id}:{key}")],
+            [("⬅️ До чернетки", f"dedit:{draft_id}")]), panel_id)
+
+    def finish_draft_edit(self, user_id, text):
+        draft_id, key, panel_id, field = self.pending_draft_edits[user_id]
+        limit = 120 if field == "name" else 200
+        if len(text) > limit:
+            self.send(user_id, f"До {limit} символів. Спробуйте коротше або /cancel.")
+            return
+        self.store.change_draft(user_id, draft_id, key, {field: "" if field == "note" and text == "-" else text.strip()})
+        self.pending_draft_edits.pop(user_id, None)
+        self.show_draft_item(user_id, draft_id, key, panel_id)
 
     def process_voice(self, user_id: int, file_id: str, note_product_id: int | None = None) -> None:
         try:
@@ -422,8 +465,10 @@ class ShoppingBot:
         try:
             parts = data.split(":")
             action = parts[0]
-            if action in {"list", "catalog", "item", "categories", "buy", "readd", "add"}:
+            if action in {"list", "catalog", "item", "categories", "buy", "readd", "add", "dedit", "ditem", "confirm", "cancel"}:
                 self.pending_notes.pop(user_id, None)
+            if action not in {"dname", "dnote", "photo"}:
+                self.pending_draft_edits.pop(user_id, None)
             panel_id = message.get("message_id")
             if panel_id == self.purchase_feedback.get(user_id) and action != "undo":
                 self.purchase_feedback.pop(user_id, None)
@@ -432,18 +477,46 @@ class ShoppingBot:
                            buttons([("🛒 До списку", "list:all")]), panel_id)
             elif action == "list" and len(parts) == 2:
                 self.show_list(user_id, message_id=message.get("message_id"))
+            elif action == "dedit" and len(parts) == 2:
+                self.show_draft(user_id, int(parts[1]), panel_id, editing=True)
+            elif action == "ditem" and len(parts) == 3:
+                self.show_draft_item(user_id, int(parts[1]), parts[2], panel_id)
+            elif action in {"dname", "dnote", "dcats", "ddel", "dcat"} and len(parts) in {3, 4}:
+                draft_id, key = int(parts[1]), parts[2]
+                items = self.store.draft(user_id, draft_id)
+                item = next((item for item in items or [] if item["key"] == key), None)
+                if item is None:
+                    answer = "Товар уже прибрано або чернетку оброблено"
+                elif action in {"dname", "dnote"}:
+                    self.pending_notes.pop(user_id, None)
+                    field = "name" if action == "dname" else "note"
+                    self.pending_draft_edits[user_id] = (draft_id, key, panel_id, field)
+                    self.panel(user_id, f"✏️ {item['name']}\nНадішліть {'нову назву' if field == 'name' else 'нотатку (або - щоб прибрати)'} текстом.",
+                               buttons([("Скасувати", f"ditem:{draft_id}:{key}")]), panel_id)
+                elif action == "dcats":
+                    choices = [[(label, f"dcat:{draft_id}:{key}:{category}")] for category, label in CATEGORIES.items()]
+                    choices.append([("⬅️ Назад", f"ditem:{draft_id}:{key}")])
+                    self.panel(user_id, "Оберіть категорію:", buttons(*choices), panel_id)
+                elif action == "ddel":
+                    self.store.change_draft(user_id, draft_id, key, remove=True)
+                    self.show_draft(user_id, draft_id, panel_id, editing=True)
+                elif action == "dcat" and len(parts) == 4:
+                    self.store.change_draft(user_id, draft_id, key, {"category": parts[3]})
+                    self.show_draft_item(user_id, draft_id, key, panel_id)
             elif action == "confirm" and len(parts) == 2:
                 items = self.store.take_draft(user_id, int(parts[1]))
                 if items is None:
                     answer = "Цей список уже оброблено"
                 else:
                     added = 0
-                    for name, preferred in items:
-                        product_id = self.store.ensure_product(name, preferred)
+                    for item in items:
+                        product_id = self.store.ensure_product(item["name"])
+                        self.store.set_note(product_id, item["note"])
+                        self.store.set_category(product_id, item["category"])
                         added += self.store.add_need(product_id, user_id)
                     self.panel(user_id, f"✅ Додано: {added}. Уже у списку: {len(items) - added}.",
                                buttons([("🛒 Відкрити список", "list:all")]), panel_id)
-                    if added:
+                    if items:
                         self.refresh_views()
             elif action == "cancel" and len(parts) == 2:
                 self.store.cancel_draft(user_id, int(parts[1]))

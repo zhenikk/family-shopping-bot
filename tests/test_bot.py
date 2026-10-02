@@ -65,6 +65,45 @@ class ShoppingBotTests(unittest.TestCase):
         self.bot.voice_pool.shutdown(wait=True)
         self.temp.cleanup()
 
+    def test_edit_draft_before_confirmation_and_ignore_stale_removal(self):
+        self.bot.make_draft(1, "Молоко, Хліб")
+        with self.store.db() as db:
+            draft_id = db.execute("SELECT id FROM drafts WHERE actor_id=1").fetchone()[0]
+        milk, bread = self.store.draft(1, draft_id)
+        self.bot.handle_callback(callback(2, f"ddel:{draft_id}:{milk['key']}"))
+        self.assertEqual(len(self.store.draft(1, draft_id)), 2)
+        self.bot.handle_callback(callback(1, f"dname:{draft_id}:{milk['key']}"))
+        self.bot.handle_message(message(1, "Кефір"))
+        self.bot.handle_callback(callback(1, f"dnote:{draft_id}:{milk['key']}"))
+        self.bot.handle_message(message(1, "Жовта упаковка"))
+        self.bot.handle_callback(callback(1, f"dcat:{draft_id}:{milk['key']}:dairy"))
+        self.bot.handle_callback(callback(1, f"ddel:{draft_id}:{bread['key']}"))
+        self.bot.handle_callback(callback(1, f"ddel:{draft_id}:{bread['key']}"))
+        self.assertEqual(len(self.store.draft(1, draft_id)), 1)
+        self.bot.handle_callback(callback(1, f"confirm:{draft_id}"))
+        self.bot.handle_callback(callback(1, f"confirm:{draft_id}"))
+        self.assertEqual(len(self.store.needs()), 1)
+        product = self.store.product_by_name("Кефір")
+        self.assertEqual(product["note"], "Жовта упаковка")
+        self.assertEqual(product["category"], "dairy")
+
+    def test_voice_list_uses_editable_confirmation(self):
+        with patch("shopping_bot.app.transcribe", return_value="Молоко, яйця"):
+            self.bot.process_voice(1, "voice-list")
+        with self.store.db() as db:
+            draft_id = db.execute("SELECT id FROM drafts WHERE actor_id=1").fetchone()[0]
+        items = self.store.draft(1, draft_id)
+        self.assertEqual(len(items), 2)
+        self.assertEqual(items[0]["category"], "dairy")
+        self.assertFalse(self.store.needs())
+        self.bot.handle_callback(callback(1, f"confirm:{draft_id}"))
+        self.assertEqual(len(self.store.needs()), 2)
+
+    def test_legacy_draft_remains_confirmable(self):
+        draft_id = self.store.save_draft(1, [("Картопля", "Lidl")])
+        self.bot.handle_callback(callback(1, f"confirm:{draft_id}"))
+        self.assertEqual(self.store.product_by_name("Картопля")["note"], "Купити в Lidl")
+
     def test_join_is_limited_to_two_private_members(self):
         self.bot.handle_message(message(3, "/join this-is-a-secret-code"))
         self.assertFalse(self.store.is_member(3))
@@ -157,7 +196,7 @@ class ShoppingBotTests(unittest.TestCase):
         text, markup = self.bot.list_content()
         self.assertIn("купити в Mercadona", text)
         self.assertNotIn("Улюблений магазин", text)
-        self.assertEqual(self.bot.menu()["keyboard"][0], [{"text": "🛒 Список"}])
+        self.assertEqual(self.bot.menu()["keyboard"][0], [{"text": "🛍 Покупки"}])
         self.bot.handle_callback(callback(2, f"note:{potato['id']}"))
         self.bot.handle_message(message(2, "велика пачка, жовта упаковка"))
         self.store.ensure_product("картопля")

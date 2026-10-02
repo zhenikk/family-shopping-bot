@@ -65,7 +65,7 @@ body.dark .filters button.selected{color:#101014}
 body.dark .product-row.is-buying .product-check svg{stroke:#171125}
 @media(max-width:360px){h1{font-size:36px}.eyebrow{font-size:9px;letter-spacing:1px}.eyebrow span{font-size:9px}.product-copy strong{font-size:16px}.product-row{padding:13px 10px}dialog{padding-left:18px;padding-right:18px}}
 @media(prefers-reduced-motion:no-preference){
- nav button[aria-current] svg{animation:nav-settle .2s ease-out}
+ nav button.tab-entering svg{animation:nav-settle .2s ease-out}
  dialog[open]{animation:sheet-rise .24s cubic-bezier(.16,1,.3,1)}
  dialog[open]::backdrop{animation:backdrop-in .2s ease-out}
  .filters button,.icon-button,.product-check{transition:background .16s,border-color .16s,transform .16s}
@@ -73,3 +73,13 @@ body.dark .product-row.is-buying .product-check svg{stroke:#171125}
  @keyframes sheet-rise{from{transform:translateY(32px);opacity:.6}to{transform:translateY(0);opacity:1}}
  @keyframes backdrop-in{from{opacity:0}to{opacity:1}}
 }
+
+/* Keep the shopping list dense, with packaging and completion state easy to scan. */
+.shell{padding-top:calc(16px + max(env(safe-area-inset-top),var(--safe-top,0px)))}
+header{margin-bottom:16px}h1{font-size:32px;letter-spacing:-1.2px}.headline{margin-top:10px}
+.thumb{width:60px;height:64px}.thumb img{padding:2px}
+.product-row{padding-top:10px;padding-bottom:10px}
+.product-copy small{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.product-check svg{opacity:0}
+.empty-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+@media(max-width:360px){h1{font-size:30px}.thumb{width:52px;height:60px}}
