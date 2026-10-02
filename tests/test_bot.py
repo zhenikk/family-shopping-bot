@@ -104,6 +104,28 @@ class ShoppingBotTests(unittest.TestCase):
         self.bot.handle_callback(callback(1, f"confirm:{draft_id}"))
         self.assertEqual(self.store.product_by_name("Картопля")["note"], "Купити в Lidl")
 
+    def test_aliases_deduplicate_without_merging_distinct_products(self):
+        items = parse_items("картошка, картопля, фріха, картопля фрі, помідори, томати, картопля молода")
+        self.assertEqual([name for name, _ in items], ["картопля", "картопля фрі", "помідори", "картопля молода"])
+        potato = self.store.ensure_product("картошка")
+        self.store.set_photo(potato, "photo", "saved.jpg")
+        self.store.set_note(potato, "Жовта упаковка")
+        self.store.add_need(potato, 1)
+        self.assertEqual(self.store.ensure_product("картопля"), potato)
+        self.assertFalse(self.store.add_need(potato, 2))
+        self.assertEqual(self.store.product(potato)["photo_file_id"], "photo")
+        self.assertEqual(self.store.product(potato)["note"], "Жовта упаковка")
+        self.assertNotEqual(self.store.ensure_product("фріха"), potato)
+        self.assertNotEqual(self.store.ensure_product("картопля молода"), potato)
+
+    def test_legacy_alias_card_is_reused_without_deleting_it(self):
+        potato = self.store.ensure_product("картопля")
+        with self.store.db() as db:
+            db.execute("UPDATE products SET name='картошка', normalized='картошка' WHERE id=?", (potato,))
+        self.assertEqual(self.store.ensure_product("картопля"), potato)
+        self.assertEqual(self.store.product_by_name("картоплю")["id"], potato)
+        self.assertEqual(self.store.product(potato)["name"], "картошка")
+
     def test_join_is_limited_to_two_private_members(self):
         self.bot.handle_message(message(3, "/join this-is-a-secret-code"))
         self.assertFalse(self.store.is_member(3))

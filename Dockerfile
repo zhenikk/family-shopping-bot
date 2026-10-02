@@ -8,13 +8,13 @@ RUN git clone --depth 1 --branch "${WHISPER_CPP_REF}" \
 RUN cmake -S /src/whisper.cpp -B /src/whisper.cpp/build \
     -DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_TESTS=OFF -DGGML_NATIVE=OFF \
     && cmake --build /src/whisper.cpp/build --target whisper-cli -j 1
-RUN cd /src/whisper.cpp && bash models/download-ggml-model.sh base
+RUN cd /src/whisper.cpp && bash models/download-ggml-model.sh small
 
 FROM python:3.12-slim-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libgomp1 && rm -rf /var/lib/apt/lists/*
 COPY --from=whisper-build /src/whisper.cpp/build /opt/whisper-build
-COPY --from=whisper-build /src/whisper.cpp/models/ggml-base.bin /opt/models/ggml-base.bin
+COPY --from=whisper-build /src/whisper.cpp/models/ggml-small.bin /opt/models/ggml-small.bin
 WORKDIR /app
 COPY pyproject.toml /app/
 COPY src /app/src
@@ -25,6 +25,6 @@ USER shopping
 ENV PYTHONPATH=/app/src \
     SHOPPING_DATA_DIR=/data \
     WHISPER_CLI=/opt/whisper-build/bin/whisper-cli \
-    WHISPER_MODEL=/opt/models/ggml-base.bin \
+    WHISPER_MODEL=/opt/models/ggml-small.bin \
     LD_LIBRARY_PATH=/opt/whisper-build/bin
 CMD ["python", "-m", "shopping_bot.app"]

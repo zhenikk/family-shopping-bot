@@ -3,12 +3,12 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-import unicodedata
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .categories import CATEGORIES, infer_category
+from .product_names import canonical_name, product_key
 
 STORES = ("Mercadona", "Lidl", "Auchan")
 DEFAULT_STORE = "Mercadona"
@@ -19,7 +19,7 @@ def now() -> str:
 
 
 def key_for(name: str) -> str:
-    return " ".join(unicodedata.normalize("NFKC", name).casefold().split())
+    return product_key(name)
 
 
 def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str, str | None]]:
@@ -51,6 +51,7 @@ def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str,
             if not part or len(note) > 200:
                 continue
             store = note or None
+        part = canonical_name(part)
         normalized = key_for(part)
         if normalized not in seen:
             seen.add(normalized)
@@ -186,17 +187,30 @@ class Store:
         with self.db() as db:
             return db.execute("SELECT * FROM products WHERE id=?", (product_id,)).fetchone()
 
+    def _matching_product(self, db, name):
+        normalized = key_for(name)
+        # Existing legacy spellings are reused without changing or deleting cards.
+        rows = db.execute("SELECT p.* FROM products p LEFT JOIN needs n ON n.product_id=p.id ORDER BY (n.product_id IS NOT NULL) DESC, p.id").fetchall()
+        return next((row for row in rows if key_for(row["name"]) == normalized), None)
+
     def product_by_name(self, name: str) -> sqlite3.Row | None:
         with self.db() as db:
-            return db.execute("SELECT * FROM products WHERE normalized=?", (key_for(name),)).fetchone()
+            return self._matching_product(db, name)
 
     def ensure_product(self, name: str, preferred_store: str | None = None) -> int:
         if preferred_store is not None and len(preferred_store) > 200:
             raise ValueError("Note too long")
+        name = canonical_name(name)
         normalized = key_for(name)
         if not normalized or len(name) > 120:
             raise ValueError("Invalid product name")
         with self.db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            existing = self._matching_product(db, name)
+            if existing:
+                if preferred_store:
+                    db.execute("UPDATE products SET note=? WHERE id=?", ("Купити в " + preferred_store if preferred_store in STORES else preferred_store, existing["id"]))
+                return existing["id"]
             db.execute(
                 "INSERT OR IGNORE INTO products(name, normalized, preferred_store, created_at, category) VALUES (?, ?, ?, ?, ?)",
                 (name.strip(), normalized, DEFAULT_STORE, now(), infer_category(name)),

@@ -644,7 +644,7 @@ def main() -> None:
     bot = ShoppingBot(
         Telegram(token), Store(data_dir / "shopping.sqlite3"), invite, data_dir / "photos",
         Path(os.getenv("WHISPER_CLI", "./whisper.cpp/build/bin/whisper-cli")),
-        Path(os.getenv("WHISPER_MODEL", "./whisper.cpp/models/ggml-base.bin")),
+        Path(os.getenv("WHISPER_MODEL", "./whisper.cpp/models/ggml-small.bin")),
     )
     from .webserver import make_server
     server = make_server(bot, token, os.getenv("SHOPPING_WEB_HOST", "127.0.0.1"),
