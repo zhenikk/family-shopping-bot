@@ -319,7 +319,7 @@ class ShoppingBot:
             self.make_draft(user_id, text)
 
     def make_draft(self, user_id: int, raw: str) -> None:
-        items = parse_items(raw)
+        items = self.store.resolved_items(raw)
         if not items:
             self.send(user_id, "Не знайшов товарів. Спробуйте: молоко, яйця, хліб.")
             return
@@ -340,7 +340,9 @@ class ShoppingBot:
             return
         lines = [f"Додати до спільного списку? · {len(items)} товарів"]
         for index, item in enumerate(items, 1):
-            lines.append(f"{index}. {item['name']} · {CATEGORIES[item['category']]}" + (f"\n   📝 {item['note']}" if item['note'] else ""))
+            existing=self.store.product_by_name(item['name'])
+            active=existing and any(row['id']==existing['id'] for row in self.store.needs())
+            lines.append(f"{index}. {item['name']} · {CATEGORIES[item['category']]}" + (' · Уже в списку' if active else '') + (f"\n   📝 {item['note']}" if item['note'] else ""))
         controls = []
         if editing:
             lines.append("\nОберіть товар для виправлення:")

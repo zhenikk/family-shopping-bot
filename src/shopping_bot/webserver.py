@@ -268,18 +268,18 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 data = self.body()
                 notification_batch = None
                 if path == "/api/draft":
-                    items = parse_items(str(data.get("text", "")))
+                    items = bot.store.resolved_items(str(data.get("text", "")))
                     if not items:
                         raise ValueError("Empty list")
                     result = []
                     for name, note in items:
                         existing = bot.store.product_by_name(name)
-                        result.append({"name": name, "note": ("Купити в " + note if note in STORES else note) or (existing["note"] if existing else ""),
+                        result.append({"name": name, "active": bool(existing and any(row["id"]==existing["id"] for row in bot.store.needs())), "note": ("Купити в " + note if note in STORES else note) or (existing["note"] if existing else ""),
                                        "category": existing["category"] if existing else infer_category(name)})
                     self.respond(200, {"items": result})
                     return
                 if path == "/api/add":
-                    items = parse_items(str(data.get("text", "")))
+                    items = bot.store.resolved_items(str(data.get("text", "")))
                     if not items:
                         raise ValueError("Empty list")
                     added = sum(bot.store.add_need(bot.store.ensure_product(name, note), user_id) for name, note in items)

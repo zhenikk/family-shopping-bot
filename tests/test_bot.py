@@ -108,7 +108,7 @@ class ShoppingBotTests(unittest.TestCase):
 
     def test_aliases_deduplicate_without_merging_distinct_products(self):
         items = parse_items("картошка, картопля, фріха, картопля фрі, помідори, томати, картопля молода")
-        self.assertEqual([name for name, _ in items], ["картопля", "картопля фрі", "помідори", "картопля молода"])
+        self.assertEqual([name for name, _ in items], ["Картопля", "Картопля фрі", "Помідори", "Картопля молода"])
         potato = self.store.ensure_product("картошка")
         self.store.set_photo(potato, "photo", "saved.jpg")
         self.store.set_note(potato, "Жовта упаковка")
@@ -169,7 +169,7 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertIn('family:accept:0:' + invite, actions)
         self.bot.handle_callback(callback(3, 'family:accept:0:' + invite))
         self.assertEqual(self.bot.families.family(3), target)
-        self.assertEqual(self.bot.store.needs()[0]['name'], 'молоко')
+        self.assertEqual(self.bot.store.needs()[0]['name'], 'Молоко')
         self.assertCountEqual([row['user_id'] for row in self.bot.store.members()], [4,3])
         self.bot.families.route_message(3,800,old_family)
         self.bot.handle_callback(callback(3,f'buy:{product}:all',message_id=800))
@@ -184,7 +184,7 @@ class ShoppingBotTests(unittest.TestCase):
         target,_=self.bot.families.enroll(4,'Owner')
         invite=self.bot.families.invite(4)
         self.assertEqual(self.bot.families.accept_invite(3,'Recipient',invite),'joined')
-        self.assertEqual(original.needs()[0]['name'],'яйця')
+        self.assertEqual(original.needs()[0]['name'],'Яйця')
         self.assertFalse(self.bot.families.delete(3))
         self.assertTrue(self.bot.families.rename(4,'Спільні покупки'))
         self.assertTrue(self.bot.families.rename(3,'Нова назва'))
@@ -219,7 +219,7 @@ class ShoppingBotTests(unittest.TestCase):
         target.set_photo(existing,'target-id',str(target_photo));target.add_need(existing,4)
         invite=self.bot.families.create_invite(4)
         self.assertEqual(self.bot.families.accept_invite(3,'Source',invite,transfer=True,expected_family=source),'joined')
-        self.assertEqual({row['name'] for row in target.needs()},{'молоко','картопля'})
+        self.assertEqual({row['name'] for row in target.needs()},{'Молоко','Картопля'})
         self.assertEqual(target.product(existing)['note'],'target note')
         self.assertEqual(target.product(existing)['photo_path'],str(target_photo))
         imported=target.product_by_name('молоко')
@@ -314,7 +314,7 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual(registry.family(1), "legacy")
         self.assertEqual(registry.family(3), family)
         restored_store, restored_media = registry.resources(family)
-        self.assertEqual(restored_store.needs()[0]["name"], "яйця")
+        self.assertEqual(restored_store.needs()[0]["name"], "Яйця")
         self.assertEqual((restored_media / "egg.jpg").read_bytes(), b"photo")
 
     def test_shared_list_purchase_batch_and_undo(self):
@@ -361,12 +361,38 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual(len(self.store.needs_for_store("Auchan")), 1)
         self.assertEqual(self.store.product(coffee["id"])["photo_file_id"], "large")
 
+    def test_recognition_suggests_unique_typos_and_preserves_qualifiers(self):
+        from shopping_bot.product_names import canonical_name, suggested_name
+        self.assertEqual(canonical_name('iPhone яблука'), 'IPhone яблука')
+        self.assertEqual(canonical_name('Nutella'), 'Nutella')
+        self.assertEqual(self.store.resolved_items('помідорі, помідори, томати'), [('Помідори',None)])
+        self.assertEqual(suggested_name('картопля фрі'), 'Картопля фрі')
+        self.assertEqual(suggested_name('молоко безлактозне'), 'Молоко безлактозне')
+        self.assertEqual(suggested_name('абвгде', ['Абвгдж','Абвгдз']), 'Абвгде')
+        self.assertNotEqual(self.store.ensure_product('молоко'),self.store.ensure_product('молоко безлактозне'))
+
+    def test_duplicate_migration_keeps_history_photos_and_notes(self):
+        potato=self.store.ensure_product('картопля');self.store.add_need(potato,1)
+        with self.store.db() as db:
+            duplicate=db.execute("INSERT INTO products(name,normalized,preferred_store,created_at,category,note,photo_path,photo_file_id) VALUES ('картошка','картошка','Mercadona','2026','vegetables','важлива нотатка','/photo.jpg','photo')").lastrowid
+            db.execute("INSERT INTO needs VALUES (?,2,'2026')",(duplicate,))
+            db.execute("INSERT INTO events(product_id,actor_id,action,happened_at) VALUES (?,2,'added','2026')",(duplicate,))
+        migrated=Store(self.store.path)
+        self.assertEqual(migrated.catalog_count(),1)
+        self.assertEqual(len(migrated.needs()),1)
+        card=migrated.product(potato)
+        self.assertEqual((card['name'],card['note'],card['photo_path']),('Картопля','важлива нотатка','/photo.jpg'))
+        with migrated.db() as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM events WHERE product_id=?',(potato,)).fetchone()[0],2)
+            self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(),[])
+        self.assertEqual(Store(self.store.path).catalog_count(),1)
+
     def test_voice_style_short_list_parser(self):
         self.assertEqual(parse_items("Молоко, яйця; хліб @Lidl. Кава"), [
-            ("Молоко", None), ("яйця", None), ("хліб", "Lidl"), ("Кава", None),
+            ("Молоко", None), ("Яйця", None), ("Хліб", "Lidl"), ("Кава", None),
         ])
         self.assertEqual(parse_items("Сьогодні треба купити яйця, молоко і хліб"), [
-            ("яйця", None), ("молоко", None), ("хліб", None),
+            ("Яйця", None), ("Молоко", None), ("Хліб", None),
         ])
         self.assertEqual(parse_items("Кава і вершки", split_conjunctions=False), [("Кава і вершки", None)])
 
@@ -382,8 +408,8 @@ class ShoppingBotTests(unittest.TestCase):
         self.store.add_need(potato, 1)
         self.store.add_need(fruit, 2)
         content, _ = self.bot.list_content("Mercadona")
-        self.assertIn("🥕 Овочі\n• картопля", content)
-        self.assertIn("🍊 Фрукти\n• мандарини", content)
+        self.assertIn("🥕 Овочі\n• Картопля", content)
+        self.assertIn("🍊 Фрукти\n• Мандарини", content)
         self.bot.handle_callback(callback(2, f"setcategory:{potato}:other"))
         self.store.ensure_product("картопля")
         self.assertEqual(self.store.product(potato)["category"], "other")

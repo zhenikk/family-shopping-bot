@@ -1,31 +1,64 @@
 """Exact offline aliases; keep brands and qualifiers distinct."""
 import unicodedata
+import re
 
 ALIASES = {
     "картопля": ("картошка", "картоплю", "картоплі", "картошку", "картофель"),
     "картопля фрі": ("картошка фрі", "картошка фри", "картопля фри", "картофель фри", "фріха", "фриха", "фрі", "фри"),
     "помідори": ("помідор", "помідорів", "помидоры", "помидор", "томати", "томат"),
-    "огірки": ("огірок", "огірків", "огурцы", "огурец"),
     "яйця": ("яйце", "яєць", "яйца"),
     "яблука": ("яблуко", "яблук", "яблоки", "яблоко"),
     "мандарини": ("мандарин", "мандаринів", "мандарины"),
     "банани": ("банан", "бананів", "бананы"),
     "хліб": ("хліба", "хлеб"),
     "молоко": ("молока",),
+    "морква": ("моркву", "моркви", "морковка", "морковь"),
+    "цибуля": ("цибулю", "цибулі", "лук"),
+    "огірки": ("огірок", "огірків", "огурцы", "огурец", "огірочки"),
+    "сметана": ("сметану", "сметани"),
+    "масло": ("масла",),
+    "вершки": ("вершків", "сливки"),
+    "сир": ("сиру",),
+    "курятина": ("курятину", "курятини"),
+    "макарони": ("макаронів", "макароны"),
+    "чіпси": ("чіпс", "чипсы", "чіпсів"),
+    "лимони": ("лимон", "лимонів"),
+    "апельсини": ("апельсин", "апельсинів"),
 }
 
 def normalized_name(name):
-    return " ".join(unicodedata.normalize("NFKC", name).casefold().split())
+    return " ".join(unicodedata.normalize("NFKC", name).casefold().replace("’", "'").replace("ʼ", "'").split())
 
 LOOKUP = {alias: canonical for canonical, aliases in ALIASES.items() for alias in (canonical, *aliases)}
 
 def canonical_name(name):
     cleaned = " ".join(unicodedata.normalize("NFKC", name).split())
     key = normalized_name(cleaned)
-    canonical = LOOKUP.get(key)
-    if canonical and canonical != key:
-        return canonical.capitalize() if cleaned[:1].isupper() else canonical
-    return cleaned
+    value = LOOKUP.get(key, cleaned)
+    return value[:1].upper() + value[1:]
+
+
+def one_edit(a, b):
+    """Exactly one insertion, deletion or replacement; no broad fuzzy matching."""
+    if a == b or abs(len(a)-len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        return sum(x != y for x, y in zip(a,b)) == 1
+    short, long = sorted((a,b), key=len)
+    return any(long[:i]+long[i+1:] == short for i in range(len(long)))
+
+
+def suggested_name(name, catalog=()):
+    cleaned=canonical_name(name)
+    key=normalized_name(cleaned)
+    # Exact known names and qualifiers are never fuzzily collapsed.
+    if key in LOOKUP or not re.fullmatch(r"[а-яіїєґ]{6,}",key):
+        return cleaned
+    targets={alias: canonical for alias,canonical in LOOKUP.items() if ' ' not in alias}
+    targets.update({normalized_name(value):value for value in catalog if ' ' not in normalized_name(value)})
+    matches={canonical_name(value) for alias,value in targets.items() if one_edit(key,alias)}
+    return next(iter(matches)) if len(matches)==1 else cleaned
+
 
 def product_key(name):
     key = normalized_name(name)

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .categories import CATEGORIES, infer_category
-from .product_names import canonical_name, product_key
+from .product_names import canonical_name, product_key, suggested_name
 
 STORES = ("Mercadona", "Lidl", "Auchan")
 DEFAULT_STORE = "Mercadona"
@@ -149,6 +149,43 @@ class Store:
                 db.execute("ALTER TABLE products ADD COLUMN note TEXT NOT NULL DEFAULT ''")
                 # The old default Mercadona was automatic, not an explicit request.
                 db.execute("UPDATE products SET note='Купити в ' || preferred_store WHERE preferred_store != 'Mercadona'")
+
+            # Exact alias migration preserves references, events and card metadata.
+            if not db.in_transaction:
+                db.execute("BEGIN IMMEDIATE")
+            rows=db.execute("SELECT p.* FROM products p LEFT JOIN needs n ON n.product_id=p.id ORDER BY (n.product_id IS NOT NULL) DESC,p.id").fetchall()
+            keep={}
+            for row in rows:
+                key=key_for(row['name'])
+                if key in keep:
+                    target=keep[key]
+                    db.execute("INSERT OR IGNORE INTO needs SELECT ?,added_by,added_at FROM needs WHERE product_id=?",(target,row['id']))
+                    db.execute("DELETE FROM needs WHERE product_id=?",(row['id'],))
+                    db.execute("UPDATE events SET product_id=? WHERE product_id=?",(target,row['id']))
+                    db.execute("UPDATE products SET note=CASE WHEN note='' THEN ? ELSE note END, photo_file_id=CASE WHEN photo_path IS NULL OR photo_path='' THEN ? ELSE photo_file_id END, photo_path=CASE WHEN photo_path IS NULL OR photo_path='' THEN ? ELSE photo_path END WHERE id=?",(row['note'],row['photo_file_id'],row['photo_path'],target))
+                    db.execute("DELETE FROM products WHERE id=?",(row['id'],))
+                else:
+                    keep[key]=row['id']
+            for key,product_id in keep.items():
+                row=db.execute("SELECT name FROM products WHERE id=?",(product_id,)).fetchone()
+                db.execute("UPDATE products SET name=?,normalized=? WHERE id=?",(canonical_name(row['name']),key,product_id))
+
+    def resolve_name(self, name):
+        exact=self.product_by_name(name)
+        if exact:
+            return canonical_name(exact['name'])
+        with self.db() as db:
+            names=[row[0] for row in db.execute('SELECT name FROM products')]
+        return suggested_name(name,names)
+
+    def resolved_items(self, raw):
+        result=[];seen=set()
+        for name,note in parse_items(raw):
+            name=self.resolve_name(name)
+            key=key_for(name)
+            if key not in seen:
+                result.append((name,note));seen.add(key)
+        return result
 
     def set_note(self, product_id: int, note: str) -> None:
         if len(note) > 200:
@@ -336,6 +373,8 @@ class Store:
                     raise ValueError("Invalid name")
                 if "note" in changes and len(changes["note"]) > 200:
                     raise ValueError("Invalid note")
+                if "name" in changes:
+                    changes["name"] = canonical_name(changes["name"])
                 item.update(changes)
             db.execute("UPDATE drafts SET items_json=? WHERE id=? AND actor_id=?", (json.dumps(items, ensure_ascii=False), draft_id, actor_id))
             return True

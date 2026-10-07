@@ -107,7 +107,7 @@ class MiniAppTests(unittest.TestCase):
         self.assertEqual(self.bot.families.family(3),source)
         self.assertEqual(self.request('/api/family/accept',{'token':invite,'source_family':source,'transfer':True,'confirm':True},user=3)[0],200)
         current=json.loads(self.request('/api/state',user=3)[1])
-        self.assertEqual(current['products'][0]['name'],'картопля')
+        self.assertEqual(current['products'][0]['name'],'Картопля')
         self.assertEqual(current['family_id'],self.bot.families.family(4))
 
     def test_switched_family_rejects_stale_miniapp_mutation(self):
@@ -164,7 +164,7 @@ class MiniAppTests(unittest.TestCase):
         self.assertEqual(self.request(f"/api/photo/{friend['id']}", user=4)[1], b"friend photo")
         with ThreadPoolExecutor(max_workers=2) as pool:
             states = list(pool.map(lambda user: json.loads(self.request("/api/state", user=user)[1]), [1, 3]))
-        self.assertEqual([state["products"][0]["name"] for state in states], ["молоко", "хліб"])
+        self.assertEqual([state["products"][0]["name"] for state in states], ["Молоко", "Хліб"])
         self.request("/api/edit", {"id": friend["id"], "note": "friend only", "category": "other"}, user=3)
         result = json.loads(self.request("/api/buy", {"id": friend["id"]}, user=3)[1])
         self.assertTrue(result["bought"])
@@ -220,8 +220,8 @@ class MiniAppTests(unittest.TestCase):
         self.assertEqual(len(sent), 1)
         edits = [params for method, params in self.bot.telegram.calls if method == "editMessageText" and params["chat_id"] == 2]
         self.assertTrue(edits)
-        self.assertIn("молоко", edits[-1]["text"])
-        self.assertIn("яйця", edits[-1]["text"])
+        self.assertIn("Молоко", edits[-1]["text"])
+        self.assertIn("Яйця", edits[-1]["text"])
 
     def test_purchase_response_does_not_wait_for_telegram(self):
         product = self.store.ensure_product("молоко")
