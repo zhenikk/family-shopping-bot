@@ -7,6 +7,7 @@ import json
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
@@ -95,7 +96,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 user_id = validate_init_data(auth[4:], token)
             except (ValueError, TypeError, KeyError):
                 raise AccessError("Open through Telegram") from None
-            if not bot.store.is_member(user_id):
+            if not bot.bind_user(user_id) or not bot.store.is_member(user_id):
                 raise AccessError("Family members only")
             return user_id
 
@@ -213,7 +214,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 else:
                     self.respond(404, {"error": "Не знайдено"})
                     return
-                self.server.sync_pool.submit(sync_changes, notification_batch)
+                self.server.sync_pool.submit(copy_context().run, sync_changes, notification_batch)
                 self.respond(200, result)
             except AccessError:
                 self.respond(401, {"error": "Сесія завершилась. Закрийте застосунок і відкрийте знову через бота."})

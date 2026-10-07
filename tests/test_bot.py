@@ -19,6 +19,8 @@ class FakeTelegram:
 
     def call(self, method, **params):
         self.calls.append((method, params))
+        if method == "getMe":
+            return {"username": "test_shopping_bot"}
         if method in ("sendMessage", "sendPhoto"):
             self.next_message_id += 1
             return {"message_id": self.next_message_id}
@@ -126,11 +128,64 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual(self.store.product_by_name("картоплю")["id"], potato)
         self.assertEqual(self.store.product(potato)["name"], "картошка")
 
-    def test_join_is_limited_to_two_private_members(self):
+    def test_join_is_private_and_has_no_member_cap(self):
         self.bot.handle_message(message(3, "/join this-is-a-secret-code"))
-        self.assertFalse(self.store.is_member(3))
-        self.bot.handle_message({"from": {"id": 3}, "chat": {"id": -10, "type": "group"}, "text": "/join this-is-a-secret-code"})
+        self.assertTrue(self.store.is_member(3))
+        self.bot.handle_message({"from": {"id": 4}, "chat": {"id": -10, "type": "group"}, "text": "/join this-is-a-secret-code"})
+        self.assertFalse(self.store.is_member(4))
         self.assertEqual(len(self.store.recent_history()), 0)
+
+    def test_family_onboarding_invitation_and_persisted_routing(self):
+        self.bot.handle_message(message(3, "/create"))
+        family = self.bot.families.family(3)
+        self.assertNotEqual(family, "legacy")
+        invite = self.bot.families.invite(3)
+        self.bot.handle_message(message(4, "/start invite_" + invite))
+        self.assertEqual(self.bot.families.family(4), family)
+        self.bot.handle_message(message(5, "/start invite_invalid"))
+        self.assertIsNone(self.bot.families.family(5))
+        self.bot.handle_message(message(1, "/start invite_" + invite))
+        self.assertEqual(self.bot.families.family(1), "legacy")
+        from shopping_bot.families import Families
+        reopened = Families(self.store, self.root / "photos")
+        self.assertEqual(reopened.family(4), family)
+        self.assertTrue(reopened.resources(family)[0].is_member(4))
+
+    def test_notifications_go_only_to_all_members_of_current_family(self):
+        self.bot.families.enroll(3, "Friend")
+        invite = self.bot.families.invite(3)
+        for user in (4, 5):
+            self.bot.families.enroll(user, "Partner", invite)
+        self.bot.bind_user(3)
+        product = self.bot.store.ensure_product("хліб")
+        self.bot.store.add_need(product, 3)
+        bought, batch, _ = self.bot.store.purchase(product, 3, "")
+        self.telegram.calls.clear()
+        self.bot.notify_partner(batch)
+        recipients = [params["chat_id"] for method, params in self.telegram.calls if method == "sendMessage"]
+        self.assertEqual(recipients, [4, 5])
+        self.bot.notify_partner(batch)
+        edits = [params["chat_id"] for method, params in self.telegram.calls if method == "editMessageText"]
+        self.assertEqual(edits, [4, 5])
+
+    def test_backup_restores_family_registry_data_and_photos(self):
+        from shopping_bot.families import Families
+        family, _ = self.bot.families.enroll(3, "Friend")
+        store, media = self.bot.families.resources(family)
+        product = store.ensure_product("яйця")
+        store.add_need(product, 3)
+        (media / "egg.jpg").write_bytes(b"photo")
+        archive = backup(self.root, self.root / "backups")
+        restored = self.root / "restored"
+        restored.mkdir()
+        with tarfile.open(archive) as tar:
+            tar.extractall(restored, filter="data")
+        registry = Families(Store(restored / "shopping.sqlite3"), restored / "photos")
+        self.assertEqual(registry.family(1), "legacy")
+        self.assertEqual(registry.family(3), family)
+        restored_store, restored_media = registry.resources(family)
+        self.assertEqual(restored_store.needs()[0]["name"], "яйця")
+        self.assertEqual((restored_media / "egg.jpg").read_bytes(), b"photo")
 
     def test_shared_list_purchase_batch_and_undo(self):
         self.bot.handle_message(message(1, "Молоко, Хліб @Lidl"))

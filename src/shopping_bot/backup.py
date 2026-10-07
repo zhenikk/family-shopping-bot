@@ -27,6 +27,20 @@ def backup(data_dir: Path, output_dir: Path) -> Path:
             photos = data_dir / "photos"
             if photos.is_dir():
                 tar.add(photos, arcname="photos")
+            registry = data_dir / "families.sqlite3"
+            if registry.is_file():
+                registry_snapshot = Path(temporary) / "families.sqlite3"
+                with closing(sqlite3.connect(registry)) as source, closing(sqlite3.connect(registry_snapshot)) as target:
+                    source.backup(target)
+                tar.add(registry_snapshot, arcname="families.sqlite3")
+            for family_db in sorted((data_dir / "families").glob("*/shopping.sqlite3")):
+                family_snapshot = Path(temporary) / (family_db.parent.name + ".sqlite3")
+                with closing(sqlite3.connect(family_db)) as source, closing(sqlite3.connect(family_snapshot)) as target:
+                    source.backup(target)
+                prefix = "families/" + family_db.parent.name
+                tar.add(family_snapshot, arcname=prefix + "/shopping.sqlite3")
+                if (family_db.parent / "photos").is_dir():
+                    tar.add(family_db.parent / "photos", arcname=prefix + "/photos")
     return archive
 
 

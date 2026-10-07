@@ -82,6 +82,37 @@ class MiniAppTests(unittest.TestCase):
         self.assertEqual(self.request(f"/api/photo/{product}")[1], b"private photo")
         self.assertEqual(self.request("/")[0], 200)
 
+    def test_families_isolate_overlapping_ids_photos_mutations_and_sync(self):
+        legacy = self.store.ensure_product("молоко")
+        self.store.add_need(legacy, 1)
+        self.bot.families.enroll(3, "Friend")
+        self.bot.families.enroll(4, "Partner", self.bot.families.invite(3))
+        self.assertEqual(self.request("/api/add", {"text": "хліб"}, user=3)[0], 200)
+        family_store, media = self.bot.families.resources(self.bot.families.family(3))
+        friend = family_store.product_by_name("хліб")
+        self.assertEqual(friend["id"], legacy)  # IDs deliberately overlap.
+        photo = media / "friend.jpg"
+        photo.write_bytes(b"friend photo")
+        family_store.set_photo(friend["id"], "id", str(photo))
+        self.assertEqual(self.request(f"/api/photo/{legacy}", user=1)[0], 404)
+        self.assertEqual(self.request(f"/api/photo/{friend['id']}", user=4)[1], b"friend photo")
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            states = list(pool.map(lambda user: json.loads(self.request("/api/state", user=user)[1]), [1, 3]))
+        self.assertEqual([state["products"][0]["name"] for state in states], ["молоко", "хліб"])
+        self.request("/api/edit", {"id": friend["id"], "note": "friend only", "category": "other"}, user=3)
+        result = json.loads(self.request("/api/buy", {"id": friend["id"]}, user=3)[1])
+        self.assertTrue(result["bought"])
+        self.assertEqual(len(self.store.needs()), 1)
+        self.assertEqual(self.store.product(legacy)["note"], "")
+        self.assertEqual(len(self.store.recent_history()), 1)
+        deadline = time.time() + 2
+        while time.time() < deadline and not any(method == "sendMessage" and params.get("chat_id") == 4 for method, params in self.bot.telegram.calls):
+            time.sleep(.01)
+        recipients = [params["chat_id"] for method, params in self.bot.telegram.calls if method == "sendMessage"]
+        self.assertEqual(recipients, [4])
+        # A foreign family cannot undo a purchase whose event ID is absent there.
+        self.assertFalse(json.loads(self.request("/api/undo", {"event_id": result["event_id"]}, user=1)[1])["restored"])
+
     def test_shared_add_edit_purchase_undo_and_atomic_validation(self):
         self.assertEqual(self.request("/api/draft", {"text": "картопля :: Mercadona"})[0], 200)
         self.assertEqual(self.store.needs(), [])

@@ -16,7 +16,7 @@ def transcribe(
     file_id: str,
     whisper_cli: Path,
     whisper_model: Path,
-    timeout: int = 240,
+    timeout: int | None = None,
 ) -> str:
     if not whisper_cli.is_file() or not whisper_model.is_file():
         raise SpeechError("Локальне розпізнавання голосу ще не налаштоване")

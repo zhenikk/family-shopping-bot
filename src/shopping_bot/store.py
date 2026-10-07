@@ -130,6 +130,12 @@ class Store:
                     PRIMARY KEY(user_id, store)
                 );
                 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS batch_notifications (
+                    batch_id INTEGER NOT NULL REFERENCES batches(id),
+                    user_id INTEGER NOT NULL REFERENCES members(user_id),
+                    message_id INTEGER NOT NULL,
+                    PRIMARY KEY(batch_id, user_id)
+                );
                 CREATE INDEX IF NOT EXISTS idx_events_time ON events(happened_at DESC);
             """)
 
@@ -169,10 +175,26 @@ class Store:
             if db.execute("SELECT 1 FROM members WHERE user_id=?", (user_id,)).fetchone():
                 db.execute("UPDATE members SET name=? WHERE user_id=?", (name[:80], user_id))
                 return "already"
-            if db.execute("SELECT COUNT(*) FROM members").fetchone()[0] >= 2:
-                return "full"
             db.execute("INSERT INTO members VALUES (?, ?, ?)", (user_id, name[:80], now()))
             return "joined"
+
+    def partners(self, user_id):
+        with self.db() as db:
+            return db.execute("SELECT * FROM members WHERE user_id != ?", (user_id,)).fetchall()
+
+    def notification(self, batch_id, user_id):
+        with self.db() as db:
+            row = db.execute("SELECT message_id FROM batch_notifications WHERE batch_id=? AND user_id=?", (batch_id, user_id)).fetchone()
+            if row:
+                return row[0]
+            # Existing two-person batches retain their original notification.
+            batch = db.execute("SELECT notification_id, actor_id FROM batches WHERE id=?", (batch_id,)).fetchone()
+            count = db.execute("SELECT COUNT(*) FROM members WHERE user_id != ?", (batch[1],)).fetchone()[0] if batch else 0
+            return batch[0] if batch and count == 1 else None
+
+    def save_notification(self, batch_id, user_id, message_id):
+        with self.db() as db:
+            db.execute("INSERT INTO batch_notifications VALUES (?, ?, ?) ON CONFLICT(batch_id, user_id) DO UPDATE SET message_id=excluded.message_id", (batch_id, user_id, message_id))
 
     def other_member(self, user_id: int) -> sqlite3.Row | None:
         with self.db() as db:

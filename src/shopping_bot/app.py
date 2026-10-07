@@ -6,6 +6,7 @@ import os
 import time
 import threading
 import uuid
+from contextvars import ContextVar, copy_context
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from .categories import CATEGORIES, infer_category
 from .speech import SpeechError, transcribe
 from .store import STORES, Store, parse_items
 from .telegram import Telegram, TelegramError
+from .families import Families
 
 LOG = logging.getLogger("shopping_bot")
 STORE_CODES = {"M": "Mercadona", "L": "Lidl", "A": "Auchan"}
@@ -40,10 +42,12 @@ class ShoppingBot:
         whisper_model: Path,
     ):
         self.telegram = telegram
-        self.store = store
+        self.legacy_store = store
         self.invite_code = invite_code
-        self.media_dir = media_dir
-        self.media_dir.mkdir(parents=True, exist_ok=True)
+        self.legacy_media_dir = media_dir
+        media_dir.mkdir(parents=True, exist_ok=True)
+        self.families = Families(store, media_dir)
+        self.family_context = ContextVar("shopping_family", default="legacy")
         self.whisper_cli = whisper_cli
         self.whisper_model = whisper_model
         self.pending_photos: dict[int, str] = {}
@@ -53,6 +57,24 @@ class ShoppingBot:
         self.purchase_feedback: dict[int, int] = {}
         self.notification_lock = threading.Lock()
         self.voice_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="local-voice")
+
+    @property
+    def store(self):
+        return self.families.resources(self.family_context.get())[0]
+
+    @property
+    def media_dir(self):
+        return self.families.resources(self.family_context.get())[1]
+
+    def bind_user(self, user_id):
+        family = self.families.family(user_id)
+        self.family_context.set(family or "legacy")
+        return family is not None
+
+    def show_invite(self, user_id):
+        username = self.telegram.call("getMe")["username"]
+        link = f"https://t.me/{username}?start=invite_{self.families.invite(user_id)}"
+        self.send(user_id, "Запросіть близьких до вашого спільного списку. Кожен, хто має це посилання, може приєднатися — передавайте його лише учасникам сім’ї.\n\n" + link)
 
     def send(self, chat_id: int, text: str, **kwargs):
         return self.telegram.call("sendMessage", chat_id=chat_id, text=text, **kwargs)
@@ -72,7 +94,8 @@ class ShoppingBot:
     def menu(self) -> dict:
         return {
             "keyboard": [[{"text": "🛍 Покупки"}],
-                         [{"text": "🎙 Додати голосом"}, {"text": "📋 Список у чаті"}]],
+                         [{"text": "🎙 Додати голосом"}, {"text": "📋 Список у чаті"}],
+                         [{"text": "👥 Запросити до сім’ї"}]],
             "input_field_placeholder": "Товари текстом або голосом",
             "resize_keyboard": True, "is_persistent": True,
         }
@@ -89,10 +112,14 @@ class ShoppingBot:
             self.send(user_id, "Застосунок ще не під’єднаний. Поки користуйтеся списком у чаті.")
 
     def handle_update(self, update: dict) -> None:
-        if "message" in update:
-            self.handle_message(update["message"])
-        elif "callback_query" in update:
-            self.handle_callback(update["callback_query"])
+        previous = self.family_context.set("legacy")
+        try:
+            if "message" in update:
+                self.handle_message(update["message"])
+            elif "callback_query" in update:
+                self.handle_callback(update["callback_query"])
+        finally:
+            self.family_context.reset(previous)
 
     def handle_message(self, message: dict) -> None:
         chat = message.get("chat", {})
@@ -101,6 +128,20 @@ class ShoppingBot:
             return
         user_id = int(user["id"])
         text = (message.get("text") or "").strip()
+        registered = self.bind_user(user_id)
+        name = user.get("first_name") or "Учасник"
+        if text == "/create" or text.startswith("/start invite_"):
+            invite = text.split("invite_", 1)[1] if text.startswith("/start invite_") else None
+            family, status = self.families.enroll(user_id, name, invite)
+            if status == "invalid":
+                self.send(user_id, "Запрошення недійсне. Попросіть нове посилання.")
+                return
+            self.bind_user(user_id)
+            self.send(user_id, "Ви вже маєте сім’ю." if status == "already" else "Готово! Ваш сімейний список доступний.", reply_markup=self.menu())
+            if not invite or status == "already":
+                self.show_invite(user_id)
+            self.show_web_app(user_id)
+            return
 
         if text.startswith("/whoami"):
             self.send(user_id, f"Ваш Telegram ID: {user_id}")
@@ -110,21 +151,25 @@ class ShoppingBot:
             if not supplied or not hmac.compare_digest(supplied, self.invite_code):
                 self.send(user_id, "Неправильний код. Надішліть /join КОД.")
                 return
-            status = self.store.join(user_id, user.get("first_name") or "Учасник")
-            if status == "full":
-                self.send(user_id, "У цій сім'ї вже є двоє учасників.")
-            else:
-                self.send(user_id, "Готово! Ваш список покупок спільний для вас двох.", reply_markup=self.menu())
+            self.families.enroll(user_id, name, legacy=True)
+            self.bind_user(user_id)
+            self.send(user_id, "Готово! Ваш сімейний список доступний.", reply_markup=self.menu())
             return
-        if not self.store.is_member(user_id):
-            self.send(user_id, "Це приватний сімейний бот. Для доступу надішліть /join КОД.")
+        if not registered:
+            self.send(user_id, "Створіть сім’ю та запросіть близьких. Якщо вам надіслали запрошення — відкрийте його.", reply_markup=buttons([("Створити сім’ю", "family:create")]))
+            return
+        if text in ("/invite", "👥 Запросити до сім’ї"):
+            self.pending_notes.pop(user_id, None)
+            self.pending_draft_edits.pop(user_id, None)
+            self.pending_photos.pop(user_id, None)
+            self.show_invite(user_id)
             return
         if text.startswith("/start") or text.startswith("/help"):
             self.pending_photos.pop(user_id, None)
             self.pending_notes.pop(user_id, None)
             self.pending_draft_edits.pop(user_id, None)
             self.send(user_id,
-                "Ваш спільний список покупок. Відкрийте застосунок або надішліть товари текстом чи голосом.",
+                "Ваш спільний список покупок. Відкрийте застосунок або надішліть товари текстом чи голосом.\n/invite — запросити учасника сім’ї.",
                 reply_markup=self.menu())
             if os.getenv("SHOPPING_WEB_URL", "").startswith("https://"):
                 self.show_web_app(user_id)
@@ -161,8 +206,8 @@ class ShoppingBot:
             self.handle_photo(user_id, message)
             return
         if message.get("voice"):
-            self.send(user_id, "Розпізнаю голосове повідомлення локально…")
-            self.voice_pool.submit(self.process_voice, user_id, message["voice"]["file_id"],
+            self.send(user_id, "Голосове в черзі. Повідомлю, коли почну розпізнавання.")
+            self.voice_pool.submit(copy_context().run, self.process_voice, user_id, message["voice"]["file_id"],
                                    self.pending_notes.get(user_id))
             return
         if not text:
@@ -248,7 +293,10 @@ class ShoppingBot:
         self.show_draft_item(user_id, draft_id, key, panel_id)
 
     def process_voice(self, user_id: int, file_id: str, note_product_id: int | None = None) -> None:
+        if not self.bind_user(user_id):
+            return
         try:
+            self.send(user_id, "Розпізнаю голосове повідомлення локально…")
             transcript = transcribe(self.telegram, file_id, self.whisper_cli, self.whisper_model)
             if not transcript:
                 self.send(user_id, "Не вдалося розпізнати повідомлення. Спробуйте ще раз або надішліть текст.")
@@ -425,8 +473,8 @@ class ShoppingBot:
         batch = self.store.batch(batch_id)
         if not batch:
             return
-        partner = self.store.other_member(batch["actor_id"])
-        if not partner:
+        partners = self.store.partners(batch["actor_id"])
+        if not partners:
             return
         items = self.store.batch_items(batch_id)
         actor = self.store.member_name(batch["actor_id"])
@@ -437,17 +485,24 @@ class ShoppingBot:
                 text += f"\n…і ще {len(items) - 40} товарів. Усі є в історії."
         else:
             text = f"{actor} скасував(ла) покупки."
-        if batch["notification_id"]:
+        for partner in partners:
+            notification = self.store.notification(batch_id, partner["user_id"])
+            if notification:
+                try:
+                    self.telegram.call("editMessageText", chat_id=partner["user_id"],
+                                       message_id=notification, text=text)
+                    continue
+                except TelegramError as exc:
+                    if "message is not modified" in str(exc).lower():
+                        continue
+                    LOG.warning("Could not edit purchase notification")
             try:
-                self.telegram.call("editMessageText", chat_id=partner["user_id"],
-                                   message_id=batch["notification_id"], text=text)
-                return
-            except TelegramError as exc:
-                if "message is not modified" in str(exc).lower():
-                    return
-                LOG.warning("Could not edit purchase notification: %s", exc)
-        result = self.send(partner["user_id"], text)
-        self.store.set_batch_notification(batch_id, result["message_id"])
+                result = self.send(partner["user_id"], text)
+                self.store.save_notification(batch_id, partner["user_id"], result["message_id"])
+                if len(partners) == 1:
+                    self.store.set_batch_notification(batch_id, result["message_id"])
+            except TelegramError:
+                LOG.warning("Could not send purchase notification")
 
     def handle_callback(self, query: dict) -> None:
         user = query.get("from", {})
@@ -456,9 +511,14 @@ class ShoppingBot:
         if not user_id or message.get("chat", {}).get("type") != "private":
             return
         callback_id = query.get("id")
-        if not self.store.is_member(user_id):
+        registered = self.bind_user(user_id)
+        if query.get("data") == "family:create":
+            self.telegram.call("answerCallbackQuery", callback_query_id=callback_id)
+            self.handle_message({"from": user, "chat": message["chat"], "text": "/create"})
+            return
+        if not registered:
             self.telegram.call("answerCallbackQuery", callback_query_id=callback_id,
-                               text="Спочатку надішліть /join КОД.", show_alert=True)
+                               text="Відкрийте /start і створіть сім’ю або прийміть запрошення.", show_alert=True)
             return
         data = query.get("data", "")
         answer = "Готово"
@@ -613,7 +673,7 @@ class ShoppingBot:
                 LOG.warning("Could not answer callback")
 
     def run(self) -> None:
-        offset = self.store.get_offset()
+        offset = self.legacy_store.get_offset()
         LOG.info("Shopping bot started")
         while True:
             try:
@@ -627,7 +687,7 @@ class ShoppingBot:
                     except Exception:
                         LOG.exception("Failed update %s", update.get("update_id"))
                     offset = update["update_id"] + 1
-                    self.store.set_offset(offset)
+                    self.legacy_store.set_offset(offset)
             except TelegramError as exc:
                 LOG.warning("Telegram polling error: %s", exc)
                 time.sleep(5)
