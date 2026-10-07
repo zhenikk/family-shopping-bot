@@ -76,6 +76,15 @@ class ShoppingBot:
         link = f"https://t.me/{username}?start=invite_{self.families.invite(user_id)}"
         self.send(user_id, "Запросіть близьких до вашого спільного списку. Кожен, хто має це посилання, може приєднатися — передавайте його лише учасникам сім’ї.\n\n" + link)
 
+    def show_family(self, user_id, message_id=None):
+        members = self.store.members()
+        lines = [f"👥 Ваша сім’я · {len(members)} учасників", ""]
+        for member in members:
+            lines.append("• " + member["name"] + (" (ви)" if member["user_id"] == user_id else ""))
+        if len(members) == 1:
+            lines.extend(["", "Запросіть близьких, щоб вести спільний список."])
+        self.panel(user_id, "\n".join(lines), buttons([("Запросити учасника", "family:invite")], [("Оновити", "family:show")]), message_id)
+
     def send(self, chat_id: int, text: str, **kwargs):
         return self.telegram.call("sendMessage", chat_id=chat_id, text=text, **kwargs)
 
@@ -95,7 +104,7 @@ class ShoppingBot:
         return {
             "keyboard": [[{"text": "🛍 Покупки"}],
                          [{"text": "🎙 Додати голосом"}, {"text": "📋 Список у чаті"}],
-                         [{"text": "👥 Запросити до сім’ї"}]],
+                         [{"text": "👥 Сім’я"}]],
             "input_field_placeholder": "Товари текстом або голосом",
             "resize_keyboard": True, "is_persistent": True,
         }
@@ -158,6 +167,12 @@ class ShoppingBot:
         if not registered:
             self.send(user_id, "Створіть сім’ю та запросіть близьких. Якщо вам надіслали запрошення — відкрийте його.", reply_markup=buttons([("Створити сім’ю", "family:create")]))
             return
+        if text in ("/family", "👥 Сім’я"):
+            self.pending_notes.pop(user_id, None)
+            self.pending_draft_edits.pop(user_id, None)
+            self.pending_photos.pop(user_id, None)
+            self.show_family(user_id)
+            return
         if text in ("/invite", "👥 Запросити до сім’ї"):
             self.pending_notes.pop(user_id, None)
             self.pending_draft_edits.pop(user_id, None)
@@ -169,7 +184,7 @@ class ShoppingBot:
             self.pending_notes.pop(user_id, None)
             self.pending_draft_edits.pop(user_id, None)
             self.send(user_id,
-                "Ваш спільний список покупок. Відкрийте застосунок або надішліть товари текстом чи голосом.\n/invite — запросити учасника сім’ї.",
+                "Ваш спільний список покупок. Відкрийте застосунок або надішліть товари текстом чи голосом.\n/family — учасники сім’ї.\n/invite — запросити учасника.",
                 reply_markup=self.menu())
             if os.getenv("SHOPPING_WEB_URL", "").startswith("https://"):
                 self.show_web_app(user_id)
@@ -519,6 +534,13 @@ class ShoppingBot:
         if not registered:
             self.telegram.call("answerCallbackQuery", callback_query_id=callback_id,
                                text="Відкрийте /start і створіть сім’ю або прийміть запрошення.", show_alert=True)
+            return
+        if query.get("data") in ("family:show", "family:invite"):
+            self.telegram.call("answerCallbackQuery", callback_query_id=callback_id)
+            if query["data"] == "family:invite":
+                self.show_invite(user_id)
+            else:
+                self.show_family(user_id, message.get("message_id"))
             return
         data = query.get("data", "")
         answer = "Готово"

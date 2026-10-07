@@ -3,6 +3,14 @@ const tg = window.Telegram?.WebApp;
 const demo = new URLSearchParams(location.search).get('demo') === '1';
 const $ = id => document.getElementById(id);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+$('family').onclick=async()=>{
+  $('family-members').textContent='Завантажуємо…';
+  showDialog('family-dialog');
+  try{
+    const data=demo?{members:[{name:'Олена',self:true},{name:'Іван',self:false}]}:await api('/api/family');
+    $('family-members').innerHTML=data.members.map(member=>`<div class="history-row"><strong>${escape(member.name)}</strong>${member.self?' <span class="muted">Ви</span>':''}</div>`).join('');
+  }catch(error){$('family-members').textContent=error.message;}
+};
 let state = {products: [], categories: {}, history: []}, tab = 'shopping', filter = '', selected = null, draftText = null, lastEvent = null;
 let signature = '', loading = false, reloadNeeded = false, revision = 0, toastTimer;
 const pending = new Set(), operations = new Map(), photos = new Map();

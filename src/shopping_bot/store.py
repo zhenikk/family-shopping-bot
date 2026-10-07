@@ -182,6 +182,10 @@ class Store:
         with self.db() as db:
             return db.execute("SELECT * FROM members WHERE user_id != ?", (user_id,)).fetchall()
 
+    def members(self):
+        with self.db() as db:
+            return db.execute("SELECT user_id, name, joined_at FROM members ORDER BY joined_at, user_id").fetchall()
+
     def notification(self, batch_id, user_id):
         with self.db() as db:
             row = db.execute("SELECT message_id FROM batch_notifications WHERE batch_id=? AND user_id=?", (batch_id, user_id)).fetchone()

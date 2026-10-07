@@ -83,3 +83,4 @@ header{margin-bottom:16px}h1{font-size:32px;letter-spacing:-1.2px}.headline{marg
 .product-check svg{opacity:0}
 .empty-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
 @media(max-width:360px){h1{font-size:30px}.thumb{width:52px;height:60px}}
+#family{margin:0 0 14px;min-height:40px;padding:8px 14px;font-size:13px}

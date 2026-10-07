@@ -131,8 +131,10 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                             data = data.replace(("/" + asset).encode(), ("/" + asset + "?v=" + version).encode())
                     self.respond(200, data, mime, "no-store" if filename == "index.html" else "public, max-age=31536000, immutable")
                     return
-                self.member()
-                if path == "/api/state":
+                user_id = self.member()
+                if path == "/api/family":
+                    self.respond(200, {"members": [{"name": row["name"], "self": row["user_id"] == user_id, "joined_at": row["joined_at"]} for row in bot.store.members()]})
+                elif path == "/api/state":
                     active = {row["id"] for row in bot.store.needs()}
                     # All items for a small family catalog; bounded to avoid unbounded responses.
                     catalog = [self.product_json(row) | {"active": row["id"] in active}
