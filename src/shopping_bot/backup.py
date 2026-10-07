@@ -9,9 +9,15 @@ import tempfile
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
+from .families import family_file_lock
 
 
 def backup(data_dir: Path, output_dir: Path) -> Path:
+    with family_file_lock(data_dir):
+        return _backup(data_dir,output_dir)
+
+
+def _backup(data_dir: Path, output_dir: Path) -> Path:
     database = data_dir / "shopping.sqlite3"
     if not database.is_file():
         raise FileNotFoundError(database)

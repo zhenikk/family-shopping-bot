@@ -88,7 +88,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
             self.end_headers()
             self.wfile.write(data)
 
-        def member(self):
+        def authenticated_user(self):
             auth = self.headers.get("Authorization", "")
             if not auth.startswith("tma ") or len(auth) > 12000:
                 raise AccessError("Open through Telegram")
@@ -96,9 +96,95 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 user_id = validate_init_data(auth[4:], token)
             except (ValueError, TypeError, KeyError):
                 raise AccessError("Open through Telegram") from None
+            user=json.loads(dict(parse_qsl(auth[4:]))['user'])
+            self.user_name=str(user.get('first_name') or 'Учасник')[:80]
+            return user_id
+
+        def member(self):
+            user_id=self.authenticated_user()
             if not bot.bind_user(user_id) or not bot.store.is_member(user_id):
                 raise AccessError("Family members only")
             return user_id
+
+        def family_payload(self,user_id):
+            info=bot.families.details(user_id)
+            if not info:
+                return {'family_id':None,'members':[],'invites':[]}
+            return {'family_id':info['id'],'name':info['name'],'owner_id':info['owner_id'],'self_id':user_id,
+                    'members':[{'id':row['user_id'],'name':row['name'],'self':row['user_id']==user_id,'owner':row['user_id']==info['owner_id'],'joined_at':row['joined_at']} for row in bot.families.members(info['id'])],
+                    'invites':[row for row in bot.families.invites(user_id) if row['created_by']==user_id or info['owner_id']==user_id],
+                    'product_count':bot.families.resources(info['id'])[0].catalog_count()}
+
+        def family_mutation(self,path,user_id,data):
+            with bot.families.lock:
+                current=bot.families.family(user_id)
+                header=self.headers.get('X-Shopping-Family')
+                if header and header!=current:
+                    self.respond(409,{'error':'Сім’ю змінено. Оновіть екран.'})
+                    return
+                if path=='/api/family/create':
+                    _,status=bot.families.enroll(user_id,self.user_name)
+                    bot.bind_user(user_id)
+                    self.respond(200,{'status':status})
+                    return
+                if path=='/api/family/preview':
+                    token=str(data.get('token',''))
+                    info=bot.families.invite_info(token,user_id)
+                    if not info:
+                        self.respond(410,{'error':'Запрошення використане, скасоване або недійсне. Попросіть нове.'})
+                        return
+                    own=bot.families.details(user_id)
+                    people=bot.families.members(current) if current else []
+                    self.respond(200,{'token':token,'name':info['name'],'inviter':info['inviter'],'already':current==info['family_id'],'source_family':current,'can_transfer':len(people)==1,'owner_required':bool(own and own['owner_id']==user_id and len(people)>1),'delete_previous':len(people)==1})
+                    return
+                if path=='/api/family/accept':
+                    if data.get('confirm') is not True or type(data.get('transfer',False)) is not bool:
+                        raise ValueError('Confirm invitation')
+                    status=bot.families.accept_invite(user_id,self.user_name,str(data.get('token','')),transfer=data.get('transfer',False),expected_family=data.get('source_family'))
+                    if status not in ('joined','already'):
+                        errors={'owner_required':'Спочатку передайте роль засновника іншому учаснику.','transfer_forbidden':'Перенести список можна лише якщо ви єдиний учасник.','stale':'Сім’ю змінено. Відкрийте запрошення знову.'}
+                        self.respond(409,{'error':errors.get(status,'Запрошення використане, скасоване або недійсне.')})
+                        return
+                    bot.clear_pending(user_id)
+                    bot.bind_user(user_id)
+                    self.respond(200,{'status':status})
+                    return
+                if not current:
+                    raise AccessError('Family required')
+                if not header:
+                    self.respond(409,{'error':'Оновіть екран сім’ї перед змінами.'})
+                    return
+                if path=='/api/family/invite':
+                    token=bot.families.create_invite(user_id)
+                    username=getattr(bot,'username',None) or bot.telegram.call('getMe')['username']
+                    bot.username=username
+                    self.respond(200,{'url':f'https://t.me/{username}?start=invite_{token}','token':token})
+                elif path=='/api/family/revoke':
+                    if not bot.families.revoke_invite(user_id,str(data.get('token',''))):
+                        self.respond(403,{'error':'Запрошення недоступне або ви не можете його скасувати.'})
+                        return
+                    self.respond(200,{'revoked':True})
+                elif path=='/api/family/rename':
+                    bot.families.rename(user_id,str(data.get('name','')))
+                    self.respond(200,{'renamed':True})
+                elif path in ('/api/family/owner','/api/family/leave','/api/family/delete'):
+                    if data.get('confirm') is not True:
+                        raise ValueError('Confirmation required')
+                    if path.endswith('/owner'):
+                        success=bot.families.transfer_owner(user_id,int(data['user_id']))
+                        status='done' if success else 'denied'
+                    elif path.endswith('/leave'):
+                        status=bot.families.leave(user_id)
+                    else:
+                        status='done' if bot.families.delete(user_id) else 'denied'
+                    if status not in ('done','left'):
+                        self.respond(403,{'error':'Засновник має передати роль перед виходом.' if status=='owner_required' else 'Ця дія недоступна.'})
+                        return
+                    bot.clear_pending(user_id)
+                    bot.bind_user(user_id)
+                    self.respond(200,{'status':status})
+                else:
+                    self.respond(404,{'error':'Невідома дія.'})
 
         def product_json(self, row):
             return {key: row[key] for key in ("id", "name", "note", "category")} | {
@@ -131,11 +217,15 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                             data = data.replace(("/" + asset).encode(), ("/" + asset + "?v=" + version).encode())
                     self.respond(200, data, mime, "no-store" if filename == "index.html" else "public, max-age=31536000, immutable")
                     return
+                user_id=self.authenticated_user()
+                if path=='/api/family':
+                    self.respond(200,self.family_payload(user_id))
+                    return
+                if path=='/api/state' and not bot.families.family(user_id):
+                    self.respond(200,{'family_id':None,'onboarding':True,'products':[],'categories':CATEGORIES,'history':[]})
+                    return
                 user_id = self.member()
-                if path == "/api/family":
-                    current=next(row for row in bot.families.choices(user_id) if row[0]==bot.families.family(user_id))
-                    self.respond(200, {"name":current[1], "members": [{"name": row["name"], "self": row["user_id"] == user_id, "joined_at": row["joined_at"]} for row in bot.store.members()]})
-                elif path == "/api/state":
+                if path == "/api/state":
                     active = {row["id"] for row in bot.store.needs()}
                     # All items for a small family catalog; bounded to avoid unbounded responses.
                     catalog = [self.product_json(row) | {"active": row["id"] in active}
@@ -165,9 +255,13 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
 
         def do_POST(self):
             try:
+                path=urlsplit(self.path).path
+                if path.startswith('/api/family/'):
+                    self.family_mutation(path,self.authenticated_user(),self.body())
+                    return
                 user_id = self.member()
                 requested_family=self.headers.get('X-Shopping-Family')
-                if (requested_family and requested_family != bot.families.family(user_id)) or (not requested_family and len(bot.families.choices(user_id))>1):
+                if requested_family != bot.families.family(user_id):
                     self.respond(409, {'error':'Сім’ю змінено. Закрийте й відкрийте застосунок перед покупками.'})
                     return
                 path = urlsplit(self.path).path
@@ -225,8 +319,8 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 self.respond(200, result)
             except AccessError:
                 self.respond(401, {"error": "Сесія завершилась. Закрийте застосунок і відкрийте знову через бота."})
-            except (ValueError, TypeError, KeyError):
-                self.respond(400, {"error": "Перевірте назви, категорію й нотатку (до 200 символів)."})
+            except (ValueError, TypeError, KeyError) as exc:
+                self.respond(400, {"error": str(exc) if path.startswith('/api/family/') else "Перевірте назви, категорію й нотатку (до 200 символів)."})
             except Exception:
                 LOG.error("Mini App mutation failed")
                 self.respond(500, {"error": "Не вдалося зберегти. Оновіть список перед повторною спробою."})

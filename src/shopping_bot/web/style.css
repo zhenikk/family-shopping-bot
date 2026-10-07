@@ -84,3 +84,5 @@ header{margin-bottom:16px}h1{font-size:32px;letter-spacing:-1.2px}.headline{marg
 .empty-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
 @media(max-width:360px){h1{font-size:30px}.thumb{width:52px;height:60px}}
 #family{margin:0 0 14px;min-height:40px;padding:8px 14px;font-size:13px}
+
+.family-controls{display:grid;gap:12px;margin-top:18px}.family-controls h3{font-size:15px;margin:16px 0 0}.family-controls label{margin-top:8px}dialog input{display:block;width:100%;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:16px;margin:8px 0 12px}.family-confirm{line-height:1.7;font-size:15px}.danger{color:#c74334}.family-controls .history-row{padding:10px 0}.family-controls .text-button{padding-top:8px}#family-join-form{margin-top:16px}#family-accept-transfer,#family-accept{margin-top:12px}

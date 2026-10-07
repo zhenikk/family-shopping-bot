@@ -6,6 +6,7 @@ import os
 import time
 import threading
 import uuid
+import re
 from contextvars import ContextVar, copy_context
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -73,26 +74,55 @@ class ShoppingBot:
         return family is not None
 
     def show_invite(self, user_id):
-        username = self.telegram.call("getMe")["username"]
-        link = f"https://t.me/{username}?start=invite_{self.families.invite(user_id)}"
-        self.send(user_id, "Запросіть близьких до вашого спільного списку. Кожен, хто має це посилання, може приєднатися — передавайте його лише учасникам сім’ї.\n\n" + link)
+        username=self.telegram.call('getMe')['username']
+        token=self.families.create_invite(user_id)
+        link=f"https://t.me/{username}?start=invite_{token}"
+        self.send(user_id,'Одноразове запрошення до вашої сім’ї. Працює до використання або скасування.\n\n'+link,reply_markup=buttons([('Скасувати запрошення','family:revoke:'+token)]))
+
+    def show_invite_preview(self,user_id,token):
+        info=self.families.invite_info(token,user_id)
+        if not info:
+            self.send(user_id,'Запрошення використане, скасоване або недійсне. Попросіть нове посилання.')
+            return
+        if self.families.family(user_id)==info['family_id']:
+            self.send(user_id,'Ви вже в цій сім’ї.')
+            self.show_family(user_id)
+            return
+        current=self.families.details(user_id)
+        people=self.families.members(current['id']) if current else []
+        lines=[f"{info['inviter']} запрошує до «{info['name']}»."]
+        rows=[]
+        if current and current['owner_id']==user_id and len(people)>1:
+            lines.append('Перед переходом передайте роль засновника іншому учаснику через «Сім’я».')
+            rows.append([('Керувати сім’єю','family:show')])
+        elif len(people)==1:
+            lines.append('Попередня сім’я буде видалена після переходу. Перенести активний список із фото та нотатками? Каталог куплених товарів та історія не переносяться.')
+            rows.extend([[('Перенести список і приєднатися','family:accept:1:'+token)],[('Не переносити й приєднатися','family:accept:0:'+token)]])
+        else:
+            lines.append('Приєднатися до спільного списку?'+(' Ви вийдете з попередньої сім’ї; її дані залишаться учасникам.' if current else ''))
+            rows.append([('Приєднатися','family:accept:0:'+token)])
+        self.send(user_id,'\n\n'.join(lines),reply_markup=buttons(*rows))
 
     def show_family(self, user_id, message_id=None):
-        members = self.store.members()
-        choices=self.families.choices(user_id)
-        current=next(row for row in choices if row[0]==self.families.family(user_id))
-        lines = [f"👥 {current[1]} · {len(members)} учасників", ""]
+        current=self.families.details(user_id)
+        if not current:
+            self.send(user_id,'Ви ще не в сім’ї. Створіть сім’ю або відкрийте запрошення.',reply_markup=buttons([('Створити сім’ю','family:create')]))
+            return
+        members=self.families.members(current['id'])
+        lines=[f"👥 {current['name']} · {len(members)} учасників",'']
         for member in members:
-            lines.append("• " + member["name"] + (" (ви)" if member["user_id"] == user_id else ""))
-        if len(members) == 1:
-            lines.extend(["", "Запросіть близьких, щоб вести спільний список."])
-        rows=[[('Запросити учасника','family:invite')],[('Оновити','family:show')]]
-        if current[2]==user_id:
-            rows.append([('Змінити назву','family:rename'),('Видалити сім’ю','family:delete')])
-        for family_id,name,_ in choices:
-            if family_id!=current[0]:
-                rows.append([('Перейти: '+name[:35],'family:switch:'+family_id)])
-        self.panel(user_id, "\n".join(lines), buttons(*rows), message_id)
+            suffix=(' (ви)' if member['user_id']==user_id else '')+(' · засновник' if member['user_id']==current['owner_id'] else '')
+            lines.append('• '+member['name']+suffix)
+        rows=[[('Запросити учасника','family:invite')],[('Змінити назву','family:rename'),('Оновити','family:show')]]
+        if current['owner_id']==user_id:
+            if len(members)>1:
+                rows.append([('Передати роль засновника','family:owners')])
+            rows.append([('Видалити сім’ю','family:delete')])
+        rows.append([('Вийти із сім’ї','family:leave')])
+        for invite in self.families.invites(user_id):
+            if invite['created_by']==user_id or current['owner_id']==user_id:
+                rows.append([('Скасувати запрошення · '+invite['created_at'][:10],'family:revoke:'+invite['token'])])
+        self.panel(user_id,'\n'.join(lines),buttons(*rows),message_id)
 
     def clear_pending(self,user_id):
         self.pending_notes.pop(user_id,None)
@@ -102,8 +132,7 @@ class ShoppingBot:
 
     def send(self, chat_id: int, text: str, **kwargs):
         result=self.telegram.call("sendMessage", chat_id=chat_id, text=text, **kwargs)
-        if self.families.family(chat_id):
-            self.families.route_message(chat_id,result['message_id'],self.family_context.get())
+        self.families.route_message(chat_id,result['message_id'],self.family_context.get() if self.families.family(chat_id) else 'none')
         return result
 
     def panel(self, user_id: int, text: str, markup: dict, message_id: int | None = None) -> int:
@@ -112,6 +141,7 @@ class ShoppingBot:
             try:
                 self.telegram.call("editMessageText", chat_id=user_id, message_id=message_id,
                                    text=text, reply_markup=markup)
+                self.families.route_message(user_id,message_id,self.family_context.get())
                 return message_id
             except TelegramError as exc:
                 if "message is not modified" in str(exc).lower():
@@ -157,27 +187,20 @@ class ShoppingBot:
         text = (message.get("text") or "").strip()
         registered = self.bind_user(user_id)
         name = user.get("first_name") or "Учасник"
-        if text == "/create" or text.startswith("/start invite_"):
-            invite = text.split("invite_", 1)[1] if text.startswith("/start invite_") else None
-            if registered and invite:
-                target = self.families.invited_family(invite)
-                if not target:
-                    self.send(user_id, "Запрошення недійсне. Попросіть нове посилання.")
-                    return
-                if target != self.families.family(user_id):
-                    self.send(user_id, "Приєднатися до запрошеної сім’ї та відкрити її спільний список? Попередня сім’я й покупки збережуться; повернутися можна через «Сім’я».", reply_markup=buttons([("Приєднатися до сім’ї", "family:join:" + invite)], [("Залишитись у своїй", "family:show")]))
-                    return
-            family, status = self.families.enroll(user_id, name, invite)
-            if status == "invalid":
-                self.send(user_id, "Запрошення недійсне. Попросіть нове посилання.")
-                return
+        pasted=re.search(r'(?:\?|&)start=invite_([A-Za-z0-9_-]{20,64})',text)
+        if pasted:
+            self.show_invite_preview(user_id,pasted.group(1))
+            return
+        if text.startswith('/start invite_'):
+            self.show_invite_preview(user_id,text.split('invite_',1)[1])
+            return
+        if text=='/create':
+            _,status=self.families.enroll(user_id,name)
             self.bind_user(user_id)
-            self.send(user_id, "Ви вже маєте сім’ю." if status == "already" else "Готово! Ваш сімейний список доступний.", reply_markup=self.menu())
-            if not invite or status == "already":
-                self.show_invite(user_id)
+            self.send(user_id,'Ви вже маєте сім’ю.' if status=='already' else 'Сім’ю створено. Запросіть близьких або відкрийте покупки.',reply_markup=self.menu())
+            self.show_family(user_id)
             self.show_web_app(user_id)
             return
-
         if text.startswith("/whoami"):
             self.send(user_id, f"Ваш Telegram ID: {user_id}")
             return
@@ -194,7 +217,8 @@ class ShoppingBot:
             self.send(user_id, "Готово! Ваш сімейний список доступний.", reply_markup=self.menu())
             return
         if not registered:
-            self.send(user_id, "Створіть сім’ю та запросіть близьких. Якщо вам надіслали запрошення — відкрийте його.", reply_markup=buttons([("Створити сім’ю", "family:create")]))
+            self.send(user_id, "Створіть сім’ю або приєднайтеся за запрошенням. Можна відкрити посилання чи надіслати його в цей чат.", reply_markup=buttons([("Створити сім’ю", "family:create"),("Приєднатися", "family:joinhelp")]))
+            self.show_web_app(user_id)
             return
         if user_id in self.pending_family_names and text and not text.startswith('/'):
             try:
@@ -203,7 +227,7 @@ class ShoppingBot:
                 self.send(user_id,str(exc))
                 return
             self.pending_family_names.discard(user_id)
-            self.send(user_id,'Назву оновлено.' if renamed else 'Змінювати назву може лише власник сім’ї.')
+            self.send(user_id,'Назву оновлено.' if renamed else 'Сім’я більше недоступна.')
             self.show_family(user_id)
             return
         if text in ("/family", "👥 Сім’я"):
@@ -539,7 +563,7 @@ class ShoppingBot:
         batch = self.store.batch(batch_id)
         if not batch:
             return
-        partners = self.store.partners(batch["actor_id"])
+        partners = [row for row in self.families.members(self.family_context.get()) if row['user_id']!=batch['actor_id']]
         if not partners:
             return
         items = self.store.batch_items(batch_id)
@@ -570,6 +594,79 @@ class ShoppingBot:
             except TelegramError:
                 LOG.warning("Could not send purchase notification")
 
+    def handle_family_action(self,user_id,name,data,message_id=None):
+        current=self.families.details(user_id)
+        if data.startswith('family:join:'):
+            self.show_invite_preview(user_id,data.split(':',2)[2])
+            return
+        if data.startswith('family:accept:'):
+            _,_,mode,token=data.split(':',3)
+            status=self.families.accept_invite(user_id,name,token,transfer=mode=='1',expected_family=self.families.family(user_id))
+            if status in ('joined','already'):
+                self.clear_pending(user_id)
+                self.bind_user(user_id)
+                self.send(user_id,'Готово! Ви в спільній сім’ї. Відкрийте покупки.',reply_markup=self.menu())
+                self.show_family(user_id)
+                self.show_web_app(user_id)
+            else:
+                errors={'owner_required':'Спочатку передайте роль засновника іншому учаснику.','transfer_forbidden':'Перенесення доступне лише коли ви єдиний учасник попередньої сім’ї.','stale':'Сім’ю змінено. Відкрийте запрошення знову.'}
+                self.send(user_id,errors.get(status,'Запрошення використане, скасоване або недійсне.'))
+            return
+        if not current:
+            self.show_family(user_id)
+            return
+        if data=='family:show':
+            self.show_family(user_id,message_id)
+        elif data=='family:invite':
+            self.show_invite(user_id)
+        elif data.startswith('family:revoke:'):
+            revoked=self.families.revoke_invite(user_id,data.split(':',2)[2])
+            self.send(user_id,'Запрошення скасовано.' if revoked else 'Запрошення вже недоступне або ви не маєте права його скасувати.')
+            self.show_family(user_id)
+        elif data=='family:rename':
+            self.clear_pending(user_id)
+            self.pending_family_names.add(user_id)
+            self.send(user_id,'Надішліть нову назву сім’ї (до 60 символів) або /cancel.')
+        elif data=='family:owners':
+            if current['owner_id']!=user_id:
+                self.send(user_id,'Передати роль може лише засновник.')
+                return
+            rows=[[(row['name'],'family:owner:'+str(row['user_id']))] for row in self.families.members(current['id']) if row['user_id']!=user_id]
+            rows.append([('Скасувати','family:show')])
+            self.panel(user_id,'Кому передати роль засновника?',buttons(*rows),message_id)
+        elif data.startswith('family:owner:'):
+            target=int(data.split(':',2)[2])
+            if current['owner_id']==user_id and self.families.family(target)==current['id']:
+                self.panel(user_id,'Передати роль засновника учаснику «'+self.store.member_name(target)+'»? Він зможе видаляти сім’ю.',buttons([('Передати','family:owner-confirm:'+str(target))],[('Скасувати','family:show')]),message_id)
+        elif data.startswith('family:owner-confirm:'):
+            success=self.families.transfer_owner(user_id,int(data.split(':',2)[2]))
+            self.send(user_id,'Роль передано.' if success else 'Передача недоступна. Оновіть сім’ю.')
+            self.show_family(user_id)
+        elif data in ('family:delete','family:leave'):
+            deleting=data=='family:delete'
+            if deleting and current['owner_id']!=user_id:
+                self.send(user_id,'Видалити сім’ю може лише засновник.')
+                return
+            people=self.families.members(current['id'])
+            if not deleting and current['owner_id']==user_id and len(people)>1:
+                self.send(user_id,'Перед виходом передайте роль засновника іншому учаснику.')
+                self.show_family(user_id)
+                return
+            description=(f"Видалити «{current['name']}» для всіх? Учасників: {len(people)}, товарів: {self.store.catalog_count()}. Список і каталог стануть недоступними; резервні копії можуть містити попередні дані." if deleting else 'Вийти з сім’ї? Ви втратите доступ до спільного списку.'+(' Ви єдиний учасник, тому сім’ю буде видалено.' if len(people)==1 else ' Дані інших учасників залишаться.'))
+            action='family:delete-confirm:' if deleting else 'family:leave-confirm:'
+            self.panel(user_id,description,buttons([('Підтвердити',action+current['id'])],[('Скасувати','family:show')]),message_id)
+        elif data.startswith(('family:delete-confirm:','family:leave-confirm:')):
+            if data.split(':',2)[2]!=current['id']:
+                self.send(user_id,'Сім’ю змінено. Оновіть екран.')
+                return
+            status=self.families.delete(user_id) if data.startswith('family:delete-confirm:') else self.families.leave(user_id)
+            if status is True or status=='left':
+                self.clear_pending(user_id)
+                self.bind_user(user_id)
+                self.send(user_id,'Готово. Створіть нову сім’ю або прийміть запрошення.',reply_markup=buttons([('Створити сім’ю','family:create'),('Приєднатися','family:joinhelp')]))
+            else:
+                self.send(user_id,'Дія недоступна. Засновник перед виходом має передати роль.')
+
     def handle_callback(self, query: dict) -> None:
         user = query.get("from", {})
         user_id = user.get("id")
@@ -578,9 +675,21 @@ class ShoppingBot:
             return
         callback_id = query.get("id")
         registered = self.bind_user(user_id)
+        if query.get('data')=='family:joinhelp':
+            self.telegram.call('answerCallbackQuery',callback_query_id=callback_id)
+            self.send(user_id,'Попросіть учасника сім’ї створити одноразове запрошення. Відкрийте посилання або надішліть його сюди.')
+            return
         if query.get("data") == "family:create":
             self.telegram.call("answerCallbackQuery", callback_query_id=callback_id)
             self.handle_message({"from": user, "chat": message["chat"], "text": "/create"})
+            return
+        if query.get('data','').startswith(('family:accept:','family:join:')):
+            route=self.families.message_family(user_id,message.get('message_id'))
+            if route and route!=(self.families.family(user_id) or 'none'):
+                self.telegram.call('answerCallbackQuery',callback_query_id=callback_id,text='Сім’ю змінено. Відкрийте запрошення знову.',show_alert=True)
+                return
+            self.handle_family_action(user_id,user.get('first_name') or 'Учасник',query['data'],message.get('message_id'))
+            self.telegram.call('answerCallbackQuery',callback_query_id=callback_id)
             return
         if not registered:
             self.telegram.call("answerCallbackQuery", callback_query_id=callback_id,
@@ -588,54 +697,12 @@ class ShoppingBot:
             return
         data=query.get('data','')
         message_family=self.families.message_family(user_id,message.get('message_id'))
-        if data not in ('family:show','family:invite') and not data.startswith(('family:join:','family:switch:')) and ((message_family and message_family!=self.families.family(user_id)) or (not message_family and len(self.families.choices(user_id))>1)):
+        if data not in ('family:show','family:invite') and ((message_family and message_family!=self.families.family(user_id)) or (not message_family and len(self.families.choices(user_id))>1)):
             self.telegram.call('answerCallbackQuery',callback_query_id=callback_id,text='Ця кнопка зі старої сім’ї. Відкрийте актуальний список.',show_alert=True)
             return
-        if data.startswith('family:join:') or data.startswith('family:switch:'):
-            if data.startswith('family:join:'):
-                status=self.families.accept_invite(user_id,user.get('first_name') or self.store.member_name(user_id),data.split(':',2)[2])
-                success=status=='joined'
-            else:
-                success=self.families.activate(user_id,data.split(':',2)[2])
+        if data.startswith('family:'):
+            self.handle_family_action(user_id,user.get('first_name') or self.store.member_name(user_id),data,message.get('message_id'))
             self.telegram.call('answerCallbackQuery',callback_query_id=callback_id)
-            if success:
-                self.clear_pending(user_id)
-                self.bind_user(user_id)
-                self.send(user_id,'Сім’ю переключено. Закрийте й відкрийте Mini App, щоб побачити спільний список.',reply_markup=self.menu())
-                self.show_family(user_id)
-                self.show_web_app(user_id)
-            else:
-                self.send(user_id,'Запрошення недійсне або сім’я більше недоступна.')
-            return
-        if data in ('family:rename','family:delete') or data.startswith('family:delete-confirm:'):
-            current=next(row for row in self.families.choices(user_id) if row[0]==self.families.family(user_id))
-            self.telegram.call('answerCallbackQuery',callback_query_id=callback_id)
-            if data.startswith('family:delete-confirm:') and data.split(':',2)[2]!=current[0]:
-                self.send(user_id,'Ця кнопка належить іншій сім’ї. Відкрийте /family ще раз.')
-            elif current[2]!=user_id:
-                self.send(user_id,'Керувати назвою й видаленням може лише власник сім’ї.')
-            elif data=='family:rename':
-                self.clear_pending(user_id)
-                self.pending_family_names.add(user_id)
-                self.send(user_id,'Надішліть нову назву сім’ї (до 60 символів) або /cancel.')
-            elif data=='family:delete':
-                self.panel(user_id,'Видалити цю сім’ю для всіх учасників? Її список перестане бути доступним, запрошення не працюватиме. Інші ваші сім’ї залишаться. Резервні копії можуть містити попередні дані.',buttons([('Так, видалити','family:delete-confirm:'+current[0])],[('Скасувати','family:show')]),message.get('message_id'))
-            else:
-                self.families.delete(user_id)
-                self.clear_pending(user_id)
-                self.bind_user(user_id)
-                self.send(user_id,'Сім’ю видалено. Інші списки збережені.')
-                if self.families.family(user_id):
-                    self.show_family(user_id)
-                else:
-                    self.send(user_id,'Можна створити сім’ю заново або прийняти запрошення.',reply_markup=buttons([('Створити сім’ю','family:create')]))
-            return
-        if query.get("data") in ("family:show", "family:invite"):
-            self.telegram.call("answerCallbackQuery", callback_query_id=callback_id)
-            if query["data"] == "family:invite":
-                self.show_invite(user_id)
-            else:
-                self.show_family(user_id, message.get("message_id"))
             return
         data = query.get("data", "")
         answer = "Готово"

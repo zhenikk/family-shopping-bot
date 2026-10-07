@@ -3,15 +3,49 @@ const tg = window.Telegram?.WebApp;
 const demo = new URLSearchParams(location.search).get('demo') === '1';
 const $ = id => document.getElementById(id);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-$('family').onclick=async()=>{
-  $('family-members').textContent='Завантажуємо…';
-  showDialog('family-dialog');
-  try{
-    const data=demo?{members:[{name:'Олена',self:true},{name:'Іван',self:false}]}:await api('/api/family');
-    $('family-dialog').querySelector('h2').textContent=data.name||'Учасники';
-    $('family-members').innerHTML=data.members.map(member=>`<div class="history-row"><strong>${escape(member.name)}</strong>${member.self?' <span class="muted">Ви</span>':''}</div>`).join('');
-  }catch(error){$('family-members').textContent=error.message;}
-};
+let familyView=null;
+$('family').onclick=()=>openFamily();
+function inviteToken(value){const match=String(value).match(/(?:start=invite_|^)([A-Za-z0-9_-]{32})(?:$|[&#])/);return match?match[1]:'';}
+async function openFamily(){
+ showDialog('family-dialog');$('family-members').textContent='Завантажуємо…';
+ try{familyView=demo?{family_id:'demo',name:'Наша сім’я',self_id:1,owner_id:1,members:[{id:1,name:'Олена',self:true,owner:true},{id:2,name:'Іван'}],invites:[],product_count:6}:await api('/api/family');renderFamily();}
+ catch(error){$('family-members').textContent=error.message;}
+}
+function joinForm(){return '<form id="family-join-form"><label>Запрошення<input id="family-invite-input" type="text" placeholder="Вставте посилання" required autocomplete="off"></label><button class="secondary full" type="submit">Перевірити запрошення</button></form>';}
+function wireJoin(){const form=$('family-join-form');if(form)form.onsubmit=async event=>{event.preventDefault();const token=inviteToken($('family-invite-input').value.trim());if(!token){toast('Вставте повне посилання запрошення.');return;}try{await previewInvite(token);}catch(error){toast(error.message);}};}
+function renderFamily(){
+ const data=familyView;$('family-dialog').querySelector('h2').textContent=data.name||'Ваша сім’я';
+ if(!data.family_id){$('family-members').innerHTML='<p class="hint">Створіть спільний список або приєднайтеся до близьких.</p><button id="family-create" class="primary full">Створити сім’ю</button>'+joinForm();$('family-create').onclick=()=>familyAction('/api/family/create',{});wireJoin();return;}
+ const owner=data.owner_id===data.self_id;
+ $('family-members').innerHTML=data.members.map(member=>`<div class="history-row"><strong>${escape(member.name)}</strong><small>${member.self?'Ви · ':''}${member.owner?'Засновник':'Учасник'}</small></div>`).join('')+
+ '<div class="family-controls"><button id="family-invite" class="primary full">Запросити учасника</button><div id="family-new-link"></div>'+joinForm()+
+ `<form id="family-name-form"><label>Назва сім’ї<input id="family-name" value="${escape(data.name)}" maxlength="60" required></label><button class="secondary full" type="submit">Зберегти назву</button></form>`+
+ (data.invites.length?'<h3>Активні запрошення</h3>'+data.invites.map(invite=>`<div class="history-row"><small>${escape(new Date(invite.created_at).toLocaleString('uk-UA'))}</small><button class="text-button" data-revoke="${escape(invite.token)}">Скасувати запрошення</button></div>`).join(''):'')+
+ (owner&&data.members.length>1?`<label>Передати роль засновника<select id="family-owner">${data.members.filter(m=>!m.self).map(m=>`<option value="${m.id}">${escape(m.name)}</option>`).join('')}</select></label><button id="family-owner-transfer" class="secondary full">Передати роль</button>`:'')+
+ '<button id="family-leave" class="secondary full">Вийти із сім’ї</button>'+(owner?'<button id="family-delete" class="text-button danger">Видалити сім’ю</button>':'')+'</div>';
+ wireJoin();
+ $('family-name-form').onsubmit=event=>{event.preventDefault();familyAction('/api/family/rename',{name:$('family-name').value});};
+ $('family-invite').onclick=async()=>{try{if(demo){toast('У демонстрації запрошення не створюються.');return;}const result=await api('/api/family/invite',{});$('family-new-link').innerHTML=`<label>Одноразове посилання<input id="family-link" readonly value="${escape(result.url)}"></label><button id="family-copy" class="secondary full">Копіювати</button><button id="family-new-revoke" class="text-button">Скасувати запрошення</button><p class="hint">До використання або скасування. Лише для одного приєднання.</p>`;$('family-new-revoke').onclick=()=>familyAction('/api/family/revoke',{token:result.token});$('family-copy').onclick=async()=>{try{await navigator.clipboard.writeText(result.url);toast('Посилання скопійовано');}catch{$('family-link').select();toast('Посилання виділено — скопіюйте його.');}};}catch(error){toast(error.message);}};
+ document.querySelectorAll('[data-revoke]').forEach(button=>button.onclick=()=>askFamily('Скасувати це запрошення?',()=>familyAction('/api/family/revoke',{token:button.dataset.revoke})));
+ $('family-leave').onclick=()=>{if(owner&&data.members.length>1){toast('Спочатку передайте роль засновника іншому учаснику.');return;}askFamily('Вийти із сім’ї?'+(data.members.length===1?' Ви єдиний учасник, тому сім’ю та її список буде видалено.':' Спільні дані залишаться іншим учасникам.'),()=>familyAction('/api/family/leave',{confirm:true}));};
+ if($('family-delete'))$('family-delete').onclick=()=>askFamily(`Видалити «${data.name}» для всіх? Учасників: ${data.members.length}, товарів: ${data.product_count}. Список стане недоступним. Резервні копії можуть містити попередні дані.`,()=>familyAction('/api/family/delete',{confirm:true}));
+ if($('family-owner-transfer'))$('family-owner-transfer').onclick=()=>{const id=Number($('family-owner').value),member=data.members.find(m=>m.id===id);askFamily(`Передати роль засновника учаснику «${member.name}»? Він зможе видаляти сім’ю.`,()=>familyAction('/api/family/owner',{user_id:id,confirm:true}));};
+}
+function askFamily(text,action){$('family-members').innerHTML=`<p class="family-confirm">${escape(text)}</p><div class="sheet-actions"><button id="family-confirm" class="primary">Підтвердити</button><button id="family-cancel" class="secondary">Скасувати</button></div>`;$('family-cancel').onclick=renderFamily;$('family-confirm').onclick=async()=>{const button=$('family-confirm');button.disabled=true;try{await action();}catch(error){toast(error.message);}finally{if(button.isConnected)button.disabled=false;}};}
+async function familyAction(path,data){if(demo){toast('У демонстрації зміни не зберігаються.');renderFamily();return;}try{await api(path,data);toast('Готово');await load();await openFamily();}catch(error){toast(error.message);await openFamily();}}
+async function previewInvite(token){
+ if(demo){toast('Запрошення доступні в боті.');return;}
+ const preview=await api('/api/family/preview',{token});
+ if(preview.already){toast('Ви вже в цій сім’ї.');await openFamily();return;}
+ $('family-dialog').querySelector('h2').textContent='Приєднання до сім’ї';
+ let text=`${preview.inviter} запрошує до «${preview.name}».`;
+ if(preview.owner_required){$('family-members').innerHTML=`<p>${escape(text)}</p><p class="hint">Перед переходом передайте роль засновника іншому учаснику.</p><button id="family-preview-back" class="secondary full">Керувати своєю сім’єю</button>`;$('family-preview-back').onclick=renderFamily;return;}
+ if(preview.delete_previous)text+=' Попередня сім’я буде видалена після успішного переходу. Перенести активний список із фото, нотатками й категоріями? Каталог куплених товарів та історія не переносяться.';
+ else if(preview.source_family)text+=' Ви вийдете з поточної сім’ї; її дані залишаться учасникам.';
+ $('family-members').innerHTML=`<p class="family-confirm">${escape(text)}</p>`+(preview.can_transfer?'<button id="family-accept-transfer" class="primary full">Перенести список й приєднатися</button>':'')+'<button id="family-accept" class="secondary full">'+(preview.can_transfer?'Не переносити й приєднатися':'Приєднатися')+'</button><button id="family-preview-back" class="text-button">Скасувати</button>';
+ const accept=transfer=>familyAction('/api/family/accept',{token,source_family:preview.source_family,transfer,confirm:true});
+ $('family-accept').onclick=()=>accept(false);if($('family-accept-transfer'))$('family-accept-transfer').onclick=()=>accept(true);$('family-preview-back').onclick=renderFamily;
+}
 let state = {products: [], categories: {}, history: []}, tab = 'shopping', filter = '', selected = null, draftText = null, lastEvent = null;
 let signature = '', loading = false, reloadNeeded = false, revision = 0, toastTimer;
 const pending = new Set(), operations = new Map(), photos = new Map();
@@ -45,11 +79,13 @@ async function load(quiet=false){
 function visible(){const term=$('search').value.trim().toLocaleLowerCase('uk');return state.products.filter(p=>(tab==='catalog'||p.active)&&(!filter||p.category===filter)&&(!term||(p.name+' '+p.note).toLocaleLowerCase('uk').includes(term)));}
 function row(p){const emoji=(state.categories[p.category]||'📦').split(' ')[0];const buying=operations.get(p.id)?.action==='buy';return `<article class="product-row ${buying?'is-buying':''}" data-product="${p.id}"><button class="product-open" data-open="${p.id}" aria-label="Відкрити ${escape(p.name)}"><span class="thumb">${p.photo?`<img data-photo="${p.id}" alt="Упаковка ${escape(p.name)}">`:escape(emoji)}</span><span class="product-copy"><strong>${escape(p.name)}</strong>${p.note?`<small>${escape(p.note)}</small>`:''}</span></button>${tab==='catalog'&&p.active?'<span class="in-list">У списку</span>':`<button class="product-check ${tab==='catalog'?'add-again':''}" data-action="${p.id}" aria-label="${tab==='catalog'?'Додати до списку':'Куплено'}: ${escape(p.name)}" ${pending.has(p.id)?'disabled':''} aria-pressed="${buying}">${tab==='catalog'?'＋':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17 19 7"/></svg>'}</button>`}</article>`;}
 function render(){
+  if(state.onboarding){$('title').textContent='Наші покупки';$('subtitle').textContent='Один список для вашої сім’ї';document.querySelector('.tools').hidden=true;$('filters').hidden=true;$('content').innerHTML='<div class="empty"><h2>Почнімо зі сім’ї</h2><p>Створіть сім’ю або прийміть запрошення близьких.</p><button id="onboarding-family" class="primary">Створити або приєднатися</button></div>';$('onboarding-family').onclick=()=>openFamily();return;}
+
   photoObserver.disconnect();
   const previousRects = new Map([...document.querySelectorAll('[data-product]')].map(node=>[node.dataset.product,node.getBoundingClientRect()]));
   $('title').textContent={shopping:'Покупки',catalog:'Наші товари',history:'Історія'}[tab];
   const count=state.products.filter(p=>p.active).length;
-  $('subtitle').textContent=tab==='shopping'?`${count} у списку · спільний для вас двох`:tab==='catalog'?`${state.products.length} збережено · фото й нотатки залишаються`:'Хто купив і коли';
+  $('subtitle').textContent=tab==='shopping'?`${count} у списку · спільний для сім’ї`:tab==='catalog'?`${state.products.length} збережено · фото й нотатки залишаються`:'Хто купив і коли';
   document.querySelectorAll('nav button').forEach(b=>b.dataset.tab===tab?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));
   document.querySelector('.tools').hidden=tab==='history';
   $('filters').hidden=tab==='history';

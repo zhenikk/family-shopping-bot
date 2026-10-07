@@ -69,6 +69,47 @@ class MiniAppTests(unittest.TestCase):
             with self.assertRaises(AccessError):
                 validate_init_data(bad, TOKEN, now=now)
 
+    def test_complete_family_management_api_and_onboarding(self):
+        self.assertEqual(self.request('/api/family',user=3,auth=False)[0],401)
+        self.assertIsNone(json.loads(self.request('/api/family',user=3)[1])['family_id'])
+        self.assertEqual(self.request('/api/family/create',{},user=3)[0],200)
+        family=self.bot.families.family(3)
+        self.assertEqual(self.request('/api/family/rename',{'name':'Дім'},user=3)[0],200)
+        invite=json.loads(self.request('/api/family/invite',{},user=3)[1])
+        preview=json.loads(self.request('/api/family/preview',{'token':invite['token']},user=4)[1])
+        self.assertEqual(preview['name'],'Дім')
+        self.assertFalse(preview['can_transfer'])
+        self.assertEqual(self.request('/api/family/accept',{'token':invite['token'],'confirm':True,'source_family':None},user=4)[0],200)
+        self.assertEqual(self.bot.families.family(4),family)
+        self.assertEqual(self.request('/api/family/preview',{'token':invite['token']},user=5)[0],410)
+        self.assertEqual(self.request('/api/family/rename',{'name':'Наш дім'},user=4)[0],200)
+        self.assertEqual(self.request('/api/family/delete',{'confirm':True},user=4)[0],403)
+        self.assertEqual(self.request('/api/family/leave',{'confirm':True},user=3)[0],403)
+        self.assertEqual(self.request('/api/family/owner',{'user_id':4,'confirm':True},user=3)[0],200)
+        self.assertEqual(self.request('/api/family/leave',{'confirm':True},user=3)[0],200)
+        members=json.loads(self.request('/api/family',user=4)[1])['members']
+        self.assertEqual([row['id'] for row in members],[4])
+        self.assertEqual(self.request('/api/family/delete',{'confirm':False},user=4)[0],400)
+        self.assertEqual(self.request('/api/family/delete',{'confirm':True},user=4)[0],200)
+        self.assertTrue(json.loads(self.request('/api/state',user=4)[1])['onboarding'])
+
+    def test_api_transition_preserves_target_and_requires_explicit_transfer(self):
+        self.bot.families.enroll(3,'Source')
+        source=self.bot.families.family(3)
+        old,_=self.bot.families.resources(source)
+        product=old.ensure_product('картопля');old.add_need(product,3)
+        self.bot.families.enroll(4,'Destination')
+        invite=self.bot.families.create_invite(4)
+        preview=json.loads(self.request('/api/family/preview',{'token':invite},user=3)[1])
+        self.assertTrue(preview['can_transfer'])
+        self.assertTrue(preview['delete_previous'])
+        self.assertEqual(self.request('/api/family/accept',{'token':invite,'source_family':source,'transfer':True,'confirm':False},user=3)[0],400)
+        self.assertEqual(self.bot.families.family(3),source)
+        self.assertEqual(self.request('/api/family/accept',{'token':invite,'source_family':source,'transfer':True,'confirm':True},user=3)[0],200)
+        current=json.loads(self.request('/api/state',user=3)[1])
+        self.assertEqual(current['products'][0]['name'],'картопля')
+        self.assertEqual(current['family_id'],self.bot.families.family(4))
+
     def test_switched_family_rejects_stale_miniapp_mutation(self):
         old,_=self.bot.families.enroll(3,'Recipient')
         target,_=self.bot.families.enroll(4,'Owner')
@@ -88,7 +129,12 @@ class MiniAppTests(unittest.TestCase):
         self.store.set_photo(product, "private-telegram-id", str(photo))
         for route in ("/api/state", f"/api/photo/{product}"):
             self.assertEqual(self.request(route, auth=False)[0], 401)
-            self.assertEqual(self.request(route, user=3)[0], 401)
+            if route=="/api/state":
+                onboarding=json.loads(self.request(route,user=3)[1])
+                self.assertTrue(onboarding["onboarding"])
+                self.assertEqual(onboarding["products"],[])
+            else:
+                self.assertEqual(self.request(route, user=3)[0], 401)
         status, data = self.request("/api/state")
         self.assertEqual(status, 200)
         self.assertNotIn(b"private-telegram-id", data)
