@@ -8,6 +8,7 @@ $('family').onclick=async()=>{
   showDialog('family-dialog');
   try{
     const data=demo?{members:[{name:'Олена',self:true},{name:'Іван',self:false}]}:await api('/api/family');
+    $('family-dialog').querySelector('h2').textContent=data.name||'Учасники';
     $('family-members').innerHTML=data.members.map(member=>`<div class="history-row"><strong>${escape(member.name)}</strong>${member.self?' <span class="muted">Ви</span>':''}</div>`).join('');
   }catch(error){$('family-members').textContent=error.message;}
 };
@@ -32,12 +33,12 @@ function theme(){
 if(tg){ tg.ready(); tg.expand(); theme(); tg.onEvent('themeChanged', theme); tg.onEvent('safeAreaChanged', theme); tg.onEvent('contentSafeAreaChanged', theme); tg.BackButton?.onClick(closeDialogs); }
 function toast(text, undo=false){ clearTimeout(toastTimer); $('toast').querySelector('span').textContent=text; $('undo').hidden=!undo; $('toast').hidden=false; toastTimer=setTimeout(()=>{$('toast').hidden=true;},undo?12000:4500); }
 async function api(path, body){
-  const response=await fetch(path,{method:body===undefined?'GET':'POST',headers:{Authorization:'tma '+(tg?.initData||''),...(body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});
+  const response=await fetch(path,{method:body===undefined?'GET':'POST',headers:{Authorization:'tma '+(tg?.initData||''),...(state.family_id?{'X-Shopping-Family':state.family_id}:{}),...(body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});
   const result=await response.json(); if(!response.ok) throw new Error(result.error||'Не вдалося виконати дію.'); return result;
 }
 async function load(quiet=false){
   if(loading){reloadNeeded=true;return;} loading=true; const startedRevision=revision;
-  try{const next=demo?structuredClone(demoData):await api('/api/state');if(startedRevision!==revision){reloadNeeded=true;return;}const nextSignature=JSON.stringify(next);for(const [id,op] of operations){const product=next.products.find(p=>p.id===id);if(product)product.active=op.phase==='hidden'?op.action==='readd':op.previousActive;}state=next;if(nextSignature!==signature){signature=nextSignature;render();} $('connection').textContent=demo?'● Перегляд дизайну':'● Спільний список';}
+  try{const next=demo?structuredClone(demoData):await api('/api/state');if(startedRevision!==revision){reloadNeeded=true;return;}if(state.family_id&&next.family_id!==state.family_id){closeDialogs();operations.clear();pending.clear();photos.clear();selected=null;lastEvent=null;revision++;toast('Сім’ю переключено');}const nextSignature=JSON.stringify(next);for(const [id,op] of operations){const product=next.products.find(p=>p.id===id);if(product)product.active=op.phase==='hidden'?op.action==='readd':op.previousActive;}state=next;if(nextSignature!==signature){signature=nextSignature;render();} $('connection').textContent=demo?'● Перегляд дизайну':'● Спільний список';}
   catch(error){$('connection').textContent='○ Немає зв’язку';if(!signature){$('subtitle').textContent='Ваші дані захищені';$('content').innerHTML=`<div class="empty"><div class="symbol">↗</div><h2>Відкрийте через Telegram</h2><p>${escape(error.message)}</p><button class="primary" id="retry">Спробувати ще раз</button></div>`;$('retry').onclick=()=>load();}else if(!quiet)toast(error.message);}
   finally{loading=false;if(reloadNeeded){reloadNeeded=false;queueMicrotask(()=>load(true));}}
 }

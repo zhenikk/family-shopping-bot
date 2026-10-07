@@ -47,9 +47,11 @@ class MiniAppTests(unittest.TestCase):
         self.bot.voice_pool.shutdown()
         self.temp.cleanup()
 
-    def request(self, path, data=None, user=1, auth=True):
+    def request(self, path, data=None, user=1, auth=True, family=None):
         conn = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
         headers = {"Authorization": "tma " + signed_data(user)} if auth else {}
+        if data is not None and self.bot.families.family(user):
+            headers['X-Shopping-Family']=family or self.bot.families.family(user)
         if data is not None:
             headers["Content-Type"] = "application/json"
         conn.request("GET" if data is None else "POST", path, body=None if data is None else json.dumps(data), headers=headers)
@@ -66,6 +68,18 @@ class MiniAppTests(unittest.TestCase):
                          (good + "&auth_date=10000", 10010), (good, 9900)]:
             with self.assertRaises(AccessError):
                 validate_init_data(bad, TOKEN, now=now)
+
+    def test_switched_family_rejects_stale_miniapp_mutation(self):
+        old,_=self.bot.families.enroll(3,'Recipient')
+        target,_=self.bot.families.enroll(4,'Owner')
+        store,_=self.bot.families.resources(target)
+        product=store.ensure_product('яйця')
+        store.add_need(product,4)
+        self.bot.families.accept_invite(3,'Recipient',self.bot.families.invite(4))
+        status,_=self.request('/api/buy',{'id':product},user=3,family=old)
+        self.assertEqual(status,409)
+        self.assertEqual(len(store.needs()),1)
+        self.assertEqual(self.request('/api/buy',{'id':product},user=3)[0],200)
 
     def test_private_data_and_photos_require_family_authorization(self):
         product = self.store.ensure_product("молоко")

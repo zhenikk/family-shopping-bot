@@ -133,7 +133,8 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     return
                 user_id = self.member()
                 if path == "/api/family":
-                    self.respond(200, {"members": [{"name": row["name"], "self": row["user_id"] == user_id, "joined_at": row["joined_at"]} for row in bot.store.members()]})
+                    current=next(row for row in bot.families.choices(user_id) if row[0]==bot.families.family(user_id))
+                    self.respond(200, {"name":current[1], "members": [{"name": row["name"], "self": row["user_id"] == user_id, "joined_at": row["joined_at"]} for row in bot.store.members()]})
                 elif path == "/api/state":
                     active = {row["id"] for row in bot.store.needs()}
                     # All items for a small family catalog; bounded to avoid unbounded responses.
@@ -141,7 +142,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                                for row in bot.store.catalog(limit=2000)]
                     history = [{key: row[key] for key in ("id", "product_name", "actor_name", "action", "happened_at", "undone")}
                                for row in bot.store.recent_history(60)]
-                    self.respond(200, {"products": catalog, "categories": CATEGORIES, "history": history})
+                    self.respond(200, {"family_id": bot.families.family(user_id), "products": catalog, "categories": CATEGORIES, "history": history})
                 elif path.startswith("/api/photo/"):
                     row = bot.store.product(int(path.rsplit("/", 1)[1]))
                     if not row or not row["photo_path"]:
@@ -165,6 +166,10 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
         def do_POST(self):
             try:
                 user_id = self.member()
+                requested_family=self.headers.get('X-Shopping-Family')
+                if (requested_family and requested_family != bot.families.family(user_id)) or (not requested_family and len(bot.families.choices(user_id))>1):
+                    self.respond(409, {'error':'Сім’ю змінено. Закрийте й відкрийте застосунок перед покупками.'})
+                    return
                 path = urlsplit(self.path).path
                 data = self.body()
                 notification_batch = None

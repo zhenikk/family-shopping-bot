@@ -151,6 +151,59 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual(reopened.family(4), family)
         self.assertTrue(reopened.resources(family)[0].is_member(4))
 
+    def test_existing_empty_family_can_confirm_invitation_and_share_products(self):
+        self.bot.families.enroll(3, "Recipient")
+        self.bot.families.enroll(4, "Owner")
+        target = self.bot.families.family(4)
+        store, _ = self.bot.families.resources(target)
+        product = store.ensure_product("молоко")
+        store.add_need(product, 4)
+        invite = self.bot.families.invite(4)
+        old_family = self.bot.families.family(3)
+        self.telegram.calls.clear()
+        self.bot.handle_message(message(3, "/start invite_" + invite))
+        self.assertEqual(self.bot.families.family(3), old_family)
+        actions = [button['callback_data'] for method, params in self.telegram.calls if method=='sendMessage' for row in params.get('reply_markup',{}).get('inline_keyboard',[]) for button in row if 'callback_data' in button]
+        self.assertIn('family:join:' + invite, actions)
+        self.bot.handle_callback(callback(3, 'family:join:' + invite))
+        self.assertEqual(self.bot.families.family(3), target)
+        self.assertEqual(self.bot.store.needs()[0]['name'], 'молоко')
+        self.assertCountEqual([row['user_id'] for row in self.bot.store.members()], [4,3])
+        self.bot.families.route_message(3,800,old_family)
+        self.bot.handle_callback(callback(3,f'buy:{product}:all',message_id=800))
+        self.assertEqual(len(store.needs()),1)
+        self.assertTrue(self.bot.families.activate(3,old_family))
+        self.bot.bind_user(3)
+        self.assertEqual(self.bot.store.needs(),[])
+
+    def test_invite_keeps_existing_products_and_delete_requires_owner(self):
+        old,_=self.bot.families.enroll(3,'Recipient')
+        original,_=self.bot.families.resources(old)
+        product=original.ensure_product('яйця')
+        original.add_need(product,3)
+        target,_=self.bot.families.enroll(4,'Owner')
+        invite=self.bot.families.invite(4)
+        self.assertEqual(self.bot.families.accept_invite(3,'Recipient',invite),'joined')
+        self.assertEqual(original.needs()[0]['name'],'яйця')
+        self.assertFalse(self.bot.families.delete(3))
+        self.assertTrue(self.bot.families.rename(4,'Спільні покупки'))
+        self.assertFalse(self.bot.families.rename(3,'Не власник'))
+        self.assertTrue(self.bot.families.delete(4))
+        self.assertIsNone(self.bot.families.family(4))
+        self.assertEqual(self.bot.families.family(3),old)
+        self.assertIsNone(self.bot.families.invited_family(invite))
+        from shopping_bot.families import Families
+        reopened=Families(self.store,self.root/'photos')
+        self.assertIsNone(reopened.family(4))
+        self.assertEqual(reopened.family(3),old)
+
+    def test_deleted_legacy_family_does_not_return_after_restart(self):
+        self.assertTrue(self.bot.families.delete(1))
+        from shopping_bot.families import Families
+        reopened=Families(self.store,self.root/'photos')
+        self.assertIsNone(reopened.family(1))
+        self.assertIsNone(reopened.family(2))
+
     def test_notifications_go_only_to_all_members_of_current_family(self):
         self.bot.families.enroll(3, "Friend")
         invite = self.bot.families.invite(3)
