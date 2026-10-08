@@ -51,6 +51,33 @@ def callback(user_id, data, message_id=50):
 
 
 class ShoppingBotTests(unittest.TestCase):
+    def test_help_preserves_pending_invite_and_does_not_create_family(self):
+        self.bot.families.pending_start(99, '/start invite_pending')
+        self.bot.handle_message(message(99, '/help'))
+        self.assertIsNone(self.bot.families.family(99))
+        self.assertEqual(self.bot.families.pending_start(99), '/start invite_pending')
+        self.assertIn('1/6', self.telegram.calls[-1][1]['text'])
+
+    def test_help_photos_navigation_and_invalid_callbacks(self):
+        with patch.dict('os.environ', {'SHOPPING_WEB_URL':'https://example.com'}):
+            self.bot.show_help(1, 'en', 'j', 2)
+            method, payload = self.telegram.calls[-1]
+            self.assertEqual(method, 'sendPhoto')
+            self.assertEqual(payload['photo'], 'https://example.com/help/en-j-2.png')
+            query = callback(1, 'help:uk:j:3')
+            query['message']['photo'] = [{}]
+            self.bot.handle_callback(query)
+            self.assertEqual(self.telegram.calls[-2][0], 'editMessageMedia')
+            before = len(self.telegram.calls)
+            self.bot.handle_callback(callback(1, 'help:fr:x:999'))
+            self.assertEqual(len(self.telegram.calls), before + 1)
+        import json
+        content = json.loads(Path(__file__).parents[1].joinpath('src/shopping_bot/help.json').read_text())
+        for lang in content.values():
+            for items in lang['steps'].values():
+                for item in items:
+                    self.assertLess(sum(len(item[k]) for k in ('title','body','tip')) + 50, 1024)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

@@ -15,4 +15,4 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-shopping_bot = ["*.json", "web/*.html", "web/*.css", "web/*.js", "web/fonts/*.woff2", "web/fonts/*-OFL.txt"]
+shopping_bot = ["*.json", "web/*.html", "web/*.css", "web/*.js", "web/help/*.png", "web/fonts/*.woff2", "web/fonts/*-OFL.txt"]

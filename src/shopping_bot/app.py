@@ -5,6 +5,8 @@ from .analytics import Analytics
 from .i18n import tr, language, CategoryLabels
 
 import hmac
+import json
+import html
 import logging
 import os
 import time
@@ -170,15 +172,50 @@ class ShoppingBot:
                     return message_id
         return self.send(user_id, text, reply_markup=markup)["message_id"]
 
+    def show_help(self, user_id, chosen=None, role='c', step=0, message=None):
+        chosen = chosen or self.families.preference(user_id) or 'uk'
+        if chosen not in ('uk', 'en') or role not in ('c', 'j') or type(step) is not int or not 0 <= step < 6:
+            return
+        content = json.loads(Path(__file__).with_name('help.json').read_text())[chosen]
+        item = content['steps'][role][step]
+        caption = f"<b>{step + 1}/6 · {html.escape(item['title'])}</b>\n\n{html.escape(item['body'])}\n\n💡 {html.escape(item['tip'])}"
+        rows = [[(content['creator'], f'help:{chosen}:c:0'), (content['invited'], f'help:{chosen}:j:0')]] if step == 0 else []
+        navigation = []
+        if step:
+            navigation.append((content['back'], f'help:{chosen}:{role}:{step-1}'))
+        if step < 5:
+            navigation.append((content['next'], f'help:{chosen}:{role}:{step+1}'))
+        if step == 5:
+            navigation.append(('Start again ↺' if chosen == 'en' else 'На початок ↺', f'help:{chosen}:{role}:0'))
+        rows.append(navigation)
+        rows.append([('🇺🇦 UA', f'help:uk:{role}:{step}'), ('🇬🇧 EN', f'help:en:{role}:{step}')])
+        markup = buttons(*(row for row in rows if row))
+        url = os.getenv('SHOPPING_WEB_URL', '').rstrip('/')
+        if url.startswith('https://'):
+            photo = f'{url}/help/{chosen}-{role}-{step}.png'
+            if message and message.get('photo'):
+                try:
+                    self.telegram.call('editMessageMedia', chat_id=user_id, message_id=message['message_id'], media={'type':'photo','media':photo,'caption':caption,'parse_mode':'HTML'}, reply_markup=markup)
+                    return
+                except TelegramError as exc:
+                    if 'message is not modified' in str(exc).lower():
+                        return
+            try:
+                self.telegram.call('sendPhoto', chat_id=user_id, photo=photo, caption=caption, parse_mode='HTML', reply_markup=markup)
+                return
+            except TelegramError:
+                LOG.warning('Help illustration unavailable; sending text guide')
+        self.send(user_id, caption, parse_mode='HTML', reply_markup=markup)
+
     def show_language(self,user_id):
-        self.send(user_id,'Оберіть мову / Choose your language',reply_markup=buttons([('🇺🇦 Українська','language:uk'),('🇬🇧 English','language:en')]))
+        self.send(user_id,'Оберіть мову / Choose your language',reply_markup=buttons([('🇺🇦 Українська','language:uk'),('🇬🇧 English','language:en')], [('📖 Як користуватися / Help', 'help:uk:c:0')]))
 
     def menu(self) -> dict:
         return {
             "keyboard": [[{"text": tr('ui_58d659bf993e')}],
                          [{"text": tr('ui_8c4317311ad3')}, {"text": tr('ui_45b58c75117f')}],
                          [{"text": tr('ui_33ed8513acbd')}, {"text": "🌐 Language" if language.get()=="en" else "🌐 Мова"}],
-                         [{"text": tr("🐞 Повідомити про проблему")}]],
+                         [{"text": tr("🐞 Повідомити про проблему")}, {"text": "📖 How to use" if language.get()=="en" else "📖 Як користуватися"}]],
             "input_field_placeholder": tr('ui_366933c83ece'),
             "resize_keyboard": True, "is_persistent": True,
         }
@@ -221,6 +258,9 @@ class ShoppingBot:
         user_id = int(user["id"])
         text = (message.get("text") or "").strip()
         registered = self.bind_user(user_id)
+        if text.split('@', 1)[0] in ('/help', '📖 Як користуватися', '📖 How to use') or text == '/start help':
+            self.show_help(user_id)
+            return
         kind='bot_start' if text.startswith('/start') else 'voice_queued' if message.get('voice') else 'bot_photo' if message.get('photo') else 'bot_message'
         self.analytics.record(kind,user)
         if text in ('/support', '/bug', '🐞 Повідомити про проблему', '🐞 Report a problem'):
@@ -318,7 +358,7 @@ class ShoppingBot:
             self.pending_photos.pop(user_id, None)
             self.show_invite(user_id)
             return
-        if text.startswith("/start") or text.startswith("/help"):
+        if text.startswith("/start"):
             self.clear_pending(user_id)
             self.pending_photos.pop(user_id, None)
             self.pending_notes.pop(user_id, None)
@@ -825,6 +865,13 @@ class ShoppingBot:
             return
         self.analytics.record("bot_callback",user)
         callback_id = query.get("id")
+        if query.get('data', '').startswith('help:'):
+            self.bind_user(user_id)
+            parts = query['data'].split(':')
+            if len(parts) == 4 and parts[3].isdigit():
+                self.show_help(user_id, parts[1], parts[2], int(parts[3]), message)
+            self.telegram.call('answerCallbackQuery', callback_query_id=callback_id)
+            return
         if query.get('data', '').startswith('support:'):
             self.bind_user(user_id)
             parts = query['data'].split(':')

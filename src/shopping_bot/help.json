@@ -1,0 +1,146 @@
+{
+  "uk": {
+    "creator": "Я створюю список",
+    "invited": "Мене запросили",
+    "back": "← Назад",
+    "next": "Наступний крок →",
+    "steps": {
+      "c": [
+        {
+          "title": "Почніть із мови",
+          "body": "Відкрийте бот і натисніть Start / «Розпочати». Оберіть українську або English.",
+          "tip": "Мову можна змінити пізніше: /language."
+        },
+        {
+          "title": "Створіть сім’ю",
+          "body": "Натисніть «Створити сім’ю». Потім відкрийте «Сім’я» та запросіть близьку людину.",
+          "tip": "Створена сім’я ще не означає, що інша людина приєдналася."
+        },
+        {
+          "title": "Надішліть запрошення",
+          "body": "У «Сім’я» натисніть «Запросити учасника». Надішліть посилання партнеру або партнерці.",
+          "tip": "Людина має відкрити посилання й підтвердити приєднання. Один учасник = список поки бачите лише ви."
+        },
+        {
+          "title": "Скажіть, що купити",
+          "body": "Надішліть боту текст або голосове: «Молоко, яйця, хліб». Перевірте чернетку й підтвердьте додавання.",
+          "tip": "Якщо бот почув не те — виправте чернетку до підтвердження. У Mini App товари також можна додати кнопкою +."
+        },
+        {
+          "title": "Відкрийте список покупок",
+          "body": "У боті натисніть «Покупки». Відкриється Mini App: там натискайте галочки біля куплених товарів.",
+          "tip": "Товар зникне з активного списку для всіх учасників. Фото й нотатки залишаться в каталозі."
+        },
+        {
+          "title": "Усе потрібне — під рукою",
+          "body": "Для фото надішліть боту зображення упаковки з назвою товару в підписі. Нотатку змініть у картці товару.",
+          "tip": "Щось не працює? /support → опишіть проблему → «Надіслати». Збережіть номер звернення."
+        }
+      ],
+      "j": [
+        {
+          "title": "Почніть із мови",
+          "body": "Відкрийте бот і натисніть Start / «Розпочати». Оберіть українську або English.",
+          "tip": "Мову можна змінити пізніше: /language."
+        },
+        {
+          "title": "Відкрийте запрошення",
+          "body": "Попросіть близьку людину надіслати запрошення з розділу «Сім’я». Відкрийте її посилання в Telegram.",
+          "tip": "Щоб мати спільний список, приєднайтеся до її сім’ї. Другу сім’ю створювати не потрібно."
+        },
+        {
+          "title": "Підтвердьте приєднання",
+          "body": "Перевірте, хто вас запросив. Натисніть «Приєднатися». Після цього в розділі «Сім’я» мають бути ви обоє.",
+          "tip": "Якщо у вас уже є своя сім’я, бот запропонує перехід. «Перенести список» переносить активні покупки; каталог та історія не переносяться."
+        },
+        {
+          "title": "Скажіть, що купити",
+          "body": "Надішліть боту текст або голосове: «Молоко, яйця, хліб». Перевірте чернетку й підтвердьте додавання.",
+          "tip": "Якщо бот почув не те — виправте чернетку до підтвердження. У Mini App товари також можна додати кнопкою +."
+        },
+        {
+          "title": "Відкрийте список покупок",
+          "body": "У боті натисніть «Покупки». Відкриється Mini App: там натискайте галочки біля куплених товарів.",
+          "tip": "Товар зникне з активного списку для всіх учасників. Фото й нотатки залишаться в каталозі."
+        },
+        {
+          "title": "Усе потрібне — під рукою",
+          "body": "Для фото надішліть боту зображення упаковки з назвою товару в підписі. Нотатку змініть у картці товару.",
+          "tip": "Щось не працює? /support → опишіть проблему → «Надіслати». Збережіть номер звернення."
+        }
+      ]
+    }
+  },
+  "en": {
+    "creator": "I’m creating a list",
+    "invited": "I’ve been invited",
+    "back": "← Back",
+    "next": "Next step →",
+    "steps": {
+      "c": [
+        {
+          "title": "Choose your language",
+          "body": "Open the bot and tap Start. Choose Ukrainian or English.",
+          "tip": "You can change it later with /language."
+        },
+        {
+          "title": "Create a family",
+          "body": "Tap “Create family”. Then open “Family” to invite someone.",
+          "tip": "Creating a family does not automatically add another person."
+        },
+        {
+          "title": "Share your invitation",
+          "body": "In “Family”, tap “Invite a member”. Send the link to your partner.",
+          "tip": "They must open the link and confirm joining. With one member, only you can see this list."
+        },
+        {
+          "title": "Say what you need",
+          "body": "Send a text or voice message: “Milk, eggs, bread”. Review the draft and confirm adding it.",
+          "tip": "If the bot misheard you, edit the draft before confirming. You can also add items with + in the Mini App."
+        },
+        {
+          "title": "Open your shopping list",
+          "body": "Tap “Shopping” in the bot. It opens the Mini App, where you can tick off items you bought.",
+          "tip": "It leaves the active list for every family member. Its photo and notes remain in the catalog."
+        },
+        {
+          "title": "Keep the details handy",
+          "body": "Send the bot a package photo with the product name in its caption. Edit notes in the product card.",
+          "tip": "Something broken? /support → describe the problem → “Send”. Keep your report number."
+        }
+      ],
+      "j": [
+        {
+          "title": "Choose your language",
+          "body": "Open the bot and tap Start. Choose Ukrainian or English.",
+          "tip": "You can change it later with /language."
+        },
+        {
+          "title": "Open your invitation",
+          "body": "Ask the other person to share an invitation from “Family”. Open their link in Telegram.",
+          "tip": "Join their family to share a list. You do not need to create a second family."
+        },
+        {
+          "title": "Confirm you want to join",
+          "body": "Check who invited you. Tap “Join”. Then open “Family” and check that both of you appear.",
+          "tip": "If you already have a family, the bot offers a switch. Transferring your list moves active items; your catalog and history do not transfer."
+        },
+        {
+          "title": "Say what you need",
+          "body": "Send a text or voice message: “Milk, eggs, bread”. Review the draft and confirm adding it.",
+          "tip": "If the bot misheard you, edit the draft before confirming. You can also add items with + in the Mini App."
+        },
+        {
+          "title": "Open your shopping list",
+          "body": "Tap “Shopping” in the bot. It opens the Mini App, where you can tick off items you bought.",
+          "tip": "It leaves the active list for every family member. Its photo and notes remain in the catalog."
+        },
+        {
+          "title": "Keep the details handy",
+          "body": "Send the bot a package photo with the product name in its caption. Edit notes in the product card.",
+          "tip": "Something broken? /support → describe the problem → “Send”. Keep your report number."
+        }
+      ]
+    }
+  }
+}

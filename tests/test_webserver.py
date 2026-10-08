@@ -61,6 +61,14 @@ class MiniAppTests(unittest.TestCase):
         conn.close()
         return status, body
 
+    def test_public_help_assets_and_private_path_rejection(self):
+        for path in ('/help?lang=en', '/help.js', '/help.css', '/help/en-j-2.png'):
+            status, body = self.request(path, auth=False)
+            self.assertEqual(status, 200)
+            self.assertTrue(body)
+        status, _ = self.request('/help/../../help.json', auth=False)
+        self.assertNotEqual(status, 200)
+
     def test_health_reports_stalled_polling_without_exposing_details(self):
         status, body = self.request('/healthz', auth=False)
         self.assertEqual((status, json.loads(body)), (200, {'status': 'ok'}))

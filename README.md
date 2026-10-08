@@ -208,3 +208,7 @@ Onest для заголовків і назв товарів, Manrope для т�
 зберігається 15 хвилин і переживає рестарт; повторний клік підтвердження не створює
 дублікат. Текст звернення не записується в аналітику. Прочитати та закрити звернення
 можуть лише акаунти із серверного `SHOPPING_ADMIN_IDS`.
+
+### Illustrated help
+
+Use `/help` or the **📖 Як користуватися / How to use** bot button. The six-step Ukrainian/English guide supports creating a family and joining an invitation. Opening it preserves pending invitations and shopping edits. Public `/help?lang=uk` and `/help?lang=en` pages contain sample Telegram illustrations, never family data. The Mini App has a **Довідка / Help** button. If Telegram cannot fetch an illustration, the bot sends the same instructions as text.

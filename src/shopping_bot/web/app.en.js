@@ -179,6 +179,7 @@ document.querySelectorAll('.close').forEach(button=>button.onclick=closeDialogs)
 document.querySelectorAll('dialog').forEach(dialog=>{dialog.addEventListener('close',()=>{if(!document.querySelector('dialog[open]'))tg?.BackButton?.hide();});dialog.onclick=event=>{if(event.target===dialog){const box=dialog.getBoundingClientRect();if(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom)closeDialogs();}};});
 $('voice').onclick=()=>{if(tg?.initData)tg.close();else toast('Send a voice message in your private chat with the bot.');};
 const currentLanguage=new URLSearchParams(location.search).get('lang')==='en'?'en':'uk';
+$('help-guide').onclick=()=>location.assign('/help?lang='+currentLanguage);
 $('language').value=currentLanguage;
 function languageURL(value){const url=new URL(location.href);url.searchParams.set('lang',value);return url.href;}
 $('language').onchange=async()=>{const select=$('language');select.disabled=true;try{if(!demo)await api('/api/language',{language:select.value});location.replace(languageURL(select.value));}catch(error){select.value=currentLanguage;toast(error.message);select.disabled=false;}};
