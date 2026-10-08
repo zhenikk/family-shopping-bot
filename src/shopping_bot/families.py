@@ -191,10 +191,10 @@ class Families:
             return [dict(row) for row in db.execute('SELECT token,created_by,created_at FROM invitations WHERE family_id=? AND used_by IS NULL AND revoked=0 ORDER BY rowid DESC',(self.family(user_id),))]
 
     def revoke_invite(self,user_id,token):
-        info=self.details(user_id)
-        if not info:
-            return False
         with self.write(),self.db() as db:
+            info=self.details(user_id)
+            if not info:
+                return False
             return bool(db.execute('UPDATE invitations SET revoked=1 WHERE token=? AND family_id=? AND used_by IS NULL AND revoked=0 AND (created_by=? OR ?=?)',(token,info['id'],user_id,info['owner_id'],user_id)).rowcount)
 
     def _retire(self,db,family_id):

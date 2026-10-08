@@ -7,6 +7,8 @@ import hmac
 import json
 import logging
 import time
+import socket
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -51,9 +53,34 @@ def validate_init_data(raw: str, token: str, now: float | None = None) -> int:
 
 def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
     class MiniAppServer(ThreadingHTTPServer):
+        request_queue_size = 32
+        request_timeout = 10
+
         def __init__(self, *args, **kwargs):
+            self.request_slots = threading.BoundedSemaphore(32)
             self.sync_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mini-app-sync")
             super().__init__(*args, **kwargs)
+
+        def get_request(self):
+            connection, address = super().get_request()
+            connection.settimeout(self.request_timeout)
+            return connection, address
+
+        def process_request(self, request, client_address):
+            if not self.request_slots.acquire(blocking=False):
+                self.shutdown_request(request)
+                return
+            try:
+                super().process_request(request, client_address)
+            except BaseException:
+                self.request_slots.release()
+                raise
+
+        def process_request_thread(self, request, client_address):
+            try:
+                super().process_request_thread(request, client_address)
+            finally:
+                self.request_slots.release()
 
         def server_close(self):
             super().server_close()
@@ -78,6 +105,9 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
             pass
 
         def respond(self, status, value, content_type="application/json; charset=utf-8", cache="no-store"):
+            if getattr(self, 'defer_response', False):
+                self.pending_response = (status, value, content_type, cache)
+                return
             if status>=500:
                 bot.analytics.record('web_error',getattr(self,'user_profile',None),status='error',value=1)
             data = json.dumps(value, ensure_ascii=False).encode() if isinstance(value, (dict, list)) else value
@@ -198,6 +228,8 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
             }
 
         def body(self):
+            if hasattr(self, 'parsed_body'):
+                return self.parsed_body
             length = int(self.headers.get("Content-Length", "0"))
             if length <= 0 or length > 10000:
                 raise ValueError("Invalid request size")
@@ -206,7 +238,36 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 raise ValueError("Invalid request")
             return data
 
+        def dispatch(self, method):
+            # Read sockets before taking the membership lock; write after releasing it.
+            try:
+                if method == 'POST':
+                    self.authenticated_user()
+                    self.parsed_body = self.body()
+                self.defer_response = True
+                with bot.families.lock:
+                    getattr(self, '_' + method)()
+                self.defer_response = False
+                self.respond(*self.pending_response)
+            except AccessError:
+                self.defer_response = False
+                self.respond(401, {'error': 'Open through Telegram'})
+            except (ValueError, UnicodeError):
+                self.defer_response = False
+                self.respond(400, {'error': 'Invalid request'})
+            except socket.timeout:
+                self.defer_response = False
+                self.respond(408, {'error': 'Request timeout'})
+            finally:
+                self.close_connection = True
+
         def do_GET(self):
+            self.dispatch('GET')
+
+        def do_POST(self):
+            self.dispatch('POST')
+
+        def _GET(self):
             try:
                 path = urlsplit(self.path).path
                 assets = {"/": ("index.html", "text/html; charset=utf-8"),
@@ -282,7 +343,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 LOG.error("Mini App read failed")
                 self.respond(500, {"error": tr('ui_ac9e82cc0e40')})
 
-        def do_POST(self):
+        def _POST(self):
             try:
                 path=urlsplit(self.path).path
                 if path=='/api/session':

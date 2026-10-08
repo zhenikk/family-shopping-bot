@@ -61,6 +61,33 @@ class MiniAppTests(unittest.TestCase):
         conn.close()
         return status, body
 
+    def test_mutation_holds_membership_lock(self):
+        original = self.bot.families.family
+        observations = []
+        def family(user_id):
+            observations.append(self.bot.families.lock._is_owned())
+            return original(user_id)
+        family_id = original(1)
+        with patch.object(self.bot.families, 'family', side_effect=family):
+            status, _ = self.request('/api/add', {'text': 'Milk'}, family=family_id)
+        self.assertEqual(status, 200)
+        # request() also reads membership on the client thread; server checks must own it.
+        self.assertTrue(any(observations))
+        self.assertTrue(all(observations[1:]))
+
+    def test_incomplete_body_times_out_without_blocking_other_requests(self):
+        self.server.request_timeout = 0.15
+        conn = http.client.HTTPConnection('127.0.0.1', self.server.server_port, timeout=2)
+        conn.putrequest('POST', '/api/add')
+        conn.putheader('Authorization', 'tma ' + signed_data())
+        conn.putheader('Content-Length', '100')
+        conn.endheaders()
+        self.assertEqual(self.request('/api/state')[0], 200)
+        response = conn.getresponse()
+        self.assertEqual(response.status, 408)
+        response.read()
+        conn.close()
+
     def test_personal_language_preferences_onboarding_and_english_api(self):
         status,body=self.request('/api/preferences',user=55)
         self.assertEqual((status,json.loads(body)['language']),(200,None))

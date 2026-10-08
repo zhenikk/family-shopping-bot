@@ -187,10 +187,11 @@ class ShoppingBot:
     def handle_update(self, update: dict) -> None:
         previous = self.family_context.set("legacy")
         try:
-            if "message" in update:
-                self.handle_message(update["message"])
-            elif "callback_query" in update:
-                self.handle_callback(update["callback_query"])
+            with self.families.lock:
+                if "message" in update:
+                    self.handle_message(update["message"])
+                elif "callback_query" in update:
+                    self.handle_callback(update["callback_query"])
         finally:
             self.family_context.reset(previous)
 
@@ -459,28 +460,29 @@ class ShoppingBot:
             transcript = transcribe(self.telegram, file_id, self.whisper_cli, self.whisper_model, language_code=language.get())
             if on_transcribed:
                 on_transcribed()
-            if self.families.family(user_id)!=expected_family:
-                self.send(user_id,tr('ui_207f65cb77d5'))
-                return
-            if not transcript:
-                self.send(user_id, tr('ui_25719b4e1c5d'))
-                return
-            successful=True
-            if note_product_id is not None:
-                # A delayed transcription must not replace a cancelled or edited note.
-                if self.pending_notes.get(user_id) != note_product_id:
+            with self.families.lock:
+                if self.families.family(user_id)!=expected_family:
+                    self.send(user_id,tr('ui_207f65cb77d5'))
                     return
-                if len(transcript) > 200:
-                    self.send(user_id, tr('ui_0ce74f1a0cc2'))
+                if not transcript:
+                    self.send(user_id, tr('ui_25719b4e1c5d'))
                     return
-                self.store.set_note(note_product_id, transcript)
-                self.pending_notes.pop(user_id, None)
-                self.send(user_id, f"{tr('ui_f5d190cbc687')}{transcript}")
-                self.show_item(user_id, note_product_id, self.note_panels.pop(user_id, None))
-                self.refresh_views()
-                return
-            self.send(user_id, f"{tr('ui_94b5a7bd2400')}{transcript}")
-            self.make_draft(user_id, transcript)
+                successful=True
+                if note_product_id is not None:
+                    # A delayed transcription must not replace a cancelled or edited note.
+                    if self.pending_notes.get(user_id) != note_product_id:
+                        return
+                    if len(transcript) > 200:
+                        self.send(user_id, tr('ui_0ce74f1a0cc2'))
+                        return
+                    self.store.set_note(note_product_id, transcript)
+                    self.pending_notes.pop(user_id, None)
+                    self.send(user_id, f"{tr('ui_f5d190cbc687')}{transcript}")
+                    self.show_item(user_id, note_product_id, self.note_panels.pop(user_id, None))
+                    self.refresh_views()
+                    return
+                self.send(user_id, f"{tr('ui_94b5a7bd2400')}{transcript}")
+                self.make_draft(user_id, transcript)
         except (SpeechError, TelegramError) as exc:
             if on_transcribed:
                 on_transcribed()

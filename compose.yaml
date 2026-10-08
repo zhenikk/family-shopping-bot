@@ -10,6 +10,13 @@ services:
     restart: unless-stopped
     init: true
     read_only: true
+    cap_drop: [ALL]
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     tmpfs:
       - /tmp:size=256m,mode=1777
     security_opt:
@@ -22,5 +29,12 @@ services:
     command: tunnel --no-autoupdate --url http://bot:8080
     restart: unless-stopped
     read_only: true
+    cap_drop: [ALL]
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     security_opt:
       - no-new-privileges:true
