@@ -124,6 +124,26 @@ class ShoppingBotTests(unittest.TestCase):
                 self.bot.handle_callback(callback(1, 'help:uk:c:1'))
             self.assertFalse(any(method.startswith('send') for method, _ in self.telegram.calls))
 
+    def test_returning_user_start_and_help_skip_onboarding(self):
+        self.bot.families.set_language(1, 'en')
+        self.telegram.calls.clear()
+        self.bot.handle_message(message(1, '/start'))
+        self.assertFalse(any('Choose your language' in str(params) for _, params in self.telegram.calls))
+        self.assertTrue(any('buy:' in str(params) or 'list:all' in str(params) for _, params in self.telegram.calls))
+        with patch.dict('os.environ', {'SHOPPING_WEB_URL':''}):
+            self.bot.handle_message(message(1, '/help'))
+        self.assertIn('4/6', self.telegram.calls[-1][1]['text'])
+        self.bot.handle_message(message(1, '/language'))
+        self.assertIn('Choose your language', self.telegram.calls[-1][1]['text'])
+
+    def test_existing_family_without_language_preference_is_not_new_user(self):
+        with self.bot.families.db() as db:
+            db.execute('DELETE FROM preferences WHERE user_id=1')
+        self.telegram.calls.clear()
+        self.bot.handle_message(message(1, '/start'))
+        self.assertFalse(any('Choose your language' in str(params) for _, params in self.telegram.calls))
+        self.assertEqual(self.bot.families.preference(1), 'uk')
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

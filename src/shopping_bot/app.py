@@ -302,7 +302,7 @@ class ShoppingBot:
         text = (message.get("text") or "").strip()
         registered = self.bind_user(user_id)
         if text.split('@', 1)[0] in ('/help', '📖 Як користуватися', '📖 How to use') or text == '/start help':
-            self.show_help(user_id)
+            self.show_help(user_id, step=3 if registered else 0)
             return
         kind='bot_start' if text.startswith('/start') else 'voice_queued' if message.get('voice') else 'bot_photo' if message.get('photo') else 'bot_message'
         self.analytics.record(kind,user)
@@ -340,6 +340,8 @@ class ShoppingBot:
                 self.send(user_id,'📊 Статистика бота / Bot analytics',reply_markup={'inline_keyboard':[[{'text':'Відкрити адмінку / Open admin','web_app':{'url':url.rstrip('/')+'/admin?lang='+language.get()}}]]})
             else:self.send(user_id,'Admin requires SHOPPING_WEB_URL (HTTPS).')
             return
+        if registered and not self.families.preference(user_id):
+            self.families.set_language(user_id, language.get())
         if text == '/language' or text in ('🌐 Мова', '🌐 Language') or (text.startswith('/start') and not self.families.preference(user_id)):
             self.families.pending_start(user_id,text if text.startswith('/start') else '')
             self.show_language(user_id)
@@ -403,14 +405,7 @@ class ShoppingBot:
             return
         if text.startswith("/start"):
             self.clear_pending(user_id)
-            self.pending_photos.pop(user_id, None)
-            self.pending_notes.pop(user_id, None)
-            self.pending_draft_edits.pop(user_id, None)
-            self.send(user_id,
-                tr('ui_d249553217d9'),
-                reply_markup=self.menu())
-            if os.getenv("SHOPPING_WEB_URL", "").startswith("https://"):
-                self.show_web_app(user_id)
+            self.show_list(user_id)
             return
         if text.startswith("/cancel"):
             self.pending_family_names.discard(user_id)
@@ -693,7 +688,11 @@ class ShoppingBot:
         if len(rows) > shown:
             lines.append(f"{tr('ui_b21c9aac6065')}{shown}{tr('ui_e2b3417bc1de')}{len(rows)}{tr('ui_dd922ebd0935')}")
         keyboard.append([(tr('ui_e303bf93e660'), "list:all"), (tr('ui_1720591356f5'), "catalog:0")])
-        return "\n".join(lines), buttons(*keyboard)
+        markup = buttons(*keyboard)
+        url = os.getenv('SHOPPING_WEB_URL', '')
+        if url.startswith('https://'):
+            markup['inline_keyboard'].insert(0, [{'text': '🛒 Shopping' if language.get() == 'en' else '🛒 Покупки', 'web_app': {'url': url}}])
+        return "\n".join(lines), markup
 
     def show_list(self, user_id: int, store_name: str = "", message_id: int | None = None) -> None:
         store_name = "all"
