@@ -88,3 +88,9 @@ header{margin-bottom:16px}h1{font-size:32px;letter-spacing:-1.2px}.headline{marg
 .family-controls{display:grid;gap:12px;margin-top:18px}.family-controls h3{font-size:15px;margin:16px 0 0}.family-controls label{margin-top:8px}dialog input{display:block;width:100%;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:16px;margin:8px 0 12px}.family-confirm{line-height:1.7;font-size:15px}.danger{color:#c74334}.family-controls .history-row{padding:10px 0}.family-controls .text-button{padding-top:8px}#family-join-form{margin-top:16px}#family-accept-transfer,#family-accept{margin-top:12px}
 
 .language-picker{display:inline-flex;align-items:center;gap:8px;margin:0 12px 12px 0}.language-picker select{padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:inherit;font:inherit}
+
+.language-picker{vertical-align:middle;margin:0 8px 12px 0;font-size:14px}
+.language-picker select{width:148px;max-width:148px;min-height:44px;margin:0;padding:9px 30px 9px 12px;font-size:14px;border-radius:12px}
+#family{vertical-align:middle;min-height:44px;margin-bottom:12px}
+.language-picker~button.secondary{min-height:44px;padding:9px 12px;font-size:13px;vertical-align:middle;margin-bottom:12px}
+@media(max-width:380px){.language-picker{gap:5px;margin-right:4px}.language-picker select{max-width:155px;padding-right:20px}.language-picker~button.secondary{padding-left:10px;padding-right:10px}}

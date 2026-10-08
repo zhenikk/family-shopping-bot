@@ -10,9 +10,9 @@ async function api(path){const response=await fetch(path,{headers:{Authorization
 function graph(data){
  const days=Number($('days').value),active=new Map(data.daily_active.map(r=>[r.day,r.count])),rows=[];
  for(let i=days-1;i>=0;i--){const day=new Date(data.generated*1000-i*86400000).toISOString().slice(0,10);rows.push({day,count:active.get(day)||0});}
- const peak=Math.max(0,...rows.map(r=>r.count)),max=Math.max(1,peak),height=170,step=940/days;
+ const peak=Math.max(0,...rows.map(r=>r.count)),max=Math.max(1,peak),height=130,step=940/days;
  const bars=rows.map((r,i)=>{const h=r.count/max*height;return '<rect x="'+(i*step+2)+'" y="'+(height-h+10)+'" width="'+Math.max(1,step-4)+'" height="'+h+'" rx="3"><title>'+r.day+': '+r.count+'</title></rect>';}).join('');
- $('chart').innerHTML='<svg viewBox="0 0 940 218" role="img" aria-label="Щоденна активність"><line x1="0" y1="180" x2="940" y2="180"/>'+bars+'<text x="0" y="206">'+rows[0].day+'</text><text x="470" y="206" text-anchor="middle">'+peak+' · максимум за день</text><text x="940" y="206" text-anchor="end">'+rows.at(-1).day+'</text></svg>';
+ $('chart').innerHTML='<svg viewBox="0 0 940 178" role="img" aria-label="Щоденна активність"><line x1="0" y1="140" x2="940" y2="140"/>'+bars+'<text x="0" y="166">'+rows[0].day+'</text><text x="470" y="166" text-anchor="middle">'+peak+' · максимум за день</text><text x="940" y="166" text-anchor="end">'+rows.at(-1).day+'</text></svg>';
 }
 async function stats(){
  const data=await api('/api/admin/stats?days='+$('days').value);
@@ -24,7 +24,7 @@ async function stats(){
 }
 async function users(){
  const result=await api('/api/admin/users?offset='+offset+'&q='+encodeURIComponent($('query').value));
- $('users').innerHTML=result.items.length?result.items.map(u=>'<tr><td><button data-user="'+u.user_id+'">'+escape(u.name||u.user_id)+'</button><small>'+escape(u.username?'@'+u.username:'')+' · '+u.user_id+'</small></td><td>'+date(u.first_seen)+'</td><td>'+date(u.last_seen)+'</td><td>'+(u.family_id?escape(u.family_id.slice(0,8)):'—')+'<small>'+escape(u.language||'—')+'</small></td></tr>').join(''):'<tr><td colspan="4">Користувачів не знайдено</td></tr>';
+ $('users').innerHTML=result.items.length?result.items.map(u=>'<tr><td><button data-user="'+u.user_id+'">'+escape(u.name||u.user_id)+'</button><small>'+escape(u.username?'@'+u.username:'')+' · '+u.user_id+'</small></td><td data-label="Перша поява">'+date(u.first_seen)+'</td><td data-label="Остання активність">'+date(u.last_seen)+'</td><td>'+(u.family_id?escape(u.family_id.slice(0,8)):'—')+'<small>'+escape(u.language||'—')+'</small></td></tr>').join(''):'<tr><td colspan="4">Користувачів не знайдено</td></tr>';
  $('users-prev').disabled=offset===0;$('users-next').disabled=!result.has_more;$('users-page').textContent=result.items.length?(offset+1)+'–'+(offset+result.items.length):'0';
  document.querySelectorAll('[data-user]').forEach(b=>b.onclick=()=>{userFilter=b.dataset.user;cursor=null;$('event-filter').hidden=false;$('event-filter').innerHTML='Telegram ID: '+userFilter+' <button id="clear-user">Усі користувачі</button>';$('clear-user').onclick=()=>{userFilter=null;$('event-filter').hidden=true;cursor=null;events().catch(e=>$('status').textContent=e.message);};events().catch(e=>$('status').textContent=e.message);});
 }
