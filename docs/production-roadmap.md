@@ -17,7 +17,7 @@ or promising a user count. Current observed VPS usage: 569 MB of 3916 MB RAM and
 | Independent recovery | Encrypted backup outside VPS, protected recovery key, successful restore to an empty instance, measured recovery time | Awaiting destination; local verification alone does not satisfy this gate |
 | Health checks | Polling heartbeat and database query produce 503 when stalled; Docker reports unhealthy | Implemented in this release |
 | Alerts | Independent check of public health, disk, backup age and container restarts; delivery to owner tested | Pending monitoring destination; no unsolicited messages configured |
-| Deployment | Tests, pre-deploy backup, bounded health wait and previous-image rollback | Script prepared; verify successful deployment on VPS |
+| Deployment | Tests, pre-deploy backup, bounded health wait and previous-image rollback | Successful VPS deployment verified; failure/rollback paths tested with an isolated Docker fixture |
 | Privacy controls | Explain collected metadata/retention; account deletion/export and family deletion behavior tested; invitations reviewed | Pending; analytics contains personal identifiers |
 | Storage safeguards | Per-family photo/catalog limits, low-disk rejection, orphan photo cleanup; no loss of active referenced images | Pending; current file/rate limits do not cap lifetime storage |
 
@@ -58,3 +58,11 @@ met. Start an invite-only beta after recovery, privacy and monitoring are verifi
 Targets to validate: daily independent backups (RPO <=24h), recovery within one hour
 (RTO <=1h), useful alerts within five minutes, list operations under one second at
 the agreed beta workload excluding speech. These are targets, not current guarantees.
+
+## Completed first release
+
+Release `1e24605` deployed on 2026-10-08. The bot is Docker healthy and public
+`/healthz` returned 200. A new mode-600 production backup was extracted in an
+isolated directory; five SQLite snapshots passed integrity checks. The release
+adds health, private atomic backups, retention, CI gates and a deployment runbook.
+An independent restore to a replacement server has not yet been performed.
