@@ -321,7 +321,7 @@ class ShoppingBot:
             self.support.cancel(user_id)
             self.send(user_id, tr('Звернення скасовано.'), reply_markup=self.menu())
             return
-        menu_actions = {button['text'] for row in self.menu()['keyboard'] for button in row}
+        menu_actions = {button['text'] for row in self.menu()['keyboard'] for button in row} | {'📋 Список у чаті', '📋 List in chat'}
         if draft and (text.startswith('/') or text in menu_actions):
             self.support.cancel(user_id)
             draft = None
@@ -410,7 +410,7 @@ class ShoppingBot:
             return
         if text.startswith("/start"):
             self.clear_pending(user_id)
-            self.show_list(user_id)
+            self.show_list(user_id, bring_to_bottom=True)
             return
         if text.startswith("/cancel"):
             self.pending_family_names.discard(user_id)
@@ -422,7 +422,7 @@ class ShoppingBot:
             else:
                 self.send(user_id, tr('ui_d1454191b8bd'))
             return
-        if text in (tr('ui_428fc2d45eba'), tr('ui_1720591356f5'), tr('ui_f46f0095cd44'), tr('ui_a9e16bfc706e'), tr('ui_78ea31018b80'), tr('ui_58d659bf993e'), tr('ui_8c4317311ad3'), tr('ui_45b58c75117f'), *STORES) or text.startswith(("/list", "/catalog", "/history", "/app")):
+        if text in (tr('ui_428fc2d45eba'), tr('ui_1720591356f5'), tr('ui_f46f0095cd44'), tr('ui_a9e16bfc706e'), tr('ui_78ea31018b80'), tr('ui_58d659bf993e'), tr('ui_8c4317311ad3'), tr('ui_45b58c75117f'), '📋 Список у чаті', '📋 List in chat', *STORES) or text.startswith(("/list", "/catalog", "/history", "/app")):
             self.pending_notes.pop(user_id, None)
             self.pending_photos.pop(user_id, None)
             self.pending_draft_edits.pop(user_id, None)
@@ -456,8 +456,8 @@ class ShoppingBot:
             return
         if text in (tr('ui_78ea31018b80'), tr('ui_58d659bf993e'), "/app"):
             self.show_web_app(user_id)
-        elif text in STORES or text in (tr('ui_428fc2d45eba'), tr('ui_45b58c75117f')):
-            self.show_list(user_id)
+        elif text in STORES or text in (tr('ui_428fc2d45eba'), tr('ui_45b58c75117f'), '📋 Список у чаті', '📋 List in chat'):
+            self.show_list(user_id, bring_to_bottom=True)
         elif text in (tr('ui_a9e16bfc706e'), tr('ui_8c4317311ad3')):
             self.send(user_id, tr('ui_3ed585b1d128'),
                       reply_markup=buttons([(tr('ui_816689e7ff0a'), "list:all")]))
@@ -466,7 +466,7 @@ class ShoppingBot:
         elif text == tr('ui_f46f0095cd44') or text.startswith("/history"):
             self.show_history(user_id)
         elif text.startswith("/list"):
-            self.show_list(user_id)
+            self.show_list(user_id, bring_to_bottom=True)
         elif text.startswith("/add "):
             self.make_draft(user_id, text[5:])
         elif text.startswith("/"):
@@ -699,14 +699,14 @@ class ShoppingBot:
             markup['inline_keyboard'].insert(0, [{'text': '🛒 Shopping' if language.get() == 'en' else '🛒 Покупки', 'web_app': {'url': url}}])
         return "\n".join(lines), markup
 
-    def show_list(self, user_id: int, store_name: str = "", message_id: int | None = None) -> None:
+    def show_list(self, user_id: int, store_name: str = "", message_id: int | None = None, *, bring_to_bottom=False) -> None:
         store_name = "all"
         content, markup = self.list_content()
         if message_id is None:
             existing = next((view for view in self.store.views() if view['user_id'] == user_id and view['store'] == store_name), None)
             if existing:
                 message_id = existing['message_id']
-        if message_id is not None:
+        if message_id is not None and not bring_to_bottom:
             try:
                 self.telegram.call("editMessageText", chat_id=user_id, message_id=message_id,
                                    text=content, reply_markup=markup)

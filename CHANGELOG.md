@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 — 2026-10-08
+
+- Fix “List in chat” appearing unresponsive: explicit opening sends the current list to the bottom and removes the previous tracked panel; purchase callbacks continue editing in place.
+- Accept the list button from an older Ukrainian/English keyboard after changing language.
+
 ## 0.2.0 — 2026-10-08
 
 First versioned release of the existing beta. Earlier deployments are identified by Git commit only.

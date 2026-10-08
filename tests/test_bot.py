@@ -144,6 +144,23 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertFalse(any('Choose your language' in str(params) for _, params in self.telegram.calls))
         self.assertEqual(self.bot.families.preference(1), 'uk')
 
+    def test_list_chat_button_brings_list_to_bottom_and_removes_old_panel(self):
+        self.bot.handle_message(message(1, '📋 Список у чаті'))
+        previous = self.telegram.next_message_id
+        self.telegram.calls.clear()
+        self.bot.handle_message(message(1, '📋 Список у чаті'))
+        sends = [params for method, params in self.telegram.calls if method == 'sendMessage']
+        self.assertEqual(len(sends), 1, 'Explicit list opening must show a visible response below the user request')
+        self.assertTrue(any(method == 'deleteMessage' and params['message_id'] == previous for method, params in self.telegram.calls))
+        self.assertEqual(self.store.views()[0]['message_id'], self.telegram.next_message_id)
+
+    def test_old_ukrainian_list_button_after_switching_to_english(self):
+        self.bot.families.set_language(1, 'en')
+        self.bot.handle_message(message(1, '📋 Список у чаті'))
+        self.assertIn('list:all', str(self.telegram.calls[-1][1]['reply_markup']))
+        with self.store.db() as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM drafts WHERE actor_id=1").fetchone()[0], 0)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
