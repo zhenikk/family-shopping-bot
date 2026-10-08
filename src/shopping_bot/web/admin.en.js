@@ -16,6 +16,8 @@ function graph(data){
 }
 async function stats(){
  const data=await api('/api/admin/stats?days='+$('days').value);
+ $('release').textContent='Version: '+data.release.version+' · Git: '+data.release.commit.slice(0,12);
+ const selected=$('release-filter').value; $('release-filter').innerHTML='<option value="">All releases</option>'+data.releases.map(r=>'<option value="'+escape(JSON.stringify([r.version,r.commit_sha]))+'">'+escape(r.version)+' · '+escape(r.commit_sha.slice(0,12))+'</option>').join('');$('release-filter').value=selected;
  const metrics=[['Users',data.users,'Tracked users'],['Active today',data.active['1'],'In the last 24 hours'],['Weekly active',data.active['7'],'In the last 7 days'],['Families',data.families,data.members+' members']];
  $('metrics').innerHTML=metrics.map(([label,value,hint])=>'<div class="metric"><strong>'+value.toLocaleString()+'</strong><span>'+label+'</span><small>'+escape(hint)+'</small></div>').join('');graph(data);
  const totals=[['New this week',data.new_7d],['Mini App sessions',data.totals.web_session||0],['Voice messages transcribed',data.totals.voice_done||0],['Purchases recorded',data.totals.purchase||0],['Errors in 24 hours',data.errors_24h]];
@@ -30,15 +32,16 @@ async function users(){
 }
 async function events(append=false){
  const query=new URLSearchParams();if(cursor&&append)query.set('before',cursor);if(userFilter)query.set('user',userFilter);if($('errors').checked)query.set('errors','1');
+ if($('release-filter').value){const [version,commit]=JSON.parse($('release-filter').value);query.set('version',version);query.set('commit',commit);}
  const result=await api('/api/admin/events?'+query);
- const html=result.items.map(e=>'<article class="event '+(e.status==='error'?'error':'')+'"><time>'+date(e.occurred)+'</time><div><strong>'+escape(labels[e.kind]||e.kind)+'</strong><small>'+(e.value!==1?'× '+e.value:'')+(e.duration_ms!=null?' · '+(e.duration_ms/1000).toFixed(1)+' s':'')+'</small></div><div class="actor">'+escape(e.name||'System')+'<small>'+(e.user_id||'—')+'</small></div></article>').join('');
+ const html=result.items.map(e=>'<article class="event '+(e.status==='error'?'error':'')+'"><time>'+date(e.occurred)+'</time><div><strong>'+escape(labels[e.kind]||e.kind)+'</strong><small>'+escape(e.version)+' · '+escape(e.commit_sha.slice(0,12))+(e.value!==1?' · × '+e.value:'')+(e.duration_ms!=null?' · '+(e.duration_ms/1000).toFixed(1)+' s':'')+'</small></div><div class="actor">'+escape(e.name||'System')+'<small>'+(e.user_id||'—')+'</small></div></article>').join('');
  if(append)$('events').insertAdjacentHTML('beforeend',html);else $('events').innerHTML=html||'<p>No events yet</p>';cursor=result.next;$('events-more').hidden=!result.has_more;
 }
 let supportCursor=null;
 async function supportTickets(append=false){
  const query=new URLSearchParams();if(append&&supportCursor)query.set('before',supportCursor);if($('support-resolved').checked)query.set('resolved','1');
  const result=await api('/api/admin/support?'+query);
- const html=result.items.map(t=>'<article class="support-ticket"><div class="section-head"><strong>#'+t.id+' · '+escape(t.name||t.user_id)+'</strong><small>'+date(t.created)+'</small></div><small>'+escape(t.username?'@'+t.username:'Telegram ID: '+t.user_id)+' · '+escape(t.metadata.language)+' · members: '+escape(t.metadata.family_member_count)+'</small><p class="support-description">'+escape(t.text)+'</p>'+(t.status==='open'?'<button class="secondary" data-resolve="'+t.id+'">Mark as resolved</button>':'<small>Resolved</small>')+'</article>').join('');
+ const html=result.items.map(t=>'<article class="support-ticket"><div class="section-head"><strong>#'+t.id+' · '+escape(t.name||t.user_id)+'</strong><small>'+date(t.created)+'</small></div><small>'+escape(t.username?'@'+t.username:'Telegram ID: '+t.user_id)+' · '+escape(t.metadata.language)+' · Version: '+escape(t.metadata.release?.version||'unknown')+' · Git: '+escape((t.metadata.release?.commit||'unknown').slice(0,12))+' · members: '+escape(t.metadata.family_member_count)+'</small><p class="support-description">'+escape(t.text)+'</p>'+(t.status==='open'?'<button class="secondary" data-resolve="'+t.id+'">Mark as resolved</button>':'<small>Resolved</small>')+'</article>').join('');
  if(append)$('support-tickets').insertAdjacentHTML('beforeend',html);else $('support-tickets').innerHTML=html||'<p>No new reports</p>';
  supportCursor=result.next;$('support-more').hidden=!result.has_more;
  document.querySelectorAll('[data-resolve]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{await api('/api/admin/support/resolve',{id:Number(button.dataset.resolve)});await supportTickets();}catch(error){$('status').textContent=error.message;button.disabled=false;}});
@@ -62,3 +65,5 @@ async function start(){
  if(!preferences.admin){$('denied').hidden=false;$('status').textContent='Owner access only.';return;}await refresh();}
  catch(error){$('denied').hidden=false;$('status').textContent='Open /admin in the bot.';}
 }start();
+
+$('release-filter').onchange=()=>{cursor=null;events().catch(error=>$('status').textContent=error.message);};

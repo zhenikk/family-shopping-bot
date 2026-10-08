@@ -1,5 +1,6 @@
 from __future__ import annotations
 from .support import Support
+from .version import release, configure_logging
 from .limits import RateLimiter, VoiceAdmission
 from .analytics import Analytics
 from .i18n import tr, language, CategoryLabels
@@ -301,6 +302,10 @@ class ShoppingBot:
         user_id = int(user["id"])
         text = (message.get("text") or "").strip()
         registered = self.bind_user(user_id)
+        if text.split('@', 1)[0] == '/version':
+            identity = release()
+            self.send(user_id, f"Version: {identity['version']}\nGit: {identity['commit']}")
+            return
         if text.split('@', 1)[0] in ('/help', '📖 Як користуватися', '📖 How to use') or text == '/start help':
             self.show_help(user_id, step=3 if registered else 0)
             return
@@ -1167,8 +1172,8 @@ class ShoppingBot:
 
 
 def main() -> None:
-    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"),
-                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    configure_logging(os.getenv("LOG_LEVEL", "INFO"))
+    LOG.info('Starting shopping bot')
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     invite = os.environ.get("SHOPPING_INVITE_CODE", "")
     if not token or len(invite) < 12:

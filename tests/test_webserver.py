@@ -61,6 +61,25 @@ class MiniAppTests(unittest.TestCase):
         conn.close()
         return status, body
 
+    def test_release_attribution_and_owner_filter(self):
+        identity = {'version':'0.2.0', 'commit':'a' * 40}
+        with patch('shopping_bot.analytics.release', return_value=identity):
+            self.bot.analytics.record('bot_error', {'id':1}, status='error')
+        with patch('shopping_bot.analytics.release', return_value={'version':'0.2.1','commit':'b' * 40}):
+            self.bot.analytics.record('bot_message', {'id':1})
+        self.bot.admin_ids = {1}
+        status, body = self.request('/api/admin/events?version=0.2.0&commit=' + 'a' * 40)
+        self.assertEqual(status, 200)
+        rows = json.loads(body)['items']
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['version'], '0.2.0')
+        self.assertEqual(rows[0]['commit_sha'], 'a' * 40)
+        self.assertEqual(self.request('/api/admin/events?version=0.2.0', user=2)[0], 403)
+        status, body = self.request('/api/admin/stats')
+        self.assertEqual(status, 200)
+        self.assertIn('release', json.loads(body))
+        self.assertEqual(len(json.loads(body)['releases']), 2)
+
     def test_public_help_assets_and_private_path_rejection(self):
         for path in ('/help?lang=en', '/help.js', '/help.css', '/help/en-j-2.png'):
             status, body = self.request(path, auth=False)

@@ -212,3 +212,11 @@ Onest для заголовків і назв товарів, Manrope для т�
 ### Illustrated help
 
 Use `/help` or the **📖 Як користуватися / How to use** bot button. The six-step Ukrainian/English guide supports creating a family and joining an invitation. Opening it preserves pending invitations and shopping edits. Public `/help?lang=uk` and `/help?lang=en` pages contain sample Telegram illustrations, never family data. The Mini App has a **Довідка / Help** button. If Telegram cannot fetch an illustration, the bot sends the same instructions as text.
+
+### Release versions
+
+The version has one source: `src/shopping_bot/__init__.py` (`__version__`). Use MAJOR.MINOR.PATCH: patch for fixes, minor for compatible features, major for breaking changes. Update this version and `CHANGELOG.md` before a release, run the test suite, commit, then run `bash scripts/tag-release.sh` and push the commit and tag. Do not move a published tag; create a new release.
+
+Deploy with `scripts/deploy.sh` from that committed checkout, ensuring release tags are fetched on the server. The script embeds both version and full Git SHA into the image; an untagged deployment is explicitly marked `VERSION-dev+SHA`. Rollback restores the previous image and its original identity. `/version` shows the running identity. Support reports capture it at submission; admin events can be filtered by version and commit. Old records remain `unknown` rather than inventing attribution. Runtime logs carry the same identity on each record; `data/deployments.log` records successful deployments. Detailed analytics retain their existing 90-day policy.
+
+Example: `git log v0.2.0..v0.2.1 --oneline` compares releases. Query `/api/admin/events?version=0.2.0` through authenticated owner access, or use the admin release selector. A Mini App report currently captures the server/bot version at submission, not the user's cached frontend build.

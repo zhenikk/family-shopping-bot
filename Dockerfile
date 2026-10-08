@@ -27,4 +27,10 @@ ENV PYTHONPATH=/app/src \
     WHISPER_CLI=/opt/whisper-build/bin/whisper-cli \
     WHISPER_MODEL=/opt/models/ggml-small.bin \
     LD_LIBRARY_PATH=/opt/whisper-build/bin
+USER root
+ARG APP_COMMIT=unknown
+ARG APP_RELEASE=development
+RUN APP_COMMIT="${APP_COMMIT}" APP_RELEASE="${APP_RELEASE}" python -c 'import json,os; from shopping_bot import __version__; from pathlib import Path; Path("/app/src/shopping_bot/build.json").write_text(json.dumps({"version": os.environ["APP_RELEASE"] if os.environ["APP_RELEASE"] != "development" else __version__ + "-dev", "commit": os.environ["APP_COMMIT"]}))'
+LABEL org.opencontainers.image.revision="${APP_COMMIT}" org.opencontainers.image.version="${APP_RELEASE}"
+USER shopping
 CMD ["python", "-m", "shopping_bot.app"]

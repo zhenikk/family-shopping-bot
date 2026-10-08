@@ -431,5 +431,8 @@
   "Опрацьовано": "Resolved",
   "Нових звернень немає": "No new reports",
   "Тексти повідомлень, голосові, фото та токени не записуються в журнал подій. Підтверджені описи звернень зберігаються окремо й доступні 90 днів.": "Message text, voice, photos and tokens are not recorded in the event journal. Confirmed support descriptions are stored separately and available for 90 days.",
-  "Довідка": "Help"
+  "Довідка": "Help",
+  "Фільтр за релізом": "Filter by release",
+  "Усі релізи": "All releases",
+  "Реліз": "Release"
 }

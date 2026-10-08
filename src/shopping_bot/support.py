@@ -1,4 +1,5 @@
 """Explicit support submissions, kept separately from content-free analytics."""
+from .version import release
 import json
 import time
 import uuid
@@ -55,6 +56,7 @@ class Support:
 
     def submit(self, user, token, metadata):
         user_id = user['id']
+        metadata = dict(metadata) | {'release': release()}
         with self.families.db() as db:
             db.execute('BEGIN IMMEDIATE')
             existing = db.execute('SELECT id FROM support_tickets WHERE user_id=? AND draft_token=?', (user_id, token)).fetchone()

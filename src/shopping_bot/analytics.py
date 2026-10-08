@@ -1,4 +1,5 @@
 """Owner-only operational analytics. No messages, credentials or product content."""
+from .version import release
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -26,6 +27,11 @@ class Analytics:
                 CREATE INDEX IF NOT EXISTS analytics_username ON analytics_users(username COLLATE NOCASE);
                 CREATE INDEX IF NOT EXISTS users_family ON users(family_id);
             ''')
+            columns = {row[1] for row in db.execute('PRAGMA table_info(analytics_events)')}
+            for column in ('version', 'commit_sha'):
+                if column not in columns:
+                    db.execute(f"ALTER TABLE analytics_events ADD COLUMN {column} TEXT NOT NULL DEFAULT 'unknown'")
+            db.execute('CREATE INDEX IF NOT EXISTS analytics_release ON analytics_events(version,commit_sha,id DESC)')
             if not db.execute("SELECT 1 FROM meta WHERE key='analytics_started'").fetchone():
                 current=time.time()
                 db.execute("INSERT INTO meta VALUES ('analytics_started',?)",(str(current),))
@@ -64,7 +70,8 @@ class Analytics:
                     previous=db.execute('SELECT started FROM analytics_sessions WHERE user_id=?',(user_id,)).fetchone()
                     if previous and stamp-previous[0]<1800:return False
                     db.execute('INSERT OR REPLACE INTO analytics_sessions VALUES (?,?)',(user_id,stamp))
-                db.execute('INSERT INTO analytics_events(user_id,kind,occurred,status,value,duration_ms) VALUES (?,?,?,?,?,?)',(user_id,kind,stamp,status,value,duration_ms))
+                identity = release()
+                db.execute('INSERT INTO analytics_events(user_id,kind,occurred,status,value,duration_ms,version,commit_sha) VALUES (?,?,?,?,?,?,?,?)',(user_id,kind,stamp,status,value,duration_ms,identity['version'],identity['commit']))
                 day=datetime.fromtimestamp(stamp,timezone.utc).date().isoformat()
                 db.execute('INSERT INTO analytics_daily VALUES (?,?,?) ON CONFLICT(day,kind) DO UPDATE SET count=count+excluded.count',(day,kind,value))
                 # Retain detailed events for 90 days; cumulative daily totals remain.
@@ -88,7 +95,8 @@ class Analytics:
             last_error=db.execute("SELECT occurred,kind FROM analytics_events WHERE status='error' ORDER BY id DESC LIMIT 1").fetchone()
             started=float(db.execute("SELECT value FROM meta WHERE key='analytics_started'").fetchone()[0])
             recent_errors=db.execute("SELECT count(*) FROM analytics_events WHERE status='error' AND occurred>=?",(stamp-86400,)).fetchone()[0]
-        return {'users':users,'members':members,'families':families,'new_7d':new,'active':active,'totals':totals,'daily':daily,'daily_active':daily_active,'errors_24h':recent_errors,'last_error':dict(last_error) if last_error else None,'started':started,'generated':stamp,'retention_days':90}
+            releases = [dict(row) for row in db.execute('SELECT version,commit_sha,count(*) events FROM analytics_events WHERE occurred>=? GROUP BY version,commit_sha ORDER BY max(id) DESC LIMIT 100',(stamp-90*86400,))]
+        return {'release':release(),'releases':releases,'users':users,'members':members,'families':families,'new_7d':new,'active':active,'totals':totals,'daily':daily,'daily_active':daily_active,'errors_24h':recent_errors,'last_error':dict(last_error) if last_error else None,'started':started,'generated':stamp,'retention_days':90}
 
     def users(self,offset=0,query=''):
         offset=max(0,min(int(offset),1000000));query=query.strip()[:80]
@@ -101,8 +109,10 @@ class Analytics:
                 LEFT JOIN preferences p ON p.user_id=a.user_id {condition} ORDER BY a.last_seen DESC,a.user_id LIMIT 51 OFFSET ?''',(*args,offset)).fetchall()
         return {'items':[dict(row) for row in rows[:50]],'has_more':len(rows)>50,'offset':offset}
 
-    def events(self,before=None,user_id=None,errors=False):
+    def events(self,before=None,user_id=None,errors=False,version=None,commit=None):
         conditions=['e.occurred>=?'];args=[time.time()-90*86400]
+        if version:conditions.append('e.version=?');args.append(str(version)[:100])
+        if commit:conditions.append('e.commit_sha=?');args.append(str(commit)[:64])
         if before:conditions.append('e.id<?');args.append(int(before))
         if user_id:conditions.append('e.user_id=?');args.append(int(user_id))
         if errors:conditions.append("e.status='error'")

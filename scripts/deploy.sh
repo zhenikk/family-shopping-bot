@@ -3,6 +3,14 @@
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 revision=$(git rev-parse HEAD)
+# Identify the actual built checkout. Refuse tracked edits that would break attribution.
+git diff --quiet HEAD -- || { echo 'Commit tracked changes before deploying.' >&2; exit 1; }
+version=$(PYTHONPATH=src python3 -c 'from shopping_bot import __version__; print(__version__)')
+if git describe --exact-match --tags HEAD 2>/dev/null | grep -Fxq "v$version"; then
+  release="$version"
+else
+  release="$version-dev+${revision:0:12}"
+fi
 container=$(docker compose ps -q bot)
 if [[ -z "$container" ]]; then
   echo 'Expected an existing bot deployment; use the installation procedure first.' >&2
@@ -23,7 +31,7 @@ rollback() {
   exit 1
 }
 trap rollback ERR
-docker compose build bot
+docker compose build --build-arg "APP_COMMIT=$revision" --build-arg "APP_RELEASE=$release" bot
 changed=1
 docker compose up -d --no-deps bot
 healthy=0
@@ -37,5 +45,6 @@ done
 if [[ "$healthy" != 1 ]]; then
   false  # Trigger rollback.
 fi
-printf '%s %s\n' "$(date -u +%FT%TZ)" "$revision" >> data/deployments.log
-echo "Healthy release: $revision"
+docker compose exec -T bot python -c 'import sys; from shopping_bot.version import release; assert release() == {"version":sys.argv[1],"commit":sys.argv[2]}, "Running image identity differs from release"' "$release" "$revision"
+printf '%s %s %s\n' "$(date -u +%FT%TZ)" "$release" "$revision" >> data/deployments.log
+echo "Healthy release: $release ($revision)"

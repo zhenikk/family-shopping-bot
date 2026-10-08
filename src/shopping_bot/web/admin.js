@@ -16,6 +16,8 @@ function graph(data){
 }
 async function stats(){
  const data=await api('/api/admin/stats?days='+$('days').value);
+ $('release').textContent='Version: '+data.release.version+' · Git: '+data.release.commit.slice(0,12);
+ const selected=$('release-filter').value; $('release-filter').innerHTML='<option value="">Усі релізи</option>'+data.releases.map(r=>'<option value="'+escape(JSON.stringify([r.version,r.commit_sha]))+'">'+escape(r.version)+' · '+escape(r.commit_sha.slice(0,12))+'</option>').join('');$('release-filter').value=selected;
  const metrics=[['Користувачі',data.users,'Зареєстровані в журналі'],['Активні сьогодні',data.active['1'],'За останні 24 години'],['Активні за тиждень',data.active['7'],'За останні 7 днів'],['Сім’ї',data.families,data.members+' учасників']];
  $('metrics').innerHTML=metrics.map(([label,value,hint])=>'<div class="metric"><strong>'+value.toLocaleString()+'</strong><span>'+label+'</span><small>'+escape(hint)+'</small></div>').join('');graph(data);
  const totals=[['Нові за тиждень',data.new_7d],['Входи у Mini App',data.totals.web_session||0],['Голосові розпізнано',data.totals.voice_done||0],['Покупок відмічено',data.totals.purchase||0],['Помилки за 24 години',data.errors_24h]];
@@ -30,15 +32,16 @@ async function users(){
 }
 async function events(append=false){
  const query=new URLSearchParams();if(cursor&&append)query.set('before',cursor);if(userFilter)query.set('user',userFilter);if($('errors').checked)query.set('errors','1');
+ if($('release-filter').value){const [version,commit]=JSON.parse($('release-filter').value);query.set('version',version);query.set('commit',commit);}
  const result=await api('/api/admin/events?'+query);
- const html=result.items.map(e=>'<article class="event '+(e.status==='error'?'error':'')+'"><time>'+date(e.occurred)+'</time><div><strong>'+escape(labels[e.kind]||e.kind)+'</strong><small>'+(e.value!==1?'× '+e.value:'')+(e.duration_ms!=null?' · '+(e.duration_ms/1000).toFixed(1)+' s':'')+'</small></div><div class="actor">'+escape(e.name||'Система')+'<small>'+(e.user_id||'—')+'</small></div></article>').join('');
+ const html=result.items.map(e=>'<article class="event '+(e.status==='error'?'error':'')+'"><time>'+date(e.occurred)+'</time><div><strong>'+escape(labels[e.kind]||e.kind)+'</strong><small>'+escape(e.version)+' · '+escape(e.commit_sha.slice(0,12))+(e.value!==1?' · × '+e.value:'')+(e.duration_ms!=null?' · '+(e.duration_ms/1000).toFixed(1)+' s':'')+'</small></div><div class="actor">'+escape(e.name||'Система')+'<small>'+(e.user_id||'—')+'</small></div></article>').join('');
  if(append)$('events').insertAdjacentHTML('beforeend',html);else $('events').innerHTML=html||'<p>Подій поки немає</p>';cursor=result.next;$('events-more').hidden=!result.has_more;
 }
 let supportCursor=null;
 async function supportTickets(append=false){
  const query=new URLSearchParams();if(append&&supportCursor)query.set('before',supportCursor);if($('support-resolved').checked)query.set('resolved','1');
  const result=await api('/api/admin/support?'+query);
- const html=result.items.map(t=>'<article class="support-ticket"><div class="section-head"><strong>#'+t.id+' · '+escape(t.name||t.user_id)+'</strong><small>'+date(t.created)+'</small></div><small>'+escape(t.username?'@'+t.username:'Telegram ID: '+t.user_id)+' · '+escape(t.metadata.language)+' · учасників: '+escape(t.metadata.family_member_count)+'</small><p class="support-description">'+escape(t.text)+'</p>'+(t.status==='open'?'<button class="secondary" data-resolve="'+t.id+'">Позначити опрацьованим</button>':'<small>Опрацьовано</small>')+'</article>').join('');
+ const html=result.items.map(t=>'<article class="support-ticket"><div class="section-head"><strong>#'+t.id+' · '+escape(t.name||t.user_id)+'</strong><small>'+date(t.created)+'</small></div><small>'+escape(t.username?'@'+t.username:'Telegram ID: '+t.user_id)+' · '+escape(t.metadata.language)+' · Version: '+escape(t.metadata.release?.version||'unknown')+' · Git: '+escape((t.metadata.release?.commit||'unknown').slice(0,12))+' · учасників: '+escape(t.metadata.family_member_count)+'</small><p class="support-description">'+escape(t.text)+'</p>'+(t.status==='open'?'<button class="secondary" data-resolve="'+t.id+'">Позначити опрацьованим</button>':'<small>Опрацьовано</small>')+'</article>').join('');
  if(append)$('support-tickets').insertAdjacentHTML('beforeend',html);else $('support-tickets').innerHTML=html||'<p>Нових звернень немає</p>';
  supportCursor=result.next;$('support-more').hidden=!result.has_more;
  document.querySelectorAll('[data-resolve]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{await api('/api/admin/support/resolve',{id:Number(button.dataset.resolve)});await supportTickets();}catch(error){$('status').textContent=error.message;button.disabled=false;}});
@@ -62,3 +65,5 @@ async function start(){
  if(!preferences.admin){$('denied').hidden=false;$('status').textContent='Адмінка доступна лише власнику.';return;}await refresh();}
  catch(error){$('denied').hidden=false;$('status').textContent='Відкрийте /admin у боті.';}
 }start();
+
+$('release-filter').onchange=()=>{cursor=null;events().catch(error=>$('status').textContent=error.message);};

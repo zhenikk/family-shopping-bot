@@ -13,6 +13,8 @@ class DeploymentTests(unittest.TestCase):
             root = Path(temporary)
             (root / 'scripts').mkdir()
             (root / 'data').mkdir()
+            (root / 'src' / 'shopping_bot').mkdir(parents=True)
+            (root / 'src' / 'shopping_bot' / '__init__.py').write_text('__version__ = \"0.2.0\"\n')
             (root / 'bin').mkdir()
             script = root / 'scripts' / 'deploy.sh'
             shutil.copyfile(Path(__file__).resolve().parents[1] / 'scripts' / 'deploy.sh', script)
@@ -44,6 +46,9 @@ esac
         self.assertTrue(recorded)
         self.assertNotIn('tunnel', log)
         self.assertIn('compose up -d --no-deps bot', log)
+        self.assertIn('--build-arg APP_COMMIT=', log)
+        self.assertIn('--build-arg APP_RELEASE=0.2.0-dev+', log)
+        self.assertIn('Running image identity differs from release', log)
 
     def test_failed_health_restores_previous_image_without_restoring_database(self):
         code, log, recorded = self.run_release('health')
