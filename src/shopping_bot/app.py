@@ -170,7 +170,13 @@ class ShoppingBot:
             except TelegramError as exc:
                 if "message is not modified" in str(exc).lower():
                     return message_id
-        return self.send(user_id, text, reply_markup=markup)["message_id"]
+                if not any(reason in str(exc).lower() for reason in ('message to edit not found', "message can't be edited", 'message_id_invalid')):
+                    LOG.warning('Panel edit failed; preserving existing message')
+                    return message_id
+        result = self.send(user_id, text, reply_markup=markup)["message_id"]
+        if message_id is not None:
+            self.remove_obsolete_panel(user_id, message_id)
+        return result
 
     def show_help(self, user_id, chosen=None, role='c', step=0, message=None):
         chosen = chosen or self.families.preference(user_id) or 'uk'
@@ -191,21 +197,58 @@ class ShoppingBot:
         rows.append([('🇺🇦 UA', f'help:uk:{role}:{step}'), ('🇬🇧 EN', f'help:en:{role}:{step}')])
         markup = buttons(*(row for row in rows if row))
         url = os.getenv('SHOPPING_WEB_URL', '').rstrip('/')
-        if url.startswith('https://'):
-            photo = f'{url}/help/{chosen}-{role}-{step}.png'
-            if message and message.get('photo'):
-                try:
-                    self.telegram.call('editMessageMedia', chat_id=user_id, message_id=message['message_id'], media={'type':'photo','media':photo,'caption':caption,'parse_mode':'HTML'}, reply_markup=markup)
-                    return
-                except TelegramError as exc:
-                    if 'message is not modified' in str(exc).lower():
-                        return
+        anchor = self.families.ui_panel(user_id, 'help')
+        legacy = message and (message.get('photo') or re.match(r'^[1-6]/6', message.get('text', '')))
+        target = anchor['message_id'] if anchor else message['message_id'] if legacy else None
+        media = bool(anchor['media']) if anchor else bool(legacy and message.get('photo'))
+        signature = json.dumps([chosen, role, step, caption, markup], ensure_ascii=False)
+        if anchor and anchor['signature'] == signature:
+            if legacy and message['message_id'] != target:
+                self.remove_obsolete_panel(user_id, message['message_id'])
+            return
+        photo = f'{url}/help/{chosen}-{role}-{step}.png'
+        if target:
             try:
-                self.telegram.call('sendPhoto', chat_id=user_id, photo=photo, caption=caption, parse_mode='HTML', reply_markup=markup)
+                if media:
+                    if url.startswith('https://'):
+                        self.telegram.call('editMessageMedia', chat_id=user_id, message_id=target, media={'type':'photo','media':photo,'caption':caption,'parse_mode':'HTML'}, reply_markup=markup)
+                    else:
+                        self.telegram.call('editMessageCaption', chat_id=user_id, message_id=target, caption=caption, parse_mode='HTML', reply_markup=markup)
+                else:
+                    self.telegram.call('editMessageText', chat_id=user_id, message_id=target, text=caption, parse_mode='HTML', reply_markup=markup)
+                self.families.save_ui_panel(user_id, 'help', target, media, signature)
+                if legacy and message['message_id'] != target:
+                    self.remove_obsolete_panel(user_id, message['message_id'])
                 return
+            except TelegramError as exc:
+                if 'message is not modified' in str(exc).lower():
+                    self.families.save_ui_panel(user_id, 'help', target, media, signature)
+                    return
+                if not any(reason in str(exc).lower() for reason in ('message to edit not found', "message can't be edited", 'message_id_invalid')):
+                    LOG.warning('Help panel edit failed; preserving existing message')
+                    return
+        result = None
+        if url.startswith('https://'):
+            try:
+                result = self.telegram.call('sendPhoto', chat_id=user_id, photo=photo, caption=caption, parse_mode='HTML', reply_markup=markup)
+                media = True
             except TelegramError:
                 LOG.warning('Help illustration unavailable; sending text guide')
-        self.send(user_id, caption, parse_mode='HTML', reply_markup=markup)
+        if result is None:
+            result = self.send(user_id, caption, parse_mode='HTML', reply_markup=markup)
+            media = False
+        self.families.save_ui_panel(user_id, 'help', result['message_id'], media, signature)
+        if target:
+            self.remove_obsolete_panel(user_id, target)
+
+    def remove_obsolete_panel(self, user_id, message_id):
+        try:
+            self.telegram.call('deleteMessage', chat_id=user_id, message_id=message_id)
+        except TelegramError:
+            try:
+                self.telegram.call('editMessageReplyMarkup', chat_id=user_id, message_id=message_id, reply_markup={'inline_keyboard':[]})
+            except TelegramError:
+                LOG.info('Old panel could not be removed')
 
     def show_language(self,user_id):
         self.send(user_id,'Оберіть мову / Choose your language',reply_markup=buttons([('🇺🇦 Українська','language:uk'),('🇬🇧 English','language:en')], [('📖 Як користуватися / Help', 'help:uk:c:0')]))
@@ -655,6 +698,10 @@ class ShoppingBot:
     def show_list(self, user_id: int, store_name: str = "", message_id: int | None = None) -> None:
         store_name = "all"
         content, markup = self.list_content()
+        if message_id is None:
+            existing = next((view for view in self.store.views() if view['user_id'] == user_id and view['store'] == store_name), None)
+            if existing:
+                message_id = existing['message_id']
         if message_id is not None:
             try:
                 self.telegram.call("editMessageText", chat_id=user_id, message_id=message_id,
@@ -665,7 +712,12 @@ class ShoppingBot:
                 if "message is not modified" in str(exc).lower():
                     self.store.set_view(user_id, store_name, message_id)
                     return
+                if not any(reason in str(exc).lower() for reason in ('message to edit not found', "message can't be edited", 'message_id_invalid')):
+                    LOG.warning('List panel edit failed; preserving existing message')
+                    return
         result = self.send(user_id, content, reply_markup=markup)
+        if message_id is not None:
+            self.remove_obsolete_panel(user_id, message_id)
         self.store.set_view(user_id, store_name, result["message_id"])
 
     def refresh_views(self) -> None:

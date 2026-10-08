@@ -67,7 +67,8 @@ class ShoppingBotTests(unittest.TestCase):
             query = callback(1, 'help:uk:j:3')
             query['message']['photo'] = [{}]
             self.bot.handle_callback(query)
-            self.assertEqual(self.telegram.calls[-2][0], 'editMessageMedia')
+            self.assertTrue(any(method == 'editMessageMedia' for method, _ in self.telegram.calls))
+            self.assertTrue(any(method == 'deleteMessage' and params['message_id'] == 50 for method, params in self.telegram.calls))
             before = len(self.telegram.calls)
             self.bot.handle_callback(callback(1, 'help:fr:x:999'))
             self.assertEqual(len(self.telegram.calls), before + 1)
@@ -77,6 +78,51 @@ class ShoppingBotTests(unittest.TestCase):
             for items in lang['steps'].values():
                 for item in items:
                     self.assertLess(sum(len(item[k]) for k in ('title','body','tip')) + 50, 1024)
+
+    def test_help_reuses_one_text_panel_for_reopen_and_steps(self):
+        with patch.dict('os.environ', {'SHOPPING_WEB_URL':''}):
+            self.telegram.calls.clear()
+            self.bot.handle_message(message(1, '/help'))
+            self.bot.handle_message(message(1, '/help'))
+            self.bot.handle_callback(callback(1, 'help:uk:c:1', self.telegram.next_message_id))
+            self.assertEqual(sum(method == 'sendMessage' for method, _ in self.telegram.calls), 1)
+            self.assertTrue(any(method == 'editMessageText' for method, _ in self.telegram.calls))
+
+    def test_list_reopen_reuses_existing_message(self):
+        self.telegram.calls.clear()
+        self.bot.show_list(1)
+        self.bot.show_list(1)
+        self.assertEqual(sum(method == 'sendMessage' for method, _ in self.telegram.calls), 1)
+
+    def test_help_anchor_survives_restart_and_photo_failure_stays_text(self):
+        from shopping_bot.families import Families
+        from shopping_bot.telegram import TelegramError
+        original = self.telegram.call
+        def unavailable(method, **params):
+            if method == 'sendPhoto':
+                raise TelegramError('wrong file identifier/HTTP URL specified')
+            return original(method, **params)
+        with patch.dict('os.environ', {'SHOPPING_WEB_URL':'https://example.com'}), patch.object(self.telegram, 'call', side_effect=unavailable):
+            self.telegram.calls.clear()
+            self.bot.handle_message(message(1, '/help'))
+            self.bot.families = Families(self.store, self.root / 'photos')
+            self.bot.handle_callback(callback(1, 'help:en:j:2'))
+            self.assertEqual(sum(method == 'sendMessage' for method, _ in self.telegram.calls), 1)
+            self.assertEqual(self.telegram.calls[-2][0], 'editMessageText')
+
+    def test_help_transient_edit_error_does_not_create_duplicate(self):
+        from shopping_bot.telegram import TelegramError
+        with patch.dict('os.environ', {'SHOPPING_WEB_URL':''}):
+            self.bot.handle_message(message(1, '/help'))
+            self.telegram.calls.clear()
+            original = self.telegram.call
+            def failing(method, **params):
+                if method == 'editMessageText':
+                    raise TelegramError('Too Many Requests: retry after 1')
+                return original(method, **params)
+            with patch.object(self.telegram, 'call', side_effect=failing):
+                self.bot.handle_callback(callback(1, 'help:uk:c:1'))
+            self.assertFalse(any(method.startswith('send') for method, _ in self.telegram.calls))
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

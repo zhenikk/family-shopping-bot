@@ -37,6 +37,7 @@ class Families:
                 CREATE TABLE IF NOT EXISTS memberships (user_id INTEGER NOT NULL, family_id TEXT NOT NULL, PRIMARY KEY(user_id,family_id));
                 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS message_routes (user_id INTEGER NOT NULL,message_id INTEGER NOT NULL,family_id TEXT NOT NULL,PRIMARY KEY(user_id,message_id));
+                CREATE TABLE IF NOT EXISTS ui_panels (user_id INTEGER NOT NULL, kind TEXT NOT NULL, message_id INTEGER NOT NULL, media INTEGER NOT NULL, signature TEXT NOT NULL, PRIMARY KEY(user_id,kind));
                 CREATE TABLE IF NOT EXISTS preferences (user_id INTEGER PRIMARY KEY, language TEXT NOT NULL, pending_start TEXT NOT NULL DEFAULT '');
                 CREATE TABLE IF NOT EXISTS invitations (token TEXT PRIMARY KEY,family_id TEXT NOT NULL,created_by INTEGER,created_at TEXT NOT NULL,used_by INTEGER,revoked INTEGER NOT NULL DEFAULT 0);
             ''')
@@ -302,6 +303,14 @@ class Families:
             db.execute('DELETE FROM users WHERE family_id=?',(info['id'],))
             self._retire(db,info['id'])
             return True
+
+    def ui_panel(self, user_id, kind):
+        with self.db() as db:
+            return db.execute('SELECT * FROM ui_panels WHERE user_id=? AND kind=?', (user_id, kind)).fetchone()
+
+    def save_ui_panel(self, user_id, kind, message_id, media, signature):
+        with self.db() as db:
+            db.execute('INSERT OR REPLACE INTO ui_panels VALUES (?,?,?,?,?)', (user_id, kind, message_id, int(media), signature))
 
     def route_message(self,user_id,message_id,family_id):
         with self.db() as db:
