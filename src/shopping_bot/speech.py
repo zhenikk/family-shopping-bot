@@ -17,7 +17,7 @@ def transcribe(
     file_id: str,
     whisper_cli: Path,
     whisper_model: Path,
-    timeout: int | None = None,
+    timeout: int = 300,
     *, language_code: str = "uk",
 ) -> str:
     if language_code not in ("uk", "en"):
@@ -33,9 +33,11 @@ def transcribe(
         try:
             subprocess.run(
                 ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", str(audio),
-                 "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", str(wav)],
+                 "-t", "121", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", str(wav)],
                 check=True, timeout=60, capture_output=True,
             )
+            if wav.stat().st_size > 120 * 16000 * 2 + 4096:
+                raise SpeechError('Voice messages must be at most 2 minutes.' if language.get() == 'en' else 'Голосове має бути не довшим за 2 хвилини.')
             subprocess.run(
                 [str(whisper_cli), "-m", str(whisper_model), "-f", str(wav), "-l", language_code, "-t", "2",
                  "-otxt", "-of", str(output_prefix)],

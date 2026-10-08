@@ -26,7 +26,7 @@ class FakeTelegram:
             return {"message_id": self.next_message_id}
         return True
 
-    def download(self, file_id, destination):
+    def download(self, file_id, destination, **kwargs):
         destination.write_bytes(b"fake image bytes")
 
 
@@ -410,6 +410,24 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertIn('Не перекладати Milk',self.telegram.calls[-1][1]['text'])
         self.bot.handle_message(message(1,'/start'))
         self.assertEqual(self.bot.families.preference(10),'en')
+
+    def test_voice_queue_limit_releases_after_failed_worker(self):
+        workers = []
+        with patch.object(self.bot.voice_pool, 'submit', side_effect=lambda fn, *args: workers.append(lambda: fn(*args))), patch('shopping_bot.app.threading.Timer'):
+            self.bot.queue_voice(1, 'one')
+            self.bot.queue_voice(1, 'two')
+            self.bot.queue_voice(1, 'three')
+            self.assertEqual(len(workers), 2)
+            self.assertIn('черга зайнята', self.telegram.calls[-1][1]['text'])
+            with patch.object(self.bot, 'process_voice', side_effect=RuntimeError('worker failed')):
+                with self.assertRaises(RuntimeError):
+                    workers.pop(0)()
+            self.bot.queue_voice(1, 'four')
+            self.assertEqual(len(workers), 2)
+            with patch.object(self.bot, 'process_voice'):
+                for worker in workers:
+                    worker()
+            self.assertEqual(self.bot.voice_admission.users, {})
 
     def test_voice_status_only_after_five_seconds_and_never_after_completion(self):
         timers=[];workers=[]

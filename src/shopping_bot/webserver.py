@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 
+from .limits import RateLimiter
 from .categories import CATEGORIES, infer_category
 from .store import STORES, parse_items
 from .telegram import TelegramError
@@ -52,12 +53,16 @@ def validate_init_data(raw: str, token: str, now: float | None = None) -> int:
 
 
 def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
+    reads = RateLimiter(100, 2)
+    writes = RateLimiter(30, 0.5)
+
     class MiniAppServer(ThreadingHTTPServer):
         request_queue_size = 32
         request_timeout = 10
 
         def __init__(self, *args, **kwargs):
             self.request_slots = threading.BoundedSemaphore(32)
+            self.sync_slots = threading.BoundedSemaphore(64)
             self.sync_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mini-app-sync")
             super().__init__(*args, **kwargs)
 
@@ -241,9 +246,20 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
         def dispatch(self, method):
             # Read sockets before taking the membership lock; write after releasing it.
             try:
+                path = urlsplit(self.path).path
+                if path.startswith('/api/'):
+                    user_id = self.authenticated_user()
+                    limiter = writes if method == 'POST' else reads
+                    if not limiter.allow(user_id):
+                        self.respond(429, {'error': 'Too many requests. Try again shortly.'})
+                        return
                 if method == 'POST':
-                    self.authenticated_user()
                     self.parsed_body = self.body()
+                    if path in ('/api/add', '/api/undo', '/api/buy', '/api/readd', '/api/edit'):
+                        if not self.server.sync_slots.acquire(blocking=False):
+                            self.respond(429, {'error': 'Server is busy. Try again shortly.'})
+                            return
+                        self.sync_reserved = True
                 self.defer_response = True
                 with bot.families.lock:
                     getattr(self, '_' + method)()
@@ -259,6 +275,8 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 self.defer_response = False
                 self.respond(408, {'error': 'Request timeout'})
             finally:
+                if getattr(self, 'sync_reserved', False):
+                    self.server.sync_slots.release()
                 self.close_connection = True
 
         def do_GET(self):
@@ -422,7 +440,9 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     return
                 event={'/api/add':'web_add','/api/buy':'web_buy','/api/edit':'web_edit','/api/undo':'web_undo','/api/readd':'web_add'}.get(path)
                 if event:bot.analytics.record(event,self.user_profile)
-                self.server.sync_pool.submit(copy_context().run, sync_changes, notification_batch)
+                future = self.server.sync_pool.submit(copy_context().run, sync_changes, notification_batch)
+                self.sync_reserved = False
+                future.add_done_callback(lambda _: self.server.sync_slots.release())
                 self.respond(200, result)
             except AccessError:
                 self.respond(401, {"error": tr('ui_02e40f40a5f9')})

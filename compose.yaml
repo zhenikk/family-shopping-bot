@@ -12,6 +12,9 @@ services:
     read_only: true
     cap_drop: [ALL]
     pids_limit: 128
+    mem_limit: 3g
+    memswap_limit: 3g
+    cpus: 2
     logging:
       driver: json-file
       options:

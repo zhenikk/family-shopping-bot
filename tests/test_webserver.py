@@ -61,6 +61,22 @@ class MiniAppTests(unittest.TestCase):
         conn.close()
         return status, body
 
+    def test_full_notification_queue_rejects_before_saving(self):
+        for _ in range(64):
+            self.assertTrue(self.server.sync_slots.acquire(blocking=False))
+        self.assertEqual(self.request('/api/add', {'text': 'Milk'})[0], 429)
+        self.assertEqual(self.store.catalog_count(), 0)
+        for _ in range(64):
+            self.server.sync_slots.release()
+        self.assertEqual(self.request('/api/add', {'text': 'Milk'})[0], 200)
+
+    def test_api_write_limit_is_per_user_and_rejects_before_mutation(self):
+        for _ in range(30):
+            self.assertEqual(self.request('/api/session', {})[0], 200)
+        self.assertEqual(self.request('/api/add', {'text': 'Blocked product'})[0], 429)
+        self.assertEqual(self.store.catalog_count(), 0)
+        self.assertEqual(self.request('/api/add', {'text': 'Milk'}, user=2)[0], 200)
+
     def test_mutation_holds_membership_lock(self):
         original = self.bot.families.family
         observations = []

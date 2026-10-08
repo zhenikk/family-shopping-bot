@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .limits import RateLimiter, VoiceAdmission
 from .analytics import Analytics
 from .i18n import tr, language, CategoryLabels
 
@@ -66,6 +67,10 @@ class ShoppingBot:
         self.pending_family_names: set[int] = set()
         self.purchase_feedback: dict[int, int] = {}
         self.notification_lock = threading.Lock()
+        self.update_limits = RateLimiter(30, 1)
+        self.voice_admission = VoiceAdmission()
+        self.voice_limits = RateLimiter(6, 1 / 60)
+        self.photo_limits = RateLimiter(5, 1 / 300)
         self.voice_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="local-voice")
 
     @property
@@ -185,6 +190,10 @@ class ShoppingBot:
             self.send(user_id, tr('ui_486022a30c33'))
 
     def handle_update(self, update: dict) -> None:
+        event = update.get('message') or update.get('callback_query') or {}
+        user_id = event.get('from', {}).get('id')
+        if type(user_id) is not int or not self.update_limits.allow(user_id):
+            return
         previous = self.family_context.set("legacy")
         try:
             with self.families.lock:
@@ -406,6 +415,9 @@ class ShoppingBot:
         self.show_draft_item(user_id, draft_id, key, panel_id)
 
     def queue_voice(self,user_id,file_id,note_product_id=None):
+        if not self.voice_limits.allow(user_id) or not self.voice_admission.acquire(user_id):
+            self.send(user_id, 'Voice queue is busy. Try again in a minute.' if language.get() == 'en' else 'Голосова черга зайнята. Спробуй за хвилину.')
+            return
         started=threading.Event()
         finished=threading.Event()
         guard=threading.Lock()
@@ -437,13 +449,20 @@ class ShoppingBot:
                 self.process_voice(user_id,file_id,note_product_id,on_transcribed=ready)
             finally:
                 ready()
+                self.voice_admission.release(user_id)
 
         try:
             self.voice_pool.submit(worker_context.run,worker)
-            timer.start()
         except Exception:
             ready()
+            self.voice_admission.release(user_id)
             raise
+        try:
+            timer.start()
+        except RuntimeError:
+            # Admission belongs to the submitted worker, even if notice startup fails.
+            ready()
+            LOG.warning('Could not start delayed voice status timer')
 
     def process_voice(self, user_id: int, file_id: str, note_product_id: int | None = None, *, on_transcribed=None) -> None:
         started=time.monotonic()
@@ -506,6 +525,9 @@ class ShoppingBot:
             self.send(user_id, tr('ui_2b3e19929f86'))
 
     def save_photo(self, user_id: int, raw_name: str, file_id: str) -> None:
+        if not self.photo_limits.allow(user_id):
+            self.send(user_id, 'Too many photos. Try again later.' if language.get() == 'en' else 'Забагато фото. Спробуй пізніше.')
+            return
         items = parse_items(raw_name, split_conjunctions=False)
         if len(items) != 1:
             self.send(user_id, tr('ui_a651e125c241'))
@@ -513,7 +535,7 @@ class ShoppingBot:
         name, preferred = items[0]
         destination = self.media_dir / f"{uuid.uuid4().hex}.jpg"
         try:
-            self.telegram.download(file_id, destination)
+            self.telegram.download(file_id, destination, limit=5_000_000)
         except TelegramError as exc:
             self.send(user_id, f"{tr('ui_051af2751ef5')}{exc}")
             return
