@@ -288,6 +288,13 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
         def _GET(self):
             try:
                 path = urlsplit(self.path).path
+                if path == '/healthz':
+                    last_poll = bot.last_poll_at
+                    ready = (time.monotonic() - (last_poll if last_poll is not None else bot.started_at)) < 120
+                    with bot.families.db() as db:
+                        db.execute('SELECT 1 FROM families LIMIT 1').fetchone()
+                    self.respond(200 if ready else 503, {'status': 'ok' if ready else 'unavailable'})
+                    return
                 assets = {"/": ("index.html", "text/html; charset=utf-8"),
                           "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                           "/style.css": ("style.css", "text/css; charset=utf-8"),

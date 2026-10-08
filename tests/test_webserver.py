@@ -61,6 +61,17 @@ class MiniAppTests(unittest.TestCase):
         conn.close()
         return status, body
 
+    def test_health_reports_stalled_polling_without_exposing_details(self):
+        status, body = self.request('/healthz', auth=False)
+        self.assertEqual((status, json.loads(body)), (200, {'status': 'ok'}))
+        self.bot.started_at = time.monotonic() - 121
+        self.bot.last_poll_at = None
+        self.assertEqual(self.request('/healthz', auth=False)[0], 503)
+        self.bot.last_poll_at = time.monotonic()
+        self.assertEqual(self.request('/healthz', auth=False)[0], 200)
+        self.bot.last_poll_at = time.monotonic() - 121
+        self.assertEqual(self.request('/healthz', auth=False)[0], 503)
+
     def test_full_notification_queue_rejects_before_saving(self):
         for _ in range(64):
             self.assertTrue(self.server.sync_slots.acquire(blocking=False))

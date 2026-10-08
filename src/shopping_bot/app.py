@@ -48,6 +48,8 @@ class ShoppingBot:
         whisper_cli: Path,
         whisper_model: Path,
     ):
+        self.started_at = time.monotonic()
+        self.last_poll_at = None
         self.telegram = telegram
         self.legacy_store = store
         self.invite_code = invite_code
@@ -998,6 +1000,7 @@ class ShoppingBot:
                     "getUpdates", offset=offset, timeout=25,
                     allowed_updates=["message", "callback_query"],
                 )
+                self.last_poll_at = time.monotonic()
                 for update in updates:
                     try:
                         self.handle_update(update)
