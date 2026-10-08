@@ -174,6 +174,23 @@ class MiniAppTests(unittest.TestCase):
         self.assertEqual([u['user_id'] for u in users['items']],[2])
         self.assertNotIn(b'script',self.request('/api/admin/stats')[1])
 
+    def test_support_inbox_and_resolve_require_admin_without_leaking_into_analytics(self):
+        self.bot.admin_ids = {1}
+        self.bot.support.begin(2)
+        draft = self.bot.support.describe(2, '<script>private support description</script>')
+        ticket = self.bot.support.submit({'id':2,'first_name':'User','username':'test'}, draft['token'], {'language':'uk','family_member_count':2})
+        self.assertEqual(self.request('/api/admin/support', auth=False)[0], 401)
+        self.assertEqual(self.request('/api/admin/support', user=2)[0], 403)
+        self.assertEqual(self.request('/api/admin/support/resolve', {'id':ticket}, user=2)[0], 403)
+        status, body = self.request('/api/admin/support')
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)['items'][0]['id'], ticket)
+        self.assertNotIn(b'private support description', self.request('/api/admin/events')[1])
+        self.assertEqual(self.request('/api/admin/support/resolve', {'id':ticket})[0], 200)
+        self.assertEqual(json.loads(self.request('/api/admin/support')[1])['items'], [])
+        self.assertEqual(json.loads(self.request('/api/admin/support?resolved=1')[1])['items'][0]['status'], 'resolved')
+        self.assertEqual(self.request('/api/admin/support/resolve', {'id':999})[0], 404)
+
     def test_admin_journal_retention_bounded_pagination_and_fail_open(self):
         import sqlite3
         from unittest.mock import patch

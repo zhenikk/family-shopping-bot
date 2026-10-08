@@ -324,6 +324,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     query=dict(parse_qsl(urlsplit(self.path).query))
                     if path=='/api/admin/stats':result=bot.analytics.snapshot(query.get('days',30))
                     elif path=='/api/admin/users':result=bot.analytics.users(query.get('offset',0),query.get('q',''))
+                    elif path=='/api/admin/support':result=bot.support.tickets(query.get('before'),query.get('resolved')=='1')
                     elif path=='/api/admin/events':result=bot.analytics.events(query.get('before'),query.get('user'),query.get('errors')=='1')
                     else:
                         self.respond(404,{'error':'Not found'})
@@ -371,6 +372,14 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
         def _POST(self):
             try:
                 path=urlsplit(self.path).path
+                if path == '/api/admin/support/resolve':
+                    user_id = self.authenticated_user()
+                    if user_id not in bot.admin_ids:
+                        self.respond(403, {'error': 'Owner access only'})
+                        return
+                    found = bot.support.resolve(self.body()['id'])
+                    self.respond(200 if found else 404, {'resolved': found})
+                    return
                 if path=='/api/session':
                     self.authenticated_user()
                     recorded=bot.analytics.record('web_session',self.user_profile)

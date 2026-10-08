@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .support import Support
 from .limits import RateLimiter, VoiceAdmission
 from .analytics import Analytics
 from .i18n import tr, language, CategoryLabels
@@ -57,6 +58,7 @@ class ShoppingBot:
         media_dir.mkdir(parents=True, exist_ok=True)
         self.families = Families(store, media_dir)
         self.analytics = Analytics(self.families)
+        self.support = Support(self.families)
         self.admin_ids={int(value.strip()) for value in os.getenv('SHOPPING_ADMIN_IDS','').split(',') if value.strip().isdigit()}
 
         self.family_context = ContextVar("shopping_family", default="legacy")
@@ -144,6 +146,7 @@ class ShoppingBot:
         self.panel(user_id,'\n'.join(lines),buttons(*rows),message_id)
 
     def clear_pending(self,user_id):
+        self.support.cancel(user_id)
         self.pending_notes.pop(user_id,None)
         self.pending_photos.pop(user_id,None)
         self.pending_draft_edits.pop(user_id,None)
@@ -174,7 +177,8 @@ class ShoppingBot:
         return {
             "keyboard": [[{"text": tr('ui_58d659bf993e')}],
                          [{"text": tr('ui_8c4317311ad3')}, {"text": tr('ui_45b58c75117f')}],
-                         [{"text": tr('ui_33ed8513acbd')}, {"text": "🌐 Language" if language.get()=="en" else "🌐 Мова"}]],
+                         [{"text": tr('ui_33ed8513acbd')}, {"text": "🌐 Language" if language.get()=="en" else "🌐 Мова"}],
+                         [{"text": tr("🐞 Повідомити про проблему")}]],
             "input_field_placeholder": tr('ui_366933c83ece'),
             "resize_keyboard": True, "is_persistent": True,
         }
@@ -219,6 +223,31 @@ class ShoppingBot:
         registered = self.bind_user(user_id)
         kind='bot_start' if text.startswith('/start') else 'voice_queued' if message.get('voice') else 'bot_photo' if message.get('photo') else 'bot_message'
         self.analytics.record(kind,user)
+        if text in ('/support', '/bug', '🐞 Повідомити про проблему', '🐞 Report a problem'):
+            self.clear_pending(user_id)
+            token = self.support.begin(user_id)
+            self.send(user_id, tr('Опишіть проблему одним текстовим повідомленням: що зробили, чого очікували та що сталося. Опис і ваш Telegram-профіль прочитає власник бота. Додамо час, мову та кількість учасників сім’ї. Не надсилайте паролі чи токени.'), reply_markup=buttons([(tr('Скасувати'), 'support:cancel:' + token)]))
+            return
+        draft = self.support.draft(user_id)
+        if draft and text == '/cancel':
+            self.support.cancel(user_id)
+            self.send(user_id, tr('Звернення скасовано.'), reply_markup=self.menu())
+            return
+        menu_actions = {button['text'] for row in self.menu()['keyboard'] for button in row}
+        if draft and (text.startswith('/') or text in menu_actions):
+            self.support.cancel(user_id)
+            draft = None
+        if draft:
+            if not text:
+                self.send(user_id, tr('Поки підтримуємо текстовий опис. Напишіть проблему текстом або скасуйте звернення.'))
+                return
+            try:
+                draft = self.support.describe(user_id, text)
+            except ValueError as exc:
+                self.send(user_id, tr(str(exc)))
+                return
+            self.send(user_id, tr('Надіслати цей опис у підтримку?') + '\n\n' + text, reply_markup=buttons([(tr('Надіслати'), 'support:send:' + draft['token']), (tr('Скасувати'), 'support:cancel:' + draft['token'])]))
+            return
         if text=='/admin':
             if user_id not in self.admin_ids:
                 self.send(user_id,'Адмінка доступна лише власнику / Owner access only.')
@@ -796,6 +825,27 @@ class ShoppingBot:
             return
         self.analytics.record("bot_callback",user)
         callback_id = query.get("id")
+        if query.get('data', '').startswith('support:'):
+            self.bind_user(user_id)
+            parts = query['data'].split(':')
+            if len(parts) != 3:
+                return
+            action, token = parts[1:]
+            try:
+                if action == 'cancel':
+                    if not self.support.cancel(user_id, token):
+                        raise ValueError('Звернення застаріло. Відкрийте /support ще раз.')
+                    self.send(user_id, tr('Звернення скасовано.'), reply_markup=self.menu())
+                elif action == 'send':
+                    family = self.families.family(user_id)
+                    count = len(self.families.members(family)) if family else 0
+                    ticket = self.support.submit(user, token, {'language': language.get(), 'family_id': family, 'family_member_count': count})
+                    self.send(user_id, tr('Звернення збережено. Номер: #') + str(ticket) + tr('. Власник бота зможе переглянути його в підтримці.'), reply_markup=self.menu())
+            except ValueError as exc:
+                self.send(user_id, tr(str(exc)))
+            finally:
+                self.telegram.call('answerCallbackQuery', callback_query_id=callback_id)
+            return
         if query.get('data','').startswith('language:'):
             chosen=query['data'].split(':',1)[1]
             if chosen not in ('uk','en'):

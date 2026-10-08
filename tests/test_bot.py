@@ -128,6 +128,65 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual(self.store.product_by_name("картоплю")["id"], potato)
         self.assertEqual(self.store.product(potato)["name"], "картошка")
 
+    def test_support_report_requires_confirmation_and_never_adds_products(self):
+        from shopping_bot.support import Support
+        self.bot.handle_update({'message': message(1, '/support')})
+        self.bot.handle_update({'message': message(1, 'Не бачу список дружини після приєднання')})
+        draft = self.bot.support.draft(1)
+        self.assertEqual(self.bot.support.tickets()['items'], [])
+        self.assertEqual(self.store.catalog_count(), 0)
+        self.assertEqual(Support(self.bot.families).draft(1)['token'], draft['token'])
+        self.bot.handle_update({'callback_query': callback(1, 'support:send:' + draft['token'])})
+        ticket = self.bot.support.tickets()['items'][0]
+        self.assertEqual(ticket['text'], 'Не бачу список дружини після приєднання')
+        self.assertEqual(ticket['metadata']['family_member_count'], 2)
+        self.assertIsNone(self.bot.support.draft(1))
+        self.bot.handle_update({'callback_query': callback(1, 'support:send:' + draft['token'])})
+        self.assertEqual(len(self.bot.support.tickets()['items']), 1)
+        self.assertEqual(self.store.catalog_count(), 0)
+
+    def test_support_stale_confirmation_and_other_user_cannot_submit(self):
+        self.bot.handle_message(message(1, '/support'))
+        self.bot.handle_message(message(1, 'Перший опис проблеми'))
+        old = self.bot.support.draft(1)['token']
+        self.bot.handle_message(message(1, 'Виправлений опис проблеми'))
+        latest = self.bot.support.draft(1)['token']
+        for actor, token in ((1, old), (2, latest)):
+            self.bot.handle_callback(callback(actor, 'support:send:' + token))
+            self.assertEqual(self.bot.support.tickets()['items'], [])
+        self.bot.handle_callback(callback(1, 'support:send:' + latest))
+        self.assertEqual(self.bot.support.tickets()['items'][0]['text'], 'Виправлений опис проблеми')
+
+    def test_support_cancel_and_switching_menu_restore_normal_shopping_input(self):
+        self.bot.handle_message(message(1, '/support'))
+        self.bot.handle_message(message(1, '/cancel'))
+        self.assertIsNone(self.bot.support.draft(1))
+        self.bot.handle_message(message(1, '/support'))
+        self.bot.handle_message(message(1, '/family'))
+        self.assertIsNone(self.bot.support.draft(1))
+        self.bot.handle_message(message(1, 'Молоко'))
+        with self.store.db() as db:
+            draft_id = db.execute('SELECT id FROM drafts WHERE actor_id=1').fetchone()[0]
+        self.assertEqual(self.store.draft(1, draft_id)[0]['name'], 'Молоко')
+        self.assertEqual(self.bot.support.tickets()['items'], [])
+
+    def test_support_available_without_family_in_english_and_enforces_daily_limit(self):
+        self.bot.families.set_language(55, 'en')
+        self.bot.handle_message(message(55, '/support'))
+        self.assertIn('Describe the problem', self.telegram.calls[-1][1]['text'])
+        self.bot.handle_message(message(55, voice={'file_id': 'not-a-shopping-voice'}))
+        self.assertIn('as text', self.telegram.calls[-1][1]['text'])
+        self.assertIsNone(self.bot.families.family(55))
+        for _ in range(5):
+            self.bot.support.begin(55)
+            draft = self.bot.support.describe(55, 'Cannot open the shopping list')
+            self.bot.support.submit({'id':55}, draft['token'], {'language':'en'})
+        self.bot.support.begin(55)
+        draft = self.bot.support.describe(55, 'Another bug in the shopping list')
+        with self.assertRaises(ValueError):
+            self.bot.support.submit({'id':55}, draft['token'], {})
+        self.assertEqual(len(self.bot.support.tickets()['items']), 5)
+
     def test_join_is_private_and_has_no_member_cap(self):
         self.bot.handle_message(message(3, "/join this-is-a-secret-code"))
         self.assertTrue(self.store.is_member(3))

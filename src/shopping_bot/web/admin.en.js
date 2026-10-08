@@ -6,7 +6,7 @@ const date=value=>value?new Date(value*1000).toLocaleString(english?'en-GB':'uk-
 const labels={bot_start:'Bot opened',bot_message:'Message to bot',bot_photo:'Photo sent to bot',bot_callback:'Button pressed',voice_queued:'Voice queued',voice_done:'Voice transcribed',voice_error:'Transcription error',web_session:'Mini App session',web_add:'Added via Mini App',web_buy:'Purchase action',web_edit:'Product edited',web_undo:'Purchase undone',web_family:'Family action',language:'Language changed',products_added:'Products added',purchase:'Product bought',bot_error:'Bot error',web_error:'Mini App error',poll_error:'Telegram connection error'};
 let offset=0,userFilter=null,cursor=null,refreshing=false;
 if(tg){tg.ready();tg.expand();}
-async function api(path){const response=await fetch(path,{headers:{Authorization:'tma '+(tg?.initData||'')},cache:'no-store'});const result=await response.json();if(!response.ok)throw new Error(result.error||'Не вдалося завантажити дані.');return result;}
+async function api(path,body){const response=await fetch(path,{method:body===undefined?'GET':'POST',body:body===undefined?undefined:JSON.stringify(body),headers:{'Content-Type':'application/json',Authorization:'tma '+(tg?.initData||'')},cache:'no-store'});const result=await response.json();if(!response.ok)throw new Error(result.error||'Не вдалося завантажити дані.');return result;}
 function graph(data){
  const days=Number($('days').value),active=new Map(data.daily_active.map(r=>[r.day,r.count])),rows=[];
  for(let i=days-1;i>=0;i--){const day=new Date(data.generated*1000-i*86400000).toISOString().slice(0,10);rows.push({day,count:active.get(day)||0});}
@@ -20,7 +20,7 @@ async function stats(){
  $('metrics').innerHTML=metrics.map(([label,value,hint])=>'<div class="metric"><strong>'+value.toLocaleString()+'</strong><span>'+label+'</span><small>'+escape(hint)+'</small></div>').join('');graph(data);
  const totals=[['New this week',data.new_7d],['Mini App sessions',data.totals.web_session||0],['Voice messages transcribed',data.totals.voice_done||0],['Purchases recorded',data.totals.purchase||0],['Errors in 24 hours',data.errors_24h]];
  $('totals').innerHTML=totals.map(([label,count])=>'<span><strong>'+count.toLocaleString()+'</strong>'+label+'</span>').join('');
- $('retention').textContent='Tracking started: '+date(data.started)+'. Detailed events are kept for '+data.retention_days+' days; cumulative counters remain. Historical visits are unavailable. Mini App session: one per 30 minutes. Event times: Europe/Lisbon. Message text, voice recordings, photos and tokens are not stored.';
+ $('retention').textContent='Tracking started: '+date(data.started)+'. Detailed events are kept for '+data.retention_days+' днів, сумарні лічильники — надалі. Історичні входи не відновлюються. Сесія Mini App: один вхід на 30 хвилин. Час подій — Europe/Lisbon. Message text, voice, photos and tokens are not recorded in the event journal. Confirmed support descriptions are stored separately and available for 90 days.';
 }
 async function users(){
  const result=await api('/api/admin/users?offset='+offset+'&q='+encodeURIComponent($('query').value));
@@ -34,9 +34,20 @@ async function events(append=false){
  const html=result.items.map(e=>'<article class="event '+(e.status==='error'?'error':'')+'"><time>'+date(e.occurred)+'</time><div><strong>'+escape(labels[e.kind]||e.kind)+'</strong><small>'+(e.value!==1?'× '+e.value:'')+(e.duration_ms!=null?' · '+(e.duration_ms/1000).toFixed(1)+' s':'')+'</small></div><div class="actor">'+escape(e.name||'System')+'<small>'+(e.user_id||'—')+'</small></div></article>').join('');
  if(append)$('events').insertAdjacentHTML('beforeend',html);else $('events').innerHTML=html||'<p>No events yet</p>';cursor=result.next;$('events-more').hidden=!result.has_more;
 }
+let supportCursor=null;
+async function supportTickets(append=false){
+ const query=new URLSearchParams();if(append&&supportCursor)query.set('before',supportCursor);if($('support-resolved').checked)query.set('resolved','1');
+ const result=await api('/api/admin/support?'+query);
+ const html=result.items.map(t=>'<article class="support-ticket"><div class="section-head"><strong>#'+t.id+' · '+escape(t.name||t.user_id)+'</strong><small>'+date(t.created)+'</small></div><small>'+escape(t.username?'@'+t.username:'Telegram ID: '+t.user_id)+' · '+escape(t.metadata.language)+' · members: '+escape(t.metadata.family_member_count)+'</small><p class="support-description">'+escape(t.text)+'</p>'+(t.status==='open'?'<button class="secondary" data-resolve="'+t.id+'">Mark as resolved</button>':'<small>Resolved</small>')+'</article>').join('');
+ if(append)$('support-tickets').insertAdjacentHTML('beforeend',html);else $('support-tickets').innerHTML=html||'<p>No new reports</p>';
+ supportCursor=result.next;$('support-more').hidden=!result.has_more;
+ document.querySelectorAll('[data-resolve]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{await api('/api/admin/support/resolve',{id:Number(button.dataset.resolve)});await supportTickets();}catch(error){$('status').textContent=error.message;button.disabled=false;}});
+}
+$('support-resolved').onchange=()=>supportTickets().catch(error=>$('status').textContent=error.message);
+$('support-more').onclick=()=>supportTickets(true).catch(error=>$('status').textContent=error.message);
 async function refresh(){
  if(refreshing)return;refreshing=true;$('refresh').disabled=true;
- try{await Promise.all([stats(),users(),events()]);$('dashboard').hidden=false;$('denied').hidden=true;$('status').textContent='Updated: '+date(Date.now()/1000);}
+ try{await Promise.all([stats(),users(),events(),supportTickets()]);$('dashboard').hidden=false;$('denied').hidden=true;$('status').textContent='Updated: '+date(Date.now()/1000);}
  catch(error){$('status').textContent=error.message;if($('dashboard').hidden)$('denied').hidden=false;}
  finally{refreshing=false;$('refresh').disabled=false;}
 }

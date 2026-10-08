@@ -29,3 +29,7 @@ footer{font-size:12px;max-width:80ch}
  .event strong{font-size:13px}.event .actor{max-width:110px}
  #user-search{margin:16px 0}#query{font-size:16px}
 }
+
+.support-ticket{padding:16px 0;border-bottom:1px solid var(--line,#ddd)}.support-description{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}
+
+.support-ticket .section-head{flex-wrap:wrap;align-items:flex-start}.support-ticket small{overflow-wrap:anywhere}

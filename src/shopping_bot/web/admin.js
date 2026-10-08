@@ -6,7 +6,7 @@ const date=value=>value?new Date(value*1000).toLocaleString(english?'en-GB':'uk-
 const labels={bot_start:'Запуск бота',bot_message:'Повідомлення боту',bot_photo:'Фото в боті',bot_callback:'Натискання кнопки',voice_queued:'Голосове в черзі',voice_done:'Голосове розпізнано',voice_error:'Помилка розпізнавання',web_session:'Вхід у Mini App',web_add:'Додавання в Mini App',web_buy:'Позначення покупки',web_edit:'Редагування товару',web_undo:'Скасування покупки',web_family:'Керування сім’єю',language:'Зміна мови',products_added:'Товари додано',purchase:'Товар куплено',bot_error:'Помилка бота',web_error:'Помилка Mini App',poll_error:'Помилка з’єднання з Telegram'};
 let offset=0,userFilter=null,cursor=null,refreshing=false;
 if(tg){tg.ready();tg.expand();}
-async function api(path){const response=await fetch(path,{headers:{Authorization:'tma '+(tg?.initData||'')},cache:'no-store'});const result=await response.json();if(!response.ok)throw new Error(result.error||'Не вдалося завантажити дані.');return result;}
+async function api(path,body){const response=await fetch(path,{method:body===undefined?'GET':'POST',body:body===undefined?undefined:JSON.stringify(body),headers:{'Content-Type':'application/json',Authorization:'tma '+(tg?.initData||'')},cache:'no-store'});const result=await response.json();if(!response.ok)throw new Error(result.error||'Не вдалося завантажити дані.');return result;}
 function graph(data){
  const days=Number($('days').value),active=new Map(data.daily_active.map(r=>[r.day,r.count])),rows=[];
  for(let i=days-1;i>=0;i--){const day=new Date(data.generated*1000-i*86400000).toISOString().slice(0,10);rows.push({day,count:active.get(day)||0});}
@@ -20,7 +20,7 @@ async function stats(){
  $('metrics').innerHTML=metrics.map(([label,value,hint])=>'<div class="metric"><strong>'+value.toLocaleString()+'</strong><span>'+label+'</span><small>'+escape(hint)+'</small></div>').join('');graph(data);
  const totals=[['Нові за тиждень',data.new_7d],['Входи у Mini App',data.totals.web_session||0],['Голосові розпізнано',data.totals.voice_done||0],['Покупок відмічено',data.totals.purchase||0],['Помилки за 24 години',data.errors_24h]];
  $('totals').innerHTML=totals.map(([label,count])=>'<span><strong>'+count.toLocaleString()+'</strong>'+label+'</span>').join('');
- $('retention').textContent='Збір подій розпочато: '+date(data.started)+'. Детальний журнал зберігається '+data.retention_days+' днів, сумарні лічильники — надалі. Історичні входи не відновлюються. Сесія Mini App: один вхід на 30 хвилин. Час подій — Europe/Lisbon. Тексти повідомлень, голосові, фото та токени не записуються.';
+ $('retention').textContent='Збір подій розпочато: '+date(data.started)+'. Детальний журнал зберігається '+data.retention_days+' днів, сумарні лічильники — надалі. Історичні входи не відновлюються. Сесія Mini App: один вхід на 30 хвилин. Час подій — Europe/Lisbon. Тексти повідомлень, голосові, фото та токени не записуються в журнал подій. Підтверджені описи звернень зберігаються окремо й доступні 90 днів.';
 }
 async function users(){
  const result=await api('/api/admin/users?offset='+offset+'&q='+encodeURIComponent($('query').value));
@@ -34,9 +34,20 @@ async function events(append=false){
  const html=result.items.map(e=>'<article class="event '+(e.status==='error'?'error':'')+'"><time>'+date(e.occurred)+'</time><div><strong>'+escape(labels[e.kind]||e.kind)+'</strong><small>'+(e.value!==1?'× '+e.value:'')+(e.duration_ms!=null?' · '+(e.duration_ms/1000).toFixed(1)+' s':'')+'</small></div><div class="actor">'+escape(e.name||'Система')+'<small>'+(e.user_id||'—')+'</small></div></article>').join('');
  if(append)$('events').insertAdjacentHTML('beforeend',html);else $('events').innerHTML=html||'<p>Подій поки немає</p>';cursor=result.next;$('events-more').hidden=!result.has_more;
 }
+let supportCursor=null;
+async function supportTickets(append=false){
+ const query=new URLSearchParams();if(append&&supportCursor)query.set('before',supportCursor);if($('support-resolved').checked)query.set('resolved','1');
+ const result=await api('/api/admin/support?'+query);
+ const html=result.items.map(t=>'<article class="support-ticket"><div class="section-head"><strong>#'+t.id+' · '+escape(t.name||t.user_id)+'</strong><small>'+date(t.created)+'</small></div><small>'+escape(t.username?'@'+t.username:'Telegram ID: '+t.user_id)+' · '+escape(t.metadata.language)+' · учасників: '+escape(t.metadata.family_member_count)+'</small><p class="support-description">'+escape(t.text)+'</p>'+(t.status==='open'?'<button class="secondary" data-resolve="'+t.id+'">Позначити опрацьованим</button>':'<small>Опрацьовано</small>')+'</article>').join('');
+ if(append)$('support-tickets').insertAdjacentHTML('beforeend',html);else $('support-tickets').innerHTML=html||'<p>Нових звернень немає</p>';
+ supportCursor=result.next;$('support-more').hidden=!result.has_more;
+ document.querySelectorAll('[data-resolve]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{await api('/api/admin/support/resolve',{id:Number(button.dataset.resolve)});await supportTickets();}catch(error){$('status').textContent=error.message;button.disabled=false;}});
+}
+$('support-resolved').onchange=()=>supportTickets().catch(error=>$('status').textContent=error.message);
+$('support-more').onclick=()=>supportTickets(true).catch(error=>$('status').textContent=error.message);
 async function refresh(){
  if(refreshing)return;refreshing=true;$('refresh').disabled=true;
- try{await Promise.all([stats(),users(),events()]);$('dashboard').hidden=false;$('denied').hidden=true;$('status').textContent='Оновлено: '+date(Date.now()/1000);}
+ try{await Promise.all([stats(),users(),events(),supportTickets()]);$('dashboard').hidden=false;$('denied').hidden=true;$('status').textContent='Оновлено: '+date(Date.now()/1000);}
  catch(error){$('status').textContent=error.message;if($('dashboard').hidden)$('denied').hidden=false;}
  finally{refreshing=false;$('refresh').disabled=false;}
 }
