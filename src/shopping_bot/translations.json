@@ -404,5 +404,12 @@
   "Подій поки немає": "No events yet",
   "Оновлено: ": "Updated: ",
   "Адмінка доступна лише власнику.": "Owner access only.",
-  "Відкрийте /admin у боті.": "Open /admin in the bot."
+  "Відкрийте /admin у боті.": "Open /admin in the bot.",
+  "Зараз у сім’ї лише ви. Надішліть запрошення близьким: спільний список з’явиться після того, як вони відкриють посилання й підтвердять приєднання.": "You are the only family member. Share an invitation: the list becomes shared after they open the link and confirm joining.",
+  "Зараз у сім’ї лише ви. Інший учасник побачить список після того, як відкриє ваше запрошення й підтвердить приєднання.": "You are the only family member. Another member will see this list after opening your invitation and confirming joining.",
+  "лише ви в сім’ї": "only you in this family",
+  "учасників:": "members:",
+  "Очікують прийняття": "Awaiting acceptance",
+  "у списку · лише ви в сім’ї": "on the list · only you in this family",
+  "у списку · учасників:": "on the list · members:"
 }

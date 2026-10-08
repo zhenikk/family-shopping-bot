@@ -347,7 +347,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                                for row in bot.store.catalog(limit=2000)]
                     history = [{key: row[key] for key in ("id", "product_name", "actor_name", "action", "happened_at", "undone")}
                                for row in bot.store.recent_history(60)]
-                    self.respond(200, {"language":language.get(), "family_id": bot.families.family(user_id), "products": catalog, "categories": {key:tr(value) for key,value in CATEGORIES.items()}, "history": history})
+                    self.respond(200, {"language":language.get(), "family_id": bot.families.family(user_id), "family_member_count": len(bot.store.members()), "products": catalog, "categories": {key:tr(value) for key,value in CATEGORIES.items()}, "history": history})
                 elif path.startswith("/api/photo/"):
                     row = bot.store.product(int(path.rsplit("/", 1)[1]))
                     if not row or not row["photo_path"]:

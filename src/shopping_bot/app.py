@@ -126,6 +126,9 @@ class ShoppingBot:
             return
         members=self.families.members(current['id'])
         lines=[f"👥 {current['name']} · {len(members)}{tr('ui_5f022cf87ad2')}",'']
+        if len(members)==1:
+            lines.append(tr('Зараз у сім’ї лише ви. Інший учасник побачить список після того, як відкриє ваше запрошення й підтвердить приєднання.'))
+            lines.append('')
         for member in members:
             suffix=(tr('ui_109e3f46b4ae') if member['user_id']==user_id else '')+(tr('ui_d22aad051523') if member['user_id']==current['owner_id'] else '')
             lines.append('• '+member['name']+suffix)

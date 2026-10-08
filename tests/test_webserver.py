@@ -200,6 +200,27 @@ class MiniAppTests(unittest.TestCase):
             with self.assertRaises(AccessError):
                 validate_init_data(bad, TOKEN, now=now)
 
+    def test_friend_creates_family_invites_partner_and_sees_partner_list(self):
+        for user in (31, 32):
+            self.bot.families.set_language(user, 'uk')
+            self.assertEqual(self.request('/api/family/create', {}, user=user)[0], 200)
+        self.assertEqual(json.loads(self.request('/api/state', user=31)[1])['family_member_count'], 1)
+        creator_family = self.bot.families.family(31)
+        partner_family = self.bot.families.family(32)
+        token = json.loads(self.request('/api/family/invite', {}, user=31)[1])['token']
+        status, body = self.request('/api/family/accept', {'token': token, 'confirm': True, 'source_family': partner_family}, user=32)
+        self.assertEqual(status, 200, body)
+        self.assertEqual(self.bot.families.family(32), creator_family)
+        self.assertEqual(json.loads(self.request('/api/state', user=31)[1])['family_member_count'], 2)
+        self.assertEqual(self.request('/api/add', {'text': 'Молоко, Хліб'}, user=32)[0], 200)
+        state = json.loads(self.request('/api/state', user=31)[1])
+        self.assertEqual({row['name'] for row in state['products'] if row['active']}, {'Молоко', 'Хліб'})
+        family = json.loads(self.request('/api/family', user=31)[1])
+        self.assertEqual({row['id'] for row in family['members']}, {31, 32})
+        self.request('/api/buy', {'id': state['products'][0]['id']}, user=31)
+        partner_state = json.loads(self.request('/api/state', user=32)[1])
+        self.assertEqual(sum(row['active'] for row in partner_state['products']), 1)
+
     def test_complete_family_management_api_and_onboarding(self):
         self.assertEqual(self.request('/api/family',user=3,auth=False)[0],401)
         self.assertIsNone(json.loads(self.request('/api/family',user=3)[1])['family_id'])

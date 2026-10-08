@@ -17,10 +17,10 @@ function renderFamily(){
  const data=familyView;$('family-dialog').querySelector('h2').textContent=data.name||'Ваша сім’я';
  if(!data.family_id){$('family-members').innerHTML='<p class="hint">Створіть спільний список або приєднайтеся до близьких.</p><button id="family-create" class="primary full">Створити сім’ю</button>'+joinForm();$('family-create').onclick=()=>familyAction('/api/family/create',{});wireJoin();return;}
  const owner=data.owner_id===data.self_id;
- $('family-members').innerHTML=data.members.map(member=>`<div class="history-row"><strong>${escape(member.name)}</strong><small>${member.self?'Ви · ':''}${member.owner?'Засновник':'Учасник'}</small></div>`).join('')+
+ $('family-members').innerHTML=(data.members.length===1?'<p class="hint">Зараз у сім’ї лише ви. Надішліть запрошення близьким: спільний список з’явиться після того, як вони відкриють посилання й підтвердять приєднання.</p>':'')+data.members.map(member=>`<div class="history-row"><strong>${escape(member.name)}</strong><small>${member.self?'Ви · ':''}${member.owner?'Засновник':'Учасник'}</small></div>`).join('')+
  '<div class="family-controls"><button id="family-invite" class="primary full">Запросити учасника</button><div id="family-new-link"></div>'+joinForm()+
  `<form id="family-name-form"><label>Назва сім’ї<input id="family-name" value="${escape(data.name)}" maxlength="60" required></label><button class="secondary full" type="submit">Зберегти назву</button></form>`+
- (data.invites.length?'<h3>Активні запрошення</h3>'+data.invites.map(invite=>`<div class="history-row"><small>${escape(new Date(invite.created_at).toLocaleString('uk-UA'))}</small><button class="text-button" data-revoke="${escape(invite.token)}">Скасувати запрошення</button></div>`).join(''):'')+
+ (data.invites.length?'<h3>Очікують прийняття</h3>'+data.invites.map(invite=>`<div class="history-row"><small>${escape(new Date(invite.created_at).toLocaleString('uk-UA'))}</small><button class="text-button" data-revoke="${escape(invite.token)}">Скасувати запрошення</button></div>`).join(''):'')+
  (owner&&data.members.length>1?`<label>Передати роль засновника<select id="family-owner">${data.members.filter(m=>!m.self).map(m=>`<option value="${m.id}">${escape(m.name)}</option>`).join('')}</select></label><button id="family-owner-transfer" class="secondary full">Передати роль</button>`:'')+
  '<button id="family-leave" class="secondary full">Вийти із сім’ї</button>'+(owner?'<button id="family-delete" class="text-button danger">Видалити сім’ю</button>':'')+'</div>';
  wireJoin();
@@ -85,7 +85,9 @@ function render(){
   const previousRects = new Map([...document.querySelectorAll('[data-product]')].map(node=>[node.dataset.product,node.getBoundingClientRect()]));
   $('title').textContent={shopping:'Покупки',catalog:'Наші товари',history:'Історія'}[tab];
   const count=state.products.filter(p=>p.active).length;
-  $('subtitle').textContent=tab==='shopping'?`${count} у списку · спільний для сім’ї`:tab==='catalog'?`${state.products.length} збережено · фото й нотатки залишаються`:'Хто купив і коли';
+  const members=state.family_member_count||(demo?2:1);
+  $('family').textContent=`👥 Сім’я · ${members}`;
+  $('subtitle').textContent=tab==='shopping'?(members===1?`${count} у списку · лише ви в сім’ї`:`${count} у списку · учасників: ${members}`):tab==='catalog'?`${state.products.length} збережено · фото й нотатки залишаються`:'Хто купив і коли';
   document.querySelectorAll('nav button').forEach(b=>b.dataset.tab===tab?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));
   document.querySelector('.tools').hidden=tab==='history';
   $('filters').hidden=tab==='history';

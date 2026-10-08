@@ -17,10 +17,10 @@ function renderFamily(){
  const data=familyView;$('family-dialog').querySelector('h2').textContent=data.name||'Your family';
  if(!data.family_id){$('family-members').innerHTML='<p class="hint">Create a shared list or join your loved ones.</p><button id="family-create" class="primary full">Create family</button>'+joinForm();$('family-create').onclick=()=>familyAction('/api/family/create',{});wireJoin();return;}
  const owner=data.owner_id===data.self_id;
- $('family-members').innerHTML=data.members.map(member=>`<div class="history-row"><strong>${escape(member.name)}</strong><small>${member.self?'You · ':''}${member.owner?'Founder':'Member'}</small></div>`).join('')+
+ $('family-members').innerHTML=(data.members.length===1?'<p class="hint">You are the only family member. Share an invitation: the list becomes shared after they open the link and confirm joining.</p>':'')+data.members.map(member=>`<div class="history-row"><strong>${escape(member.name)}</strong><small>${member.self?'You · ':''}${member.owner?'Founder':'Member'}</small></div>`).join('')+
  '<div class="family-controls"><button id="family-invite" class="primary full">Invite a member</button><div id="family-new-link"></div>'+joinForm()+
  `<form id="family-name-form"><label>Family name<input id="family-name" value="${escape(data.name)}" maxlength="60" required></label><button class="secondary full" type="submit">Save name</button></form>`+
- (data.invites.length?'<h3>Active invitations</h3>'+data.invites.map(invite=>`<div class="history-row"><small>${escape(new Date(invite.created_at).toLocaleString('en-GB'))}</small><button class="text-button" data-revoke="${escape(invite.token)}">Revoke invitation</button></div>`).join(''):'')+
+ (data.invites.length?'<h3>Awaiting acceptance</h3>'+data.invites.map(invite=>`<div class="history-row"><small>${escape(new Date(invite.created_at).toLocaleString('en-GB'))}</small><button class="text-button" data-revoke="${escape(invite.token)}">Revoke invitation</button></div>`).join(''):'')+
  (owner&&data.members.length>1?`<label>Transfer founder role<select id="family-owner">${data.members.filter(m=>!m.self).map(m=>`<option value="${m.id}">${escape(m.name)}</option>`).join('')}</select></label><button id="family-owner-transfer" class="secondary full">Transfer role</button>`:'')+
  '<button id="family-leave" class="secondary full">Leave family</button>'+(owner?'<button id="family-delete" class="text-button danger">Delete family</button>':'')+'</div>';
  wireJoin();
@@ -85,7 +85,9 @@ function render(){
   const previousRects = new Map([...document.querySelectorAll('[data-product]')].map(node=>[node.dataset.product,node.getBoundingClientRect()]));
   $('title').textContent={shopping:'Shopping',catalog:'Our products',history:'History'}[tab];
   const count=state.products.filter(p=>p.active).length;
-  $('subtitle').textContent=tab==='shopping'?`${count} on the list · shared with your family`:tab==='catalog'?`${state.products.length} saved · photos and notes are kept`:'Who bought what and when';
+  const members=state.family_member_count||(demo?2:1);
+  $('family').textContent=`👥 Family · ${members}`;
+  $('subtitle').textContent=tab==='shopping'?(members===1?`${count} at списку · only you in this family`:`${count} at списку · members: ${members}`):tab==='catalog'?`${state.products.length} saved · photos and notes are kept`:'Who bought what and when';
   document.querySelectorAll('nav button').forEach(b=>b.dataset.tab===tab?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));
   document.querySelector('.tools').hidden=tab==='history';
   $('filters').hidden=tab==='history';
