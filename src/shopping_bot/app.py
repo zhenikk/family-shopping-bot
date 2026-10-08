@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .analytics import Analytics
 from .i18n import tr, language, CategoryLabels
 
 import hmac
@@ -52,6 +53,9 @@ class ShoppingBot:
         self.legacy_media_dir = media_dir
         media_dir.mkdir(parents=True, exist_ok=True)
         self.families = Families(store, media_dir)
+        self.analytics = Analytics(self.families)
+        self.admin_ids={int(value.strip()) for value in os.getenv('SHOPPING_ADMIN_IDS','').split(',') if value.strip().isdigit()}
+
         self.family_context = ContextVar("shopping_family", default="legacy")
         self.whisper_cli = whisper_cli
         self.whisper_model = whisper_model
@@ -198,6 +202,17 @@ class ShoppingBot:
         user_id = int(user["id"])
         text = (message.get("text") or "").strip()
         registered = self.bind_user(user_id)
+        kind='bot_start' if text.startswith('/start') else 'voice_queued' if message.get('voice') else 'bot_photo' if message.get('photo') else 'bot_message'
+        self.analytics.record(kind,user)
+        if text=='/admin':
+            if user_id not in self.admin_ids:
+                self.send(user_id,'Адмінка доступна лише власнику / Owner access only.')
+                return
+            url=os.getenv('SHOPPING_WEB_URL','')
+            if url.startswith('https://'):
+                self.send(user_id,'📊 Статистика бота / Bot analytics',reply_markup={'inline_keyboard':[[{'text':'Відкрити адмінку / Open admin','web_app':{'url':url.rstrip('/')+'/admin?lang='+language.get()}}]]})
+            else:self.send(user_id,'Admin requires SHOPPING_WEB_URL (HTTPS).')
+            return
         if text == '/language' or text in ('🌐 Мова', '🌐 Language') or (text.startswith('/start') and not self.families.preference(user_id)):
             self.families.pending_start(user_id,text if text.startswith('/start') else '')
             self.show_language(user_id)
@@ -392,6 +407,8 @@ class ShoppingBot:
         self.show_draft_item(user_id, draft_id, key, panel_id)
 
     def process_voice(self, user_id: int, file_id: str, note_product_id: int | None = None) -> None:
+        started=time.monotonic()
+        successful=False
         selected_language=language.get()
         expected_family=self.family_context.get()
         if self.families.family(user_id)!=expected_family:
@@ -409,6 +426,7 @@ class ShoppingBot:
             if not transcript:
                 self.send(user_id, tr('ui_25719b4e1c5d'))
                 return
+            successful=True
             if note_product_id is not None:
                 # A delayed transcription must not replace a cancelled or edited note.
                 if self.pending_notes.get(user_id) != note_product_id:
@@ -429,6 +447,9 @@ class ShoppingBot:
         except Exception:
             LOG.exception("Voice processing failed for user %s", user_id)
             self.send(user_id, tr('ui_7d5933174b7f'))
+
+        finally:
+            self.analytics.record('voice_done' if successful else 'voice_error',{'id':user_id},status='ok' if successful else 'error',duration_ms=int((time.monotonic()-started)*1000))
 
     def handle_photo(self, user_id: int, message: dict) -> None:
         file_id = message["photo"][-1]["file_id"]
@@ -701,6 +722,7 @@ class ShoppingBot:
         message = query.get("message") or {}
         if not user_id or message.get("chat", {}).get("type") != "private":
             return
+        self.analytics.record("bot_callback",user)
         callback_id = query.get("id")
         if query.get('data','').startswith('language:'):
             chosen=query['data'].split(':',1)[1]
@@ -799,6 +821,7 @@ class ShoppingBot:
                         self.store.set_note(product_id, item["note"])
                         self.store.set_category(product_id, item["category"])
                         added += self.store.add_need(product_id, user_id)
+                    self.analytics.record("products_added",{"id":user_id},value=added)
                     self.panel(user_id, f"{tr('ui_34d3477683e3')}{added}{tr('ui_08e3e9dd9f8c')}{len(items) - added}.",
                                buttons([(tr('ui_80f83082d444'), "list:all")]), panel_id)
                     if items:
@@ -812,6 +835,7 @@ class ShoppingBot:
                 product = self.store.product(product_id)
                 bought, batch_id, event_id = self.store.purchase(product_id, user_id, store_name)
                 if bought:
+                    self.analytics.record("purchase",{"id":user_id})
                     answer = f"{tr('ui_b729d2e8c2e3')}{product['name']}"[:180]
                     self.purchase_feedback[user_id] = self.panel(user_id,
                         f"{tr('ui_40a72cd566c7')}{product['name']}",
@@ -889,6 +913,7 @@ class ShoppingBot:
             LOG.warning("Callback Telegram error for user %s: %s", user_id, exc)
             answer = tr('ui_94f482bc49a6')
         except (ValueError, KeyError, IndexError):
+            self.analytics.record("bot_error",user,status="error")
             LOG.exception("Callback failed for user %s", user_id)
             answer = tr('ui_94f482bc49a6')
         finally:
@@ -910,10 +935,12 @@ class ShoppingBot:
                     try:
                         self.handle_update(update)
                     except Exception:
+                        self.analytics.record("bot_error",(update.get("message") or update.get("callback_query") or {}).get("from"),status="error")
                         LOG.exception("Failed update %s", update.get("update_id"))
                     offset = update["update_id"] + 1
                     self.legacy_store.set_offset(offset)
             except TelegramError as exc:
+                self.analytics.record("poll_error",status="error")
                 LOG.warning("Telegram polling error: %s", exc)
                 time.sleep(5)
 

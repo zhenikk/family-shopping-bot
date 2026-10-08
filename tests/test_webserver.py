@@ -87,6 +87,57 @@ class MiniAppTests(unittest.TestCase):
         self.assertEqual(status,200)
         self.assertIn(b'Add to the shared list?',body)
 
+    def test_admin_auth_sessions_privacy_and_successful_purchase_counts(self):
+        self.bot.admin_ids={1}
+        self.assertEqual(self.request('/api/admin/stats',auth=False)[0],401)
+        self.assertEqual(self.request('/api/admin/stats',user=2)[0],403)
+        self.assertEqual(self.request('/api/admin/users',user=2)[0],403)
+        self.assertEqual(self.request('/api/admin/events?user=1',user=2)[0],403)
+        self.request('/api/language',{'language':'en','admin':True},user=2)
+        self.assertEqual(self.request('/api/admin/stats',user=2)[0],403)
+        self.assertEqual(self.request('/api/session',{},user=2)[0],200)
+        self.assertFalse(json.loads(self.request('/api/session',{},user=2)[1])['recorded'])
+        for _ in range(3):self.request('/api/state',user=2)
+        self.request('/api/add',{'text':'TOP SECRET PRODUCT :: private note'},user=2)
+        product=self.store.product_by_name('TOP SECRET PRODUCT')
+        self.request('/api/buy',{'id':product['id']},user=2)
+        self.request('/api/buy',{'id':product['id']},user=2)
+        status,body=self.request('/api/admin/stats')
+        stats=json.loads(body)
+        self.assertEqual(status,200)
+        self.assertEqual(stats['totals']['web_session'],1)
+        self.assertEqual(stats['totals']['purchase'],1)
+        self.assertEqual(stats['totals']['products_added'],1)
+        status,body=self.request('/api/admin/events')
+        self.assertEqual(status,200)
+        self.assertNotIn(b'TOP SECRET',body)
+        self.assertNotIn(b'private note',body)
+        self.assertNotIn(b'hash',body)
+        self.bot.analytics.record('voice_error',{'id':2,'first_name':'Test'},status='error')
+        errors=json.loads(self.request('/api/admin/events?errors=1')[1])
+        self.assertEqual([e['kind'] for e in errors['items']],['voice_error'])
+        users=json.loads(self.request('/api/admin/users?q=2')[1])
+        self.assertEqual([u['user_id'] for u in users['items']],[2])
+        self.assertNotIn(b'script',self.request('/api/admin/stats')[1])
+
+    def test_admin_journal_retention_bounded_pagination_and_fail_open(self):
+        import sqlite3
+        from unittest.mock import patch
+        analytics=self.bot.analytics
+        for _ in range(60):analytics.record('bot_message',{'id':2})
+        first=analytics.events()
+        second=analytics.events(first['next'])
+        self.assertEqual(len(first['items']),50)
+        self.assertTrue(first['has_more'])
+        self.assertFalse({e['id'] for e in first['items']} & {e['id'] for e in second['items']})
+        with analytics.db() as db:
+            db.execute("UPDATE analytics_events SET occurred=?",(time.time()-100*86400,))
+        analytics.record('bot_message',{'id':2})
+        self.assertEqual(len(analytics.events()['items']),1)
+        self.assertGreaterEqual(analytics.snapshot()['totals']['bot_message'],61)
+        with patch.object(analytics,'db',side_effect=sqlite3.OperationalError('unavailable')):
+            self.assertFalse(analytics.record('bot_message',{'id':2}))
+
     def test_signature_tamper_expiry_and_duplicate_fields(self):
         good = signed_data(date=10000)
         self.assertEqual(validate_init_data(good, TOKEN, now=10010), 1)

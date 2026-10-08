@@ -78,6 +78,8 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
             pass
 
         def respond(self, status, value, content_type="application/json; charset=utf-8", cache="no-store"):
+            if status>=500:
+                bot.analytics.record('web_error',getattr(self,'user_profile',None),status='error',value=1)
             data = json.dumps(value, ensure_ascii=False).encode() if isinstance(value, (dict, list)) else value
             self.send_response(status)
             self.send_header("Content-Type", content_type)
@@ -99,6 +101,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 raise AccessError("Open through Telegram") from None
             language.set(bot.families.preference(user_id) or "uk")
             user=json.loads(dict(parse_qsl(auth[4:]))['user'])
+            self.user_profile=user
             self.user_name=str(user.get('first_name') or tr('ui_9e0a513bdc07'))[:80]
             return user_id
 
@@ -118,6 +121,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     'product_count':bot.families.resources(info['id'])[0].catalog_count()}
 
         def family_mutation(self,path,user_id,data):
+            bot.analytics.record('web_family',self.user_profile)
             with bot.families.lock:
                 current=bot.families.family(user_id)
                 header=self.headers.get('X-Shopping-Family')
@@ -208,24 +212,40 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 assets = {"/": ("index.html", "text/html; charset=utf-8"),
                           "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                           "/style.css": ("style.css", "text/css; charset=utf-8"),
+                          "/admin": ("admin.html", "text/html; charset=utf-8"),
+                          "/admin.js": ("admin.js", "text/javascript; charset=utf-8"),
+                          "/admin.css": ("admin.css", "text/css; charset=utf-8"),
                           "/fonts/onest.woff2": ("fonts/onest.woff2", "font/woff2"),
                           "/fonts/manrope.woff2": ("fonts/manrope.woff2", "font/woff2")}
                 if path in assets:
                     filename, mime = assets[path]
                     chosen='en' if dict(parse_qsl(urlsplit(self.path).query)).get('lang')=='en' else 'uk'
-                    if chosen=='en' and filename in ('index.html','app.js'):
+                    if chosen=='en' and filename in ('index.html','app.js','admin.html','admin.js'):
                         filename=filename.replace('.', '.en.', 1)
                     data = (STATIC / filename).read_bytes()
-                    if filename in ("index.html","index.en.html"):
-                        for asset in ("app.js", "style.css"):
-                            asset_file="app.en.js" if chosen=="en" and asset=="app.js" else asset
+                    if filename in ("index.html","index.en.html","admin.html","admin.en.html"):
+                        for asset in (("admin.js","admin.css") if filename in ("admin.html","admin.en.html") else ("app.js", "style.css")):
+                            asset_file=asset.replace(".",".en.",1) if chosen=="en" and asset in ("app.js","admin.js") else asset
                             version = hashlib.sha256((STATIC / asset_file).read_bytes()).hexdigest()[:12]
                             data = data.replace(("/" + asset).encode(), ("/" + asset + "?lang=" + (chosen or "uk") + "&v=" + version).encode())
-                    self.respond(200, data, mime, "no-store" if filename in ("index.html","index.en.html") else "public, max-age=31536000, immutable")
+                    self.respond(200, data, mime, "no-store" if filename in ("index.html","index.en.html","admin.html","admin.en.html") else "public, max-age=31536000, immutable")
                     return
                 user_id=self.authenticated_user()
+                if path.startswith('/api/admin/'):
+                    if user_id not in bot.admin_ids:
+                        self.respond(403,{'error':'Owner access only'})
+                        return
+                    query=dict(parse_qsl(urlsplit(self.path).query))
+                    if path=='/api/admin/stats':result=bot.analytics.snapshot(query.get('days',30))
+                    elif path=='/api/admin/users':result=bot.analytics.users(query.get('offset',0),query.get('q',''))
+                    elif path=='/api/admin/events':result=bot.analytics.events(query.get('before'),query.get('user'),query.get('errors')=='1')
+                    else:
+                        self.respond(404,{'error':'Not found'})
+                        return
+                    self.respond(200,result)
+                    return
                 if path=='/api/preferences':
-                    self.respond(200,{'language':bot.families.preference(user_id) or None})
+                    self.respond(200,{'language':bot.families.preference(user_id) or None,'admin':user_id in bot.admin_ids})
                     return
                 if path=='/api/family':
                     self.respond(200,self.family_payload(user_id))
@@ -265,11 +285,17 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
         def do_POST(self):
             try:
                 path=urlsplit(self.path).path
+                if path=='/api/session':
+                    self.authenticated_user()
+                    recorded=bot.analytics.record('web_session',self.user_profile)
+                    self.respond(200,{'recorded':recorded})
+                    return
                 if path=='/api/language':
                     user_id=self.authenticated_user()
                     value=self.body().get('language')
                     bot.families.set_language(user_id,value)
                     language.set(value)
+                    bot.analytics.record('language',self.user_profile)
                     self.respond(200,{'language':value})
                     return
                 if path.startswith('/api/family/'):
@@ -299,6 +325,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     if not items:
                         raise ValueError("Empty list")
                     added = sum(bot.store.add_need(bot.store.ensure_product(name, note), user_id) for name, note in items)
+                    bot.analytics.record("products_added",self.user_profile,value=added)
                     result = {"added": added}
                 elif path == "/api/undo":
                     restored = bot.store.undo_purchase(int(data["event_id"]), user_id)
@@ -316,6 +343,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     if path == "/api/buy":
                         bought, batch_id, event_id = bot.store.purchase(product_id, user_id, "")
                         if bought:
+                            bot.analytics.record("purchase",self.user_profile)
                             notification_batch = batch_id
                         result = {"bought": bought, "event_id": event_id}
                     elif path == "/api/readd":
@@ -331,6 +359,8 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 else:
                     self.respond(404, {"error": tr('ui_08c66d1111a3')})
                     return
+                event={'/api/add':'web_add','/api/buy':'web_buy','/api/edit':'web_edit','/api/undo':'web_undo','/api/readd':'web_add'}.get(path)
+                if event:bot.analytics.record(event,self.user_profile)
                 self.server.sync_pool.submit(copy_context().run, sync_changes, notification_batch)
                 self.respond(200, result)
             except AccessError:
