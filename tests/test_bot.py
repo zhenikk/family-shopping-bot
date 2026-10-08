@@ -411,6 +411,41 @@ class ShoppingBotTests(unittest.TestCase):
         self.bot.handle_message(message(1,'/start'))
         self.assertEqual(self.bot.families.preference(10),'en')
 
+    def test_voice_status_only_after_five_seconds_and_never_after_completion(self):
+        timers=[];workers=[]
+        class Timer:
+            def __init__(self,delay,callback):
+                self.delay=delay;self.callback=callback;self.cancelled=False;timers.append(self)
+            def start(self):pass
+            def cancel(self):self.cancelled=True
+        def submit(fn,*args):workers.append(lambda:fn(*args))
+        self.telegram.calls.clear()
+        with patch('shopping_bot.app.threading.Timer',Timer),patch.object(self.bot.voice_pool,'submit',side_effect=submit):
+            self.bot.handle_message(message(1,voice={'file_id':'fast'}))
+            self.assertFalse(any(method=='sendMessage' for method,_ in self.telegram.calls))
+            self.assertEqual(timers[0].delay,5)
+            with patch('shopping_bot.app.transcribe',return_value='молоко'):
+                workers.pop(0)()
+            self.assertTrue(timers[0].cancelled)
+            before=len(self.telegram.calls);timers[0].callback()
+            self.assertEqual(len(self.telegram.calls),before)
+
+            self.bot.handle_message(message(1,voice={'file_id':'queued'}))
+            timers[-1].callback()
+            self.assertIn('Голосове в черзі',self.telegram.calls[-1][1]['text'])
+            with patch('shopping_bot.app.transcribe',return_value='яйця'):
+                workers.pop(0)()
+
+            self.bot.handle_message(message(1,voice={'file_id':'slow'}))
+            def slow(*args,**kwargs):
+                timers[-1].callback()
+                self.assertIn('Розпізнаю голосове',self.telegram.calls[-1][1]['text'])
+                return 'хліб'
+            with patch('shopping_bot.app.transcribe',side_effect=slow):
+                workers.pop(0)()
+            before=len(self.telegram.calls);timers[-1].callback()
+            self.assertEqual(len(self.telegram.calls),before)
+
     def test_voice_language_passed_to_whisper_and_scoped_to_each_user(self):
         self.bot.families.set_language(1,'en');self.bot.bind_user(1)
         with patch('shopping_bot.app.transcribe',return_value='milk, eggs') as recognize:

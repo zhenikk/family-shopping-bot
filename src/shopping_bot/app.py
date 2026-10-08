@@ -318,9 +318,7 @@ class ShoppingBot:
             self.handle_photo(user_id, message)
             return
         if message.get("voice"):
-            self.send(user_id, tr('ui_cb8057ef0a78'))
-            self.voice_pool.submit(copy_context().run, self.process_voice, user_id, message["voice"]["file_id"],
-                                   self.pending_notes.get(user_id))
+            self.queue_voice(user_id,message["voice"]["file_id"],self.pending_notes.get(user_id))
             return
         if not text:
             self.send(user_id, tr('ui_a83f7bb5f025'))
@@ -406,7 +404,47 @@ class ShoppingBot:
         self.pending_draft_edits.pop(user_id, None)
         self.show_draft_item(user_id, draft_id, key, panel_id)
 
-    def process_voice(self, user_id: int, file_id: str, note_product_id: int | None = None) -> None:
+    def queue_voice(self,user_id,file_id,note_product_id=None):
+        started=threading.Event()
+        finished=threading.Event()
+        guard=threading.Lock()
+        expected_family=self.family_context.get()
+        worker_context=copy_context()
+        notice_context=copy_context()
+
+        def ready():
+            with guard:
+                finished.set()
+            timer.cancel()
+
+        def notice():
+            with guard:
+                if finished.is_set() or self.families.family(user_id)!=expected_family:
+                    return
+                try:
+                    key='ui_8ac40e2be49b' if started.is_set() else 'ui_cb8057ef0a78'
+                    self.send(user_id,tr(key))
+                except TelegramError:
+                    LOG.warning('Could not send delayed voice status')
+
+        timer=threading.Timer(5,lambda:notice_context.run(notice))
+        timer.daemon=True
+
+        def worker():
+            started.set()
+            try:
+                self.process_voice(user_id,file_id,note_product_id,on_transcribed=ready)
+            finally:
+                ready()
+
+        try:
+            self.voice_pool.submit(worker_context.run,worker)
+            timer.start()
+        except Exception:
+            ready()
+            raise
+
+    def process_voice(self, user_id: int, file_id: str, note_product_id: int | None = None, *, on_transcribed=None) -> None:
         started=time.monotonic()
         successful=False
         selected_language=language.get()
@@ -418,8 +456,9 @@ class ShoppingBot:
             return
         language.set(selected_language)
         try:
-            self.send(user_id, tr('ui_8ac40e2be49b'))
             transcript = transcribe(self.telegram, file_id, self.whisper_cli, self.whisper_model, language_code=language.get())
+            if on_transcribed:
+                on_transcribed()
             if self.families.family(user_id)!=expected_family:
                 self.send(user_id,tr('ui_207f65cb77d5'))
                 return
@@ -443,8 +482,12 @@ class ShoppingBot:
             self.send(user_id, f"{tr('ui_94b5a7bd2400')}{transcript}")
             self.make_draft(user_id, transcript)
         except (SpeechError, TelegramError) as exc:
+            if on_transcribed:
+                on_transcribed()
             self.send(user_id, f"{exc}{tr('ui_61a76168c7db')}")
         except Exception:
+            if on_transcribed:
+                on_transcribed()
             LOG.exception("Voice processing failed for user %s", user_id)
             self.send(user_id, tr('ui_7d5933174b7f'))
 
