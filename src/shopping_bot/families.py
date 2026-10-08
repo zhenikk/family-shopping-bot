@@ -37,6 +37,7 @@ class Families:
                 CREATE TABLE IF NOT EXISTS memberships (user_id INTEGER NOT NULL, family_id TEXT NOT NULL, PRIMARY KEY(user_id,family_id));
                 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS message_routes (user_id INTEGER NOT NULL,message_id INTEGER NOT NULL,family_id TEXT NOT NULL,PRIMARY KEY(user_id,message_id));
+                CREATE TABLE IF NOT EXISTS preferences (user_id INTEGER PRIMARY KEY, language TEXT NOT NULL, pending_start TEXT NOT NULL DEFAULT '');
                 CREATE TABLE IF NOT EXISTS invitations (token TEXT PRIMARY KEY,family_id TEXT NOT NULL,created_by INTEGER,created_at TEXT NOT NULL,used_by INTEGER,revoked INTEGER NOT NULL DEFAULT 0);
             ''')
             columns = {row[1] for row in db.execute('PRAGMA table_info(families)')}
@@ -50,6 +51,7 @@ class Families:
                         for row in old.execute('SELECT user_id FROM members'):
                             db.execute("INSERT OR IGNORE INTO users VALUES (?,'legacy')", (row[0],))
                 db.execute("INSERT INTO meta VALUES ('legacy_imported','1')")
+            db.execute("INSERT OR IGNORE INTO preferences(user_id,language) SELECT user_id,'uk' FROM users")
             # Existing active family is retained; inactive old memberships/data are archived.
             db.execute('DELETE FROM memberships WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.user_id=memberships.user_id AND u.family_id=memberships.family_id)')
             db.execute('INSERT OR IGNORE INTO memberships SELECT user_id,family_id FROM users')
@@ -80,6 +82,26 @@ class Families:
                 yield conn
         finally:
             conn.close()
+
+    def preference(self,user_id):
+        with self.db() as db:
+            row=db.execute('SELECT language FROM preferences WHERE user_id=?',(user_id,)).fetchone()
+            return row[0] if row else None
+
+    def set_language(self,user_id,value):
+        if value not in ('uk','en'):
+            raise ValueError('Invalid language')
+        with self.write(),self.db() as db:
+            db.execute("INSERT INTO preferences(user_id,language) VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET language=excluded.language",(user_id,value))
+
+    def pending_start(self,user_id,value=None):
+        with self.write(),self.db() as db:
+            if value is not None:
+                db.execute("INSERT INTO preferences(user_id,language,pending_start) VALUES (?,'',?) ON CONFLICT(user_id) DO UPDATE SET pending_start=excluded.pending_start",(user_id,value))
+                return
+            row=db.execute('SELECT pending_start FROM preferences WHERE user_id=?',(user_id,)).fetchone()
+            db.execute("UPDATE preferences SET pending_start='' WHERE user_id=?",(user_id,))
+            return row[0] if row else ''
 
     def family(self,user_id):
         with self.db() as db:
@@ -126,9 +148,10 @@ class Families:
             db.execute('ATTACH DATABASE ? AS family_data',(store.path,))
             db.execute('BEGIN IMMEDIATE')
             if not legacy:
-                db.execute('INSERT INTO families(id,invite,name,owner_id) VALUES (?,?,?,?)',(family_id,secrets.token_urlsafe(24),'Сім’я '+name[:40],user_id))
+                db.execute('INSERT INTO families(id,invite,name,owner_id) VALUES (?,?,?,?)',(family_id,secrets.token_urlsafe(24),('Family ' if self.preference(user_id)=='en' else 'Сім’я ')+name[:40],user_id))
             db.execute('INSERT OR REPLACE INTO family_data.members VALUES (?,?,?)',(user_id,name[:80],now()))
             db.execute('INSERT INTO users VALUES (?,?)',(user_id,family_id))
+            db.execute("INSERT OR IGNORE INTO preferences(user_id,language) VALUES (?,'uk')",(user_id,))
             db.execute('INSERT OR REPLACE INTO memberships VALUES (?,?)',(user_id,family_id))
             db.execute('UPDATE families SET owner_id=? WHERE id=? AND owner_id IS NULL',(user_id,family_id))
             return family_id,'joined'

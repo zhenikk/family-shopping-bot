@@ -1,5 +1,6 @@
 """Private Mini App API. Telegram initData is checked on every data request."""
 from __future__ import annotations
+from .i18n import tr, language
 
 import hashlib
 import hmac
@@ -96,8 +97,9 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 user_id = validate_init_data(auth[4:], token)
             except (ValueError, TypeError, KeyError):
                 raise AccessError("Open through Telegram") from None
+            language.set(bot.families.preference(user_id) or "uk")
             user=json.loads(dict(parse_qsl(auth[4:]))['user'])
-            self.user_name=str(user.get('first_name') or 'Учасник')[:80]
+            self.user_name=str(user.get('first_name') or tr('ui_9e0a513bdc07'))[:80]
             return user_id
 
         def member(self):
@@ -120,7 +122,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 current=bot.families.family(user_id)
                 header=self.headers.get('X-Shopping-Family')
                 if header and header!=current:
-                    self.respond(409,{'error':'Сім’ю змінено. Оновіть екран.'})
+                    self.respond(409,{'error':tr('ui_4942d160189f')})
                     return
                 if path=='/api/family/create':
                     _,status=bot.families.enroll(user_id,self.user_name)
@@ -131,7 +133,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     token=str(data.get('token',''))
                     info=bot.families.invite_info(token,user_id)
                     if not info:
-                        self.respond(410,{'error':'Запрошення використане, скасоване або недійсне. Попросіть нове.'})
+                        self.respond(410,{'error':tr('ui_1fb9fe6dbff2')})
                         return
                     own=bot.families.details(user_id)
                     people=bot.families.members(current) if current else []
@@ -142,8 +144,8 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                         raise ValueError('Confirm invitation')
                     status=bot.families.accept_invite(user_id,self.user_name,str(data.get('token','')),transfer=data.get('transfer',False),expected_family=data.get('source_family'))
                     if status not in ('joined','already'):
-                        errors={'owner_required':'Спочатку передайте роль засновника іншому учаснику.','transfer_forbidden':'Перенести список можна лише якщо ви єдиний учасник.','stale':'Сім’ю змінено. Відкрийте запрошення знову.'}
-                        self.respond(409,{'error':errors.get(status,'Запрошення використане, скасоване або недійсне.')})
+                        errors={'owner_required':tr('ui_006b7c354b8a'),'transfer_forbidden':tr('ui_51dbcae1e020'),'stale':tr('ui_ec20e7b8a7be')}
+                        self.respond(409,{'error':errors.get(status,tr('ui_5d077df0d079'))})
                         return
                     bot.clear_pending(user_id)
                     bot.bind_user(user_id)
@@ -152,7 +154,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 if not current:
                     raise AccessError('Family required')
                 if not header:
-                    self.respond(409,{'error':'Оновіть екран сім’ї перед змінами.'})
+                    self.respond(409,{'error':tr('ui_aba4d96508c4')})
                     return
                 if path=='/api/family/invite':
                     token=bot.families.create_invite(user_id)
@@ -161,7 +163,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     self.respond(200,{'url':f'https://t.me/{username}?start=invite_{token}','token':token})
                 elif path=='/api/family/revoke':
                     if not bot.families.revoke_invite(user_id,str(data.get('token',''))):
-                        self.respond(403,{'error':'Запрошення недоступне або ви не можете його скасувати.'})
+                        self.respond(403,{'error':tr('ui_10a2e8ef134a')})
                         return
                     self.respond(200,{'revoked':True})
                 elif path=='/api/family/rename':
@@ -178,13 +180,13 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     else:
                         status='done' if bot.families.delete(user_id) else 'denied'
                     if status not in ('done','left'):
-                        self.respond(403,{'error':'Засновник має передати роль перед виходом.' if status=='owner_required' else 'Ця дія недоступна.'})
+                        self.respond(403,{'error':tr('ui_57bbe0bd6194') if status=='owner_required' else tr('ui_880d5e897fe6')})
                         return
                     bot.clear_pending(user_id)
                     bot.bind_user(user_id)
                     self.respond(200,{'status':status})
                 else:
-                    self.respond(404,{'error':'Невідома дія.'})
+                    self.respond(404,{'error':tr('ui_ab0679edd735')})
 
         def product_json(self, row):
             return {key: row[key] for key in ("id", "name", "note", "category")} | {
@@ -210,19 +212,26 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                           "/fonts/manrope.woff2": ("fonts/manrope.woff2", "font/woff2")}
                 if path in assets:
                     filename, mime = assets[path]
+                    chosen='en' if dict(parse_qsl(urlsplit(self.path).query)).get('lang')=='en' else 'uk'
+                    if chosen=='en' and filename in ('index.html','app.js'):
+                        filename=filename.replace('.', '.en.', 1)
                     data = (STATIC / filename).read_bytes()
-                    if filename == "index.html":
+                    if filename in ("index.html","index.en.html"):
                         for asset in ("app.js", "style.css"):
-                            version = hashlib.sha256((STATIC / asset).read_bytes()).hexdigest()[:12]
-                            data = data.replace(("/" + asset).encode(), ("/" + asset + "?v=" + version).encode())
-                    self.respond(200, data, mime, "no-store" if filename == "index.html" else "public, max-age=31536000, immutable")
+                            asset_file="app.en.js" if chosen=="en" and asset=="app.js" else asset
+                            version = hashlib.sha256((STATIC / asset_file).read_bytes()).hexdigest()[:12]
+                            data = data.replace(("/" + asset).encode(), ("/" + asset + "?lang=" + (chosen or "uk") + "&v=" + version).encode())
+                    self.respond(200, data, mime, "no-store" if filename in ("index.html","index.en.html") else "public, max-age=31536000, immutable")
                     return
                 user_id=self.authenticated_user()
+                if path=='/api/preferences':
+                    self.respond(200,{'language':bot.families.preference(user_id) or None})
+                    return
                 if path=='/api/family':
                     self.respond(200,self.family_payload(user_id))
                     return
                 if path=='/api/state' and not bot.families.family(user_id):
-                    self.respond(200,{'family_id':None,'onboarding':True,'products':[],'categories':CATEGORIES,'history':[]})
+                    self.respond(200,{'language':language.get(),'family_id':None,'onboarding':True,'products':[],'categories':{key:tr(value) for key,value in CATEGORIES.items()},'history':[]})
                     return
                 user_id = self.member()
                 if path == "/api/state":
@@ -232,37 +241,44 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                                for row in bot.store.catalog(limit=2000)]
                     history = [{key: row[key] for key in ("id", "product_name", "actor_name", "action", "happened_at", "undone")}
                                for row in bot.store.recent_history(60)]
-                    self.respond(200, {"family_id": bot.families.family(user_id), "products": catalog, "categories": CATEGORIES, "history": history})
+                    self.respond(200, {"language":language.get(), "family_id": bot.families.family(user_id), "products": catalog, "categories": {key:tr(value) for key,value in CATEGORIES.items()}, "history": history})
                 elif path.startswith("/api/photo/"):
                     row = bot.store.product(int(path.rsplit("/", 1)[1]))
                     if not row or not row["photo_path"]:
-                        self.respond(404, {"error": "Фото ще немає"})
+                        self.respond(404, {"error": tr('ui_16aff7a8a36c')})
                         return
                     photo = Path(row["photo_path"]).resolve()
                     if not photo.is_relative_to(bot.media_dir.resolve()) or not photo.is_file():
-                        self.respond(404, {"error": "Фото недоступне"})
+                        self.respond(404, {"error": tr('ui_49f7f5d3052f')})
                         return
                     self.respond(200, photo.read_bytes(), "image/jpeg")
                 else:
-                    self.respond(404, {"error": "Не знайдено"})
+                    self.respond(404, {"error": tr('ui_08c66d1111a3')})
             except AccessError:
-                self.respond(401, {"error": "Відкрийте застосунок через кнопку в боті. Доступ лише для вашої сім’ї."})
+                self.respond(401, {"error": tr('ui_9690765dd168')})
             except (ValueError, TypeError, KeyError):
-                self.respond(400, {"error": "Некоректний запит"})
+                self.respond(400, {"error": tr('ui_ac2e1cbfde52')})
             except Exception:
                 LOG.error("Mini App read failed")
-                self.respond(500, {"error": "Не вдалося завантажити дані. Спробуйте ще раз."})
+                self.respond(500, {"error": tr('ui_ac9e82cc0e40')})
 
         def do_POST(self):
             try:
                 path=urlsplit(self.path).path
+                if path=='/api/language':
+                    user_id=self.authenticated_user()
+                    value=self.body().get('language')
+                    bot.families.set_language(user_id,value)
+                    language.set(value)
+                    self.respond(200,{'language':value})
+                    return
                 if path.startswith('/api/family/'):
                     self.family_mutation(path,self.authenticated_user(),self.body())
                     return
                 user_id = self.member()
                 requested_family=self.headers.get('X-Shopping-Family')
                 if requested_family != bot.families.family(user_id):
-                    self.respond(409, {'error':'Сім’ю змінено. Закрийте й відкрийте застосунок перед покупками.'})
+                    self.respond(409, {'error':tr('ui_6ecf0e92694e')})
                     return
                 path = urlsplit(self.path).path
                 data = self.body()
@@ -274,7 +290,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     result = []
                     for name, note in items:
                         existing = bot.store.product_by_name(name)
-                        result.append({"name": name, "active": bool(existing and any(row["id"]==existing["id"] for row in bot.store.needs())), "note": ("Купити в " + note if note in STORES else note) or (existing["note"] if existing else ""),
+                        result.append({"name": name, "active": bool(existing and any(row["id"]==existing["id"] for row in bot.store.needs())), "note": (tr('ui_b0c5ef5f2ea3') + note if note in STORES else note) or (existing["note"] if existing else ""),
                                        "category": existing["category"] if existing else infer_category(name)})
                     self.respond(200, {"items": result})
                     return
@@ -295,7 +311,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 elif path in ("/api/buy", "/api/readd", "/api/edit"):
                     product_id = int(data["id"])
                     if not bot.store.product(product_id):
-                        self.respond(404, {"error": "Товар не знайдено"})
+                        self.respond(404, {"error": tr('ui_5383e75496a0')})
                         return
                     if path == "/api/buy":
                         bought, batch_id, event_id = bot.store.purchase(product_id, user_id, "")
@@ -313,17 +329,17 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                             db.execute("UPDATE products SET note=?, category=? WHERE id=?", (note.strip(), category, product_id))
                         result = {"saved": True}
                 else:
-                    self.respond(404, {"error": "Не знайдено"})
+                    self.respond(404, {"error": tr('ui_08c66d1111a3')})
                     return
                 self.server.sync_pool.submit(copy_context().run, sync_changes, notification_batch)
                 self.respond(200, result)
             except AccessError:
-                self.respond(401, {"error": "Сесія завершилась. Закрийте застосунок і відкрийте знову через бота."})
+                self.respond(401, {"error": tr('ui_02e40f40a5f9')})
             except (ValueError, TypeError, KeyError) as exc:
-                self.respond(400, {"error": str(exc) if path.startswith('/api/family/') else "Перевірте назви, категорію й нотатку (до 200 символів)."})
+                self.respond(400, {"error": tr(str(exc)) if path.startswith('/api/family/') else tr('ui_56c892566df1')})
             except Exception:
                 LOG.error("Mini App mutation failed")
-                self.respond(500, {"error": "Не вдалося зберегти. Оновіть список перед повторною спробою."})
+                self.respond(500, {"error": tr('ui_481b37e9167a')})
 
     server = MiniAppServer((host, port), Handler)
     server.daemon_threads = True

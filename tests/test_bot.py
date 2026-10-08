@@ -387,6 +387,62 @@ class ShoppingBotTests(unittest.TestCase):
             self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(),[])
         self.assertEqual(Store(self.store.path).catalog_count(),1)
 
+    def test_first_start_language_preserves_invitation_and_personal_settings(self):
+        token=self.bot.families.create_invite(1)
+        self.bot.handle_message(message(10,'/start invite_'+token))
+        self.assertIsNone(self.bot.families.family(10))
+        self.assertIn('Choose your language',self.telegram.calls[-1][1]['text'])
+        self.bot.handle_callback(callback(10,'language:en'))
+        self.assertEqual(self.bot.families.preference(10),'en')
+        self.assertIn('Join',str(self.telegram.calls[-1][1]['reply_markup']))
+        self.bot.handle_callback(callback(10,'family:accept:0:'+token))
+        self.assertEqual(self.bot.families.family(10),self.bot.families.family(1))
+        self.assertEqual(self.bot.families.preference(1),'uk')
+        self.bot.handle_message(message(10,'milk, eggs and bread'))
+        text=self.telegram.calls[-1][1]['text']
+        self.assertIn('Add to the shared list?',text)
+        self.assertIn('Dairy and eggs',text)
+        self.assertIn('Milk',text)
+        self.assertEqual(self.store.resolved_items('milk, молоко'),[('Milk',None)])
+        product=self.store.ensure_product('молоко');self.store.set_note(product,'Не перекладати Milk')
+        self.bot.show_item(10,product)
+        self.assertIn('Молоко',self.telegram.calls[-1][1]['text'])
+        self.assertIn('Не перекладати Milk',self.telegram.calls[-1][1]['text'])
+        self.bot.handle_message(message(1,'/start'))
+        self.assertEqual(self.bot.families.preference(10),'en')
+
+    def test_voice_language_passed_to_whisper_and_scoped_to_each_user(self):
+        self.bot.families.set_language(1,'en');self.bot.bind_user(1)
+        with patch('shopping_bot.app.transcribe',return_value='milk, eggs') as recognize:
+            self.bot.process_voice(1,'voice')
+            self.assertEqual(recognize.call_args.kwargs['language_code'],'en')
+        self.bot.bind_user(2)
+        with patch('shopping_bot.app.transcribe',return_value='молоко') as recognize:
+            self.bot.process_voice(2,'voice')
+            self.assertEqual(recognize.call_args.kwargs['language_code'],'uk')
+        from shopping_bot.i18n import language
+        language.set('uk')
+
+    def test_notifications_follow_recipient_language_and_keep_product_names(self):
+        self.bot.families.set_language(2,'en')
+        product=self.store.ensure_product('молоко');self.store.add_need(product,1)
+        bought,batch,event=self.store.purchase(product,1,'')
+        self.assertTrue(bought)
+        self.bot.bind_user(1);self.telegram.calls.clear()
+        self.bot.notify_partner(batch)
+        sent=[params for method,params in self.telegram.calls if method=='sendMessage' and params['chat_id']==2]
+        self.assertIn(' bought:',sent[-1]['text'])
+        self.assertIn('Молоко',sent[-1]['text'])
+        self.assertEqual(self.bot.families.preference(1),'uk')
+
+    def test_translation_catalog_has_no_untranslated_bot_templates(self):
+        from shopping_bot.i18n import language,tr,MESSAGES
+        previous=language.set('en')
+        try:
+            for key in MESSAGES:
+                self.assertFalse(any('а'<=c.lower()<='я' or c.lower() in 'іїєґ' for c in tr(key)),MESSAGES[key])
+        finally:language.reset(previous)
+
     def test_voice_style_short_list_parser(self):
         self.assertEqual(parse_items("Молоко, яйця; хліб @Lidl. Кава"), [
             ("Молоко", None), ("Яйця", None), ("Хліб", "Lidl"), ("Кава", None),

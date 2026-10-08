@@ -61,6 +61,32 @@ class MiniAppTests(unittest.TestCase):
         conn.close()
         return status, body
 
+    def test_personal_language_preferences_onboarding_and_english_api(self):
+        status,body=self.request('/api/preferences',user=55)
+        self.assertEqual((status,json.loads(body)['language']),(200,None))
+        status,body=self.request('/api/language',{'language':'en'},user=55)
+        self.assertEqual(status,200)
+        self.assertIsNone(self.bot.families.family(55))
+        status,body=self.request('/api/state',user=55)
+        self.assertEqual(json.loads(body)['language'],'en')
+        self.assertIn('Vegetables',json.loads(body)['categories']['vegetables'])
+        self.assertEqual(self.request('/api/language',{'language':'de'},user=55)[0],400)
+        self.assertEqual(self.request('/api/language',{'language':'en'},user=55,auth=False)[0],401)
+        self.request('/api/language',{'language':'en'},user=1)
+        self.assertEqual(self.bot.families.preference(2),'uk')
+        self.request('/api/add',{'text':'milk, eggs and bread'},user=1)
+        status,body=self.request('/api/state',user=1)
+        self.assertEqual({p['name'] for p in json.loads(body)['products']},{'Milk','Eggs','Bread'})
+        self.request('/api/add',{'text':'молоко'},user=2)
+        self.assertEqual(self.store.catalog_count(),3)
+        status,body=self.request('/?lang=en',auth=False)
+        self.assertEqual(status,200)
+        self.assertIn(b'lang="en"',body)
+        self.assertIn(b'Our groceries',body)
+        status,body=self.request('/app.js?lang=en',auth=False)
+        self.assertEqual(status,200)
+        self.assertIn(b'Add to the shared list?',body)
+
     def test_signature_tamper_expiry_and_duplicate_fields(self):
         good = signed_data(date=10000)
         self.assertEqual(validate_init_data(good, TOKEN, now=10010), 1)

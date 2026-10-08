@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .i18n import tr, language, CategoryLabels
 
 import hmac
 import logging
@@ -30,6 +31,9 @@ def buttons(*rows: list[tuple[str, str]]) -> dict:
             for row in rows
         ]
     }
+
+
+CATEGORIES = CategoryLabels(CATEGORIES)
 
 
 class ShoppingBot:
@@ -69,6 +73,7 @@ class ShoppingBot:
         return self.families.resources(self.family_context.get())[1]
 
     def bind_user(self, user_id):
+        language.set(self.families.preference(user_id) or "uk")
         family = self.families.family(user_id)
         self.family_context.set(family or "legacy")
         return family is not None
@@ -77,51 +82,51 @@ class ShoppingBot:
         username=self.telegram.call('getMe')['username']
         token=self.families.create_invite(user_id)
         link=f"https://t.me/{username}?start=invite_{token}"
-        self.send(user_id,'Одноразове запрошення до вашої сім’ї. Працює до використання або скасування.\n\n'+link,reply_markup=buttons([('Скасувати запрошення','family:revoke:'+token)]))
+        self.send(user_id,tr('ui_f275062357b4')+link,reply_markup=buttons([(tr('ui_2be3fb25cd68'),'family:revoke:'+token)]))
 
     def show_invite_preview(self,user_id,token):
         info=self.families.invite_info(token,user_id)
         if not info:
-            self.send(user_id,'Запрошення використане, скасоване або недійсне. Попросіть нове посилання.')
+            self.send(user_id,tr('ui_aef1daa71b4a'))
             return
         if self.families.family(user_id)==info['family_id']:
-            self.send(user_id,'Ви вже в цій сім’ї.')
+            self.send(user_id,tr('ui_cdb41a006258'))
             self.show_family(user_id)
             return
         current=self.families.details(user_id)
         people=self.families.members(current['id']) if current else []
-        lines=[f"{info['inviter']} запрошує до «{info['name']}»."]
+        lines=[f"{info['inviter']}{tr('ui_c94b6235f03d')}{info['name']}»."]
         rows=[]
         if current and current['owner_id']==user_id and len(people)>1:
-            lines.append('Перед переходом передайте роль засновника іншому учаснику через «Сім’я».')
-            rows.append([('Керувати сім’єю','family:show')])
+            lines.append(tr('ui_8d6d7c1e81ca'))
+            rows.append([(tr('ui_f51530f0cb99'),'family:show')])
         elif len(people)==1:
-            lines.append('Попередня сім’я буде видалена після переходу. Перенести активний список із фото та нотатками? Каталог куплених товарів та історія не переносяться.')
-            rows.extend([[('Перенести список і приєднатися','family:accept:1:'+token)],[('Не переносити й приєднатися','family:accept:0:'+token)]])
+            lines.append(tr('ui_c2df410b3e53'))
+            rows.extend([[(tr('ui_563f940fd610'),'family:accept:1:'+token)],[(tr('ui_fed82bd9ac82'),'family:accept:0:'+token)]])
         else:
-            lines.append('Приєднатися до спільного списку?'+(' Ви вийдете з попередньої сім’ї; її дані залишаться учасникам.' if current else ''))
-            rows.append([('Приєднатися','family:accept:0:'+token)])
+            lines.append(tr('ui_463e85e9abca')+(tr('ui_b76585e6073f') if current else ''))
+            rows.append([(tr('ui_cc3a50c1e3fb'),'family:accept:0:'+token)])
         self.send(user_id,'\n\n'.join(lines),reply_markup=buttons(*rows))
 
     def show_family(self, user_id, message_id=None):
         current=self.families.details(user_id)
         if not current:
-            self.send(user_id,'Ви ще не в сім’ї. Створіть сім’ю або відкрийте запрошення.',reply_markup=buttons([('Створити сім’ю','family:create')]))
+            self.send(user_id,tr('ui_6337eda17267'),reply_markup=buttons([(tr('ui_fa354ddf77af'),'family:create')]))
             return
         members=self.families.members(current['id'])
-        lines=[f"👥 {current['name']} · {len(members)} учасників",'']
+        lines=[f"👥 {current['name']} · {len(members)}{tr('ui_5f022cf87ad2')}",'']
         for member in members:
-            suffix=(' (ви)' if member['user_id']==user_id else '')+(' · засновник' if member['user_id']==current['owner_id'] else '')
+            suffix=(tr('ui_109e3f46b4ae') if member['user_id']==user_id else '')+(tr('ui_d22aad051523') if member['user_id']==current['owner_id'] else '')
             lines.append('• '+member['name']+suffix)
-        rows=[[('Запросити учасника','family:invite')],[('Змінити назву','family:rename'),('Оновити','family:show')]]
+        rows=[[(tr('ui_aa604e9d68b3'),'family:invite')],[(tr('ui_a1efd43db3c8'),'family:rename'),(tr('ui_fe32bae01c21'),'family:show')]]
         if current['owner_id']==user_id:
             if len(members)>1:
-                rows.append([('Передати роль засновника','family:owners')])
-            rows.append([('Видалити сім’ю','family:delete')])
-        rows.append([('Вийти із сім’ї','family:leave')])
+                rows.append([(tr('ui_0e81fbcf3f39'),'family:owners')])
+            rows.append([(tr('ui_bca182050a3e'),'family:delete')])
+        rows.append([(tr('ui_f4937f3c1393'),'family:leave')])
         for invite in self.families.invites(user_id):
             if invite['created_by']==user_id or current['owner_id']==user_id:
-                rows.append([('Скасувати запрошення · '+invite['created_at'][:10],'family:revoke:'+invite['token'])])
+                rows.append([(tr('ui_0823e11095ca')+invite['created_at'][:10],'family:revoke:'+invite['token'])])
         self.panel(user_id,'\n'.join(lines),buttons(*rows),message_id)
 
     def clear_pending(self,user_id):
@@ -148,25 +153,32 @@ class ShoppingBot:
                     return message_id
         return self.send(user_id, text, reply_markup=markup)["message_id"]
 
+    def show_language(self,user_id):
+        self.send(user_id,'Оберіть мову / Choose your language',reply_markup=buttons([('🇺🇦 Українська','language:uk'),('🇬🇧 English','language:en')]))
+
     def menu(self) -> dict:
         return {
-            "keyboard": [[{"text": "🛍 Покупки"}],
-                         [{"text": "🎙 Додати голосом"}, {"text": "📋 Список у чаті"}],
-                         [{"text": "👥 Сім’я"}]],
-            "input_field_placeholder": "Товари текстом або голосом",
+            "keyboard": [[{"text": tr('ui_58d659bf993e')}],
+                         [{"text": tr('ui_8c4317311ad3')}, {"text": tr('ui_45b58c75117f')}],
+                         [{"text": tr('ui_33ed8513acbd')}, {"text": "🌐 Language" if language.get()=="en" else "🌐 Мова"}]],
+            "input_field_placeholder": tr('ui_366933c83ece'),
             "resize_keyboard": True, "is_persistent": True,
         }
 
     def show_web_app(self, user_id: int) -> None:
         url = os.getenv("SHOPPING_WEB_URL", "")
         if url.startswith("https://"):
+            try:
+                self.telegram.call('setChatMenuButton',chat_id=user_id,menu_button={'type':'web_app','text':'Shopping' if language.get()=='en' else 'Покупки','web_app':{'url':url}})
+            except TelegramError:
+                LOG.warning('Could not update personal app menu')
             # Inline/menu launches carry authenticated initData; reply-keyboard
             # web_app launches do not (Telegram's documented launch semantics).
-            self.send(user_id, "🛍 Наші покупки · список, фото та нотатки", reply_markup={
-                "inline_keyboard": [[{"text": "Відкрити застосунок", "web_app": {"url": url}}]]
+            self.send(user_id, tr('ui_02e3f68d1e6a'), reply_markup={
+                "inline_keyboard": [[{"text": tr('ui_be653d74c655'), "web_app": {"url": url}}]]
             })
         else:
-            self.send(user_id, "Застосунок ще не під’єднаний. Поки користуйтеся списком у чаті.")
+            self.send(user_id, tr('ui_486022a30c33'))
 
     def handle_update(self, update: dict) -> None:
         previous = self.family_context.set("legacy")
@@ -186,7 +198,11 @@ class ShoppingBot:
         user_id = int(user["id"])
         text = (message.get("text") or "").strip()
         registered = self.bind_user(user_id)
-        name = user.get("first_name") or "Учасник"
+        if text == '/language' or text in ('🌐 Мова', '🌐 Language') or (text.startswith('/start') and not self.families.preference(user_id)):
+            self.families.pending_start(user_id,text if text.startswith('/start') else '')
+            self.show_language(user_id)
+            return
+        name = user.get("first_name") or tr('ui_9e0a513bdc07')
         pasted=re.search(r'(?:\?|&)start=invite_([A-Za-z0-9_-]{20,64})',text)
         if pasted:
             self.show_invite_preview(user_id,pasted.group(1))
@@ -197,27 +213,27 @@ class ShoppingBot:
         if text=='/create':
             _,status=self.families.enroll(user_id,name)
             self.bind_user(user_id)
-            self.send(user_id,'Ви вже маєте сім’ю.' if status=='already' else 'Сім’ю створено. Запросіть близьких або відкрийте покупки.',reply_markup=self.menu())
+            self.send(user_id,tr('ui_d68371904f25') if status=='already' else tr('ui_6f7df4bd00b9'),reply_markup=self.menu())
             self.show_family(user_id)
             self.show_web_app(user_id)
             return
         if text.startswith("/whoami"):
-            self.send(user_id, f"Ваш Telegram ID: {user_id}")
+            self.send(user_id, f"{tr('ui_4f0929df6f64')}{user_id}")
             return
         if text.startswith("/join"):
             supplied = text.partition(" ")[2].strip()
             if not supplied or not hmac.compare_digest(supplied, self.invite_code):
-                self.send(user_id, "Неправильний код. Надішліть /join КОД.")
+                self.send(user_id, tr('ui_1194471b223e'))
                 return
             _,status=self.families.enroll(user_id, name, legacy=True)
             if status=='invalid':
-                self.send(user_id,'Стару сім’ю видалено. Створіть нову через /start або прийміть запрошення.')
+                self.send(user_id,tr('ui_fa8c34c73d06'))
                 return
             self.bind_user(user_id)
-            self.send(user_id, "Готово! Ваш сімейний список доступний.", reply_markup=self.menu())
+            self.send(user_id, tr('ui_06ea442c02cb'), reply_markup=self.menu())
             return
         if not registered:
-            self.send(user_id, "Створіть сім’ю або приєднайтеся за запрошенням. Можна відкрити посилання чи надіслати його в цей чат.", reply_markup=buttons([("Створити сім’ю", "family:create"),("Приєднатися", "family:joinhelp")]))
+            self.send(user_id, tr('ui_ecf6cf5bcc46'), reply_markup=buttons([(tr('ui_fa354ddf77af'), "family:create"),(tr('ui_cc3a50c1e3fb'), "family:joinhelp")]))
             self.show_web_app(user_id)
             return
         if user_id in self.pending_family_names and text and not text.startswith('/'):
@@ -227,17 +243,17 @@ class ShoppingBot:
                 self.send(user_id,str(exc))
                 return
             self.pending_family_names.discard(user_id)
-            self.send(user_id,'Назву оновлено.' if renamed else 'Сім’я більше недоступна.')
+            self.send(user_id,tr('ui_a81997d616d2') if renamed else tr('ui_b4bc5b9b1531'))
             self.show_family(user_id)
             return
-        if text in ("/family", "👥 Сім’я"):
+        if text in ("/family", tr('ui_33ed8513acbd')):
             self.clear_pending(user_id)
             self.pending_notes.pop(user_id, None)
             self.pending_draft_edits.pop(user_id, None)
             self.pending_photos.pop(user_id, None)
             self.show_family(user_id)
             return
-        if text in ("/invite", "👥 Запросити до сім’ї"):
+        if text in ("/invite", tr('ui_0eb483441299')):
             self.pending_notes.pop(user_id, None)
             self.pending_draft_edits.pop(user_id, None)
             self.pending_photos.pop(user_id, None)
@@ -249,7 +265,7 @@ class ShoppingBot:
             self.pending_notes.pop(user_id, None)
             self.pending_draft_edits.pop(user_id, None)
             self.send(user_id,
-                "Ваш спільний список покупок. Відкрийте застосунок або надішліть товари текстом чи голосом.\n/family — учасники сім’ї.\n/invite — запросити учасника.",
+                tr('ui_d249553217d9'),
                 reply_markup=self.menu())
             if os.getenv("SHOPPING_WEB_URL", "").startswith("https://"):
                 self.show_web_app(user_id)
@@ -262,9 +278,9 @@ class ShoppingBot:
             if edit:
                 self.show_draft(user_id, edit[0], edit[2])
             else:
-                self.send(user_id, "Дію скасовано.")
+                self.send(user_id, tr('ui_d1454191b8bd'))
             return
-        if text in ("🛒 Список", "📚 Каталог", "🕘 Історія", "➕ Додати", "🛍 Застосунок", "🛍 Покупки", "🎙 Додати голосом", "📋 Список у чаті", *STORES) or text.startswith(("/list", "/catalog", "/history", "/app")):
+        if text in (tr('ui_428fc2d45eba'), tr('ui_1720591356f5'), tr('ui_f46f0095cd44'), tr('ui_a9e16bfc706e'), tr('ui_78ea31018b80'), tr('ui_58d659bf993e'), tr('ui_8c4317311ad3'), tr('ui_45b58c75117f'), *STORES) or text.startswith(("/list", "/catalog", "/history", "/app")):
             self.pending_notes.pop(user_id, None)
             self.pending_photos.pop(user_id, None)
             self.pending_draft_edits.pop(user_id, None)
@@ -272,11 +288,11 @@ class ShoppingBot:
             if text:
                 self.finish_draft_edit(user_id, text)
             else:
-                self.send(user_id, "Надішліть виправлення текстом або /cancel, щоб повернутися до чернетки.")
+                self.send(user_id, tr('ui_c84b82ea081c'))
             return
         if user_id in self.pending_notes and text:
             if len(text) > 200:
-                self.send(user_id, "Нотатка має бути до 200 символів. Спробуйте коротше або /cancel.")
+                self.send(user_id, tr('ui_bf3b7ea9dd1b'))
                 return
             product_id = self.pending_notes.pop(user_id)
             self.store.set_note(product_id, text)
@@ -287,47 +303,47 @@ class ShoppingBot:
             self.handle_photo(user_id, message)
             return
         if message.get("voice"):
-            self.send(user_id, "Голосове в черзі. Повідомлю, коли почну розпізнавання.")
+            self.send(user_id, tr('ui_cb8057ef0a78'))
             self.voice_pool.submit(copy_context().run, self.process_voice, user_id, message["voice"]["file_id"],
                                    self.pending_notes.get(user_id))
             return
         if not text:
-            self.send(user_id, "Надішліть список текстом, голосове або фото товару з підписом.")
+            self.send(user_id, tr('ui_a83f7bb5f025'))
             return
         if user_id in self.pending_photos:
             file_id = self.pending_photos.pop(user_id)
             self.save_photo(user_id, text, file_id)
             return
-        if text in ("🛍 Застосунок", "🛍 Покупки", "/app"):
+        if text in (tr('ui_78ea31018b80'), tr('ui_58d659bf993e'), "/app"):
             self.show_web_app(user_id)
-        elif text in STORES or text in ("🛒 Список", "📋 Список у чаті"):
+        elif text in STORES or text in (tr('ui_428fc2d45eba'), tr('ui_45b58c75117f')):
             self.show_list(user_id)
-        elif text in ("➕ Додати", "🎙 Додати голосом"):
-            self.send(user_id, "🎙 Надішліть голосове українською: «молоко, яйця, хліб». Покажу чернетку для перевірки.",
-                      reply_markup=buttons([("Скасувати", "list:all")]))
-        elif text == "📚 Каталог" or text.startswith("/catalog"):
+        elif text in (tr('ui_a9e16bfc706e'), tr('ui_8c4317311ad3')):
+            self.send(user_id, tr('ui_3ed585b1d128'),
+                      reply_markup=buttons([(tr('ui_816689e7ff0a'), "list:all")]))
+        elif text == tr('ui_1720591356f5') or text.startswith("/catalog"):
             self.show_catalog(user_id)
-        elif text == "🕘 Історія" or text.startswith("/history"):
+        elif text == tr('ui_f46f0095cd44') or text.startswith("/history"):
             self.show_history(user_id)
         elif text.startswith("/list"):
             self.show_list(user_id)
         elif text.startswith("/add "):
             self.make_draft(user_id, text[5:])
         elif text.startswith("/"):
-            self.send(user_id, "Невідома команда. Натисніть /help.")
+            self.send(user_id, tr('ui_9711fa721bfc'))
         else:
             self.make_draft(user_id, text)
 
     def make_draft(self, user_id: int, raw: str) -> None:
         items = self.store.resolved_items(raw)
         if not items:
-            self.send(user_id, "Не знайшов товарів. Спробуйте: молоко, яйця, хліб.")
+            self.send(user_id, tr('ui_ed4dbaec7704'))
             return
         draft_items = []
         for name, note in items:
             existing = self.store.product_by_name(name)
             draft_items.append({"key": uuid.uuid4().hex[:8], "name": name,
-                                "note": ("Купити в " + note if note in STORES else note) or (existing["note"] if existing else ""),
+                                "note": (tr('ui_b0c5ef5f2ea3') + note if note in STORES else note) or (existing["note"] if existing else ""),
                                 "category": existing["category"] if existing else infer_category(name)})
         self.pending_draft_edits.pop(user_id, None)
         draft_id = self.store.save_draft(user_id, draft_items)
@@ -336,22 +352,22 @@ class ShoppingBot:
     def show_draft(self, user_id: int, draft_id: int, panel_id=None, editing=False) -> None:
         items = self.store.draft(user_id, draft_id)
         if items is None:
-            self.panel(user_id, "Цю чернетку вже оброблено.", buttons([("До списку", "list:all")]), panel_id)
+            self.panel(user_id, tr('ui_ccdb1698f91f'), buttons([(tr('ui_13a3f958c2ad'), "list:all")]), panel_id)
             return
-        lines = [f"Додати до спільного списку? · {len(items)} товарів"]
+        lines = [f"{tr('ui_85fd92fd6b66')}{len(items)}{tr('ui_1df015513d95')}"]
         for index, item in enumerate(items, 1):
             existing=self.store.product_by_name(item['name'])
             active=existing and any(row['id']==existing['id'] for row in self.store.needs())
-            lines.append(f"{index}. {item['name']} · {CATEGORIES[item['category']]}" + (' · Уже в списку' if active else '') + (f"\n   📝 {item['note']}" if item['note'] else ""))
+            lines.append(f"{index}. {item['name']} · {CATEGORIES[item['category']]}" + (tr('ui_17e79ca873f8') if active else '') + (f"\n   📝 {item['note']}" if item['note'] else ""))
         controls = []
         if editing:
-            lines.append("\nОберіть товар для виправлення:")
+            lines.append(tr('ui_4908e89b0c6b'))
             controls += [[(item["name"][:35], f"ditem:{draft_id}:{item['key']}")] for item in items]
         if items:
-            controls.append([("✅ Додати", f"confirm:{draft_id}"), ("✏️ Виправити", f"dedit:{draft_id}")])
+            controls.append([(tr('ui_b2db6721d657'), f"confirm:{draft_id}"), (tr('ui_646edfb78b75'), f"dedit:{draft_id}")])
         else:
-            lines.append("Чернетка порожня. Надішліть новий список.")
-        controls.append([("Скасувати", f"cancel:{draft_id}")])
+            lines.append(tr('ui_364563cf6a1f'))
+        controls.append([(tr('ui_816689e7ff0a'), f"cancel:{draft_id}")])
         self.panel(user_id, "\n".join(lines)[:3900], buttons(*controls), panel_id)
 
     def show_draft_item(self, user_id, draft_id, key, panel_id):
@@ -360,57 +376,59 @@ class ShoppingBot:
         if item is None:
             self.show_draft(user_id, draft_id, panel_id, editing=True)
             return
-        self.panel(user_id, f"✏️ {item['name']}\n{CATEGORIES[item['category']]}\nНотатка: {item['note'] or '—'}", buttons(
-            [("Назва", f"dname:{draft_id}:{key}"), ("Нотатка", f"dnote:{draft_id}:{key}")],
-            [("Категорія", f"dcats:{draft_id}:{key}"), ("Прибрати", f"ddel:{draft_id}:{key}")],
-            [("⬅️ До чернетки", f"dedit:{draft_id}")]), panel_id)
+        self.panel(user_id, f"✏️ {item['name']}\n{CATEGORIES[item['category']]}{tr('ui_2be7f9402c08')}{item['note'] or '—'}", buttons(
+            [(tr('ui_8d2855b10253'), f"dname:{draft_id}:{key}"), (tr('ui_1bc4bea6f13d'), f"dnote:{draft_id}:{key}")],
+            [(tr('ui_b6150e14a981'), f"dcats:{draft_id}:{key}"), (tr('ui_2bc919726f86'), f"ddel:{draft_id}:{key}")],
+            [(tr('ui_554dca2bdb83'), f"dedit:{draft_id}")]), panel_id)
 
     def finish_draft_edit(self, user_id, text):
         draft_id, key, panel_id, field = self.pending_draft_edits[user_id]
         limit = 120 if field == "name" else 200
         if len(text) > limit:
-            self.send(user_id, f"До {limit} символів. Спробуйте коротше або /cancel.")
+            self.send(user_id, f"{tr('ui_5a347316dd36')}{limit}{tr('ui_a61e898f8b7e')}")
             return
         self.store.change_draft(user_id, draft_id, key, {field: "" if field == "note" and text == "-" else text.strip()})
         self.pending_draft_edits.pop(user_id, None)
         self.show_draft_item(user_id, draft_id, key, panel_id)
 
     def process_voice(self, user_id: int, file_id: str, note_product_id: int | None = None) -> None:
+        selected_language=language.get()
         expected_family=self.family_context.get()
         if self.families.family(user_id)!=expected_family:
-            self.send(user_id,'Голосове не додано: сім’ю переключено. Надішліть його ще раз у потрібній сім’ї.')
+            self.send(user_id,tr('ui_d026c0b5a708'))
             return
         if not self.bind_user(user_id):
             return
+        language.set(selected_language)
         try:
-            self.send(user_id, "Розпізнаю голосове повідомлення локально…")
-            transcript = transcribe(self.telegram, file_id, self.whisper_cli, self.whisper_model)
+            self.send(user_id, tr('ui_8ac40e2be49b'))
+            transcript = transcribe(self.telegram, file_id, self.whisper_cli, self.whisper_model, language_code=language.get())
             if self.families.family(user_id)!=expected_family:
-                self.send(user_id,'Голосове не додано: під час розпізнавання сім’ю переключено.')
+                self.send(user_id,tr('ui_207f65cb77d5'))
                 return
             if not transcript:
-                self.send(user_id, "Не вдалося розпізнати повідомлення. Спробуйте ще раз або надішліть текст.")
+                self.send(user_id, tr('ui_25719b4e1c5d'))
                 return
             if note_product_id is not None:
                 # A delayed transcription must not replace a cancelled or edited note.
                 if self.pending_notes.get(user_id) != note_product_id:
                     return
                 if len(transcript) > 200:
-                    self.send(user_id, "Нотатка має бути до 200 символів. Надішліть коротше голосове або текст, або /cancel.")
+                    self.send(user_id, tr('ui_0ce74f1a0cc2'))
                     return
                 self.store.set_note(note_product_id, transcript)
                 self.pending_notes.pop(user_id, None)
-                self.send(user_id, f"Нотатку збережено: {transcript}")
+                self.send(user_id, f"{tr('ui_f5d190cbc687')}{transcript}")
                 self.show_item(user_id, note_product_id, self.note_panels.pop(user_id, None))
                 self.refresh_views()
                 return
-            self.send(user_id, f"Почув: {transcript}")
+            self.send(user_id, f"{tr('ui_94b5a7bd2400')}{transcript}")
             self.make_draft(user_id, transcript)
         except (SpeechError, TelegramError) as exc:
-            self.send(user_id, f"{exc}. Повідомлення можна надіслати текстом.")
+            self.send(user_id, f"{exc}{tr('ui_61a76168c7db')}")
         except Exception:
             LOG.exception("Voice processing failed for user %s", user_id)
-            self.send(user_id, "Помилка розпізнавання. Спробуйте текстовий список.")
+            self.send(user_id, tr('ui_7d5933174b7f'))
 
     def handle_photo(self, user_id: int, message: dict) -> None:
         file_id = message["photo"][-1]["file_id"]
@@ -419,33 +437,33 @@ class ShoppingBot:
             self.save_photo(user_id, caption, file_id)
         else:
             self.pending_photos[user_id] = file_id
-            self.send(user_id, "Напишіть назву товару для цього фото. Щоб скасувати, /cancel.")
+            self.send(user_id, tr('ui_2b3e19929f86'))
 
     def save_photo(self, user_id: int, raw_name: str, file_id: str) -> None:
         items = parse_items(raw_name, split_conjunctions=False)
         if len(items) != 1:
-            self.send(user_id, "Для фото потрібна одна назва товару, наприклад: молоко.")
+            self.send(user_id, tr('ui_a651e125c241'))
             return
         name, preferred = items[0]
         destination = self.media_dir / f"{uuid.uuid4().hex}.jpg"
         try:
             self.telegram.download(file_id, destination)
         except TelegramError as exc:
-            self.send(user_id, f"Не вдалося зберегти фото: {exc}")
+            self.send(user_id, f"{tr('ui_051af2751ef5')}{exc}")
             return
         product_id = self.store.ensure_product(name, preferred)
         self.store.set_photo(product_id, file_id, str(destination))
         added = self.store.add_need(product_id, user_id)
         self.send(user_id,
-            f"Фото для «{name}» збережено. " +
-            ("Товар додано до списку." if added else "Товар уже є в активному списку."))
+            f"{tr('ui_54a2c8dccf6a')}{name}{tr('ui_3fa58feabda5')}" +
+            (tr('ui_ce35ddc7dd31') if added else tr('ui_8326f110c62b')))
         self.refresh_views()
 
     def list_content(self, store_name: str = "") -> tuple[str, dict]:
         rows = self.store.needs()
         order = list(CATEGORIES)
         rows = sorted(rows, key=lambda row: (order.index(row["category"]) if row["category"] in order else len(order), row["name"].casefold()))
-        lines = ["🛒 Спільний список"]
+        lines = [tr('ui_2e7599dba763')]
         keyboard = []
         previous = None
         shown = 0
@@ -460,16 +478,16 @@ class ShoppingBot:
             lines.append(f"• {row['name'][:70]}{suffix}")
             if row["note"]:
                 lines.append(f"  📝 {row['note']}")
-            controls = [(row["name"][:28], f"item:{row['id']}"), ("✅ Куплено", f"buy:{row['id']}:all")]
+            controls = [(row["name"][:28], f"item:{row['id']}"), (tr('ui_a573634f69eb'), f"buy:{row['id']}:all")]
             if row["photo_file_id"]:
                 controls.append(("📷", f"photo:{row['id']}"))
             keyboard.append(controls)
         if not rows:
-            lines.append("Список порожній для вас обох. Додайте товари текстом чи голосом.")
-            keyboard.append([("➕ Додати товари", "add")])
+            lines.append(tr('ui_2ae6a665289d'))
+            keyboard.append([(tr('ui_3d14fa5a5b38'), "add")])
         if len(rows) > shown:
-            lines.append(f"\nПоказано {shown} із {len(rows)} товарів. Куплені зникатимуть, решта з’являться далі.")
-        keyboard.append([("🔄 Оновити", "list:all"), ("📚 Каталог", "catalog:0")])
+            lines.append(f"{tr('ui_b21c9aac6065')}{shown}{tr('ui_e2b3417bc1de')}{len(rows)}{tr('ui_dd922ebd0935')}")
+        keyboard.append([(tr('ui_e303bf93e660'), "list:all"), (tr('ui_1720591356f5'), "catalog:0")])
         return "\n".join(lines), buttons(*keyboard)
 
     def show_list(self, user_id: int, store_name: str = "", message_id: int | None = None) -> None:
@@ -490,9 +508,11 @@ class ShoppingBot:
 
     def refresh_views(self) -> None:
         """Keep each person's latest store lists aligned after shared changes."""
+        original_language = language.get()
         for view in self.store.views():
             if self.families.family(view['user_id'])!=self.family_context.get():
                 continue
+            language.set(self.families.preference(view["user_id"]) or "uk")
             content, markup = self.list_content(view["store"])
             try:
                 self.telegram.call("editMessageText", chat_id=view["user_id"],
@@ -501,57 +521,59 @@ class ShoppingBot:
                 if "message is not modified" not in str(exc).lower():
                     LOG.warning("Could not refresh shopping list: %s", exc)
 
+        language.set(original_language)
+
     def show_catalog(self, user_id: int, offset: int = 0, message_id: int | None = None) -> None:
         count = self.store.catalog_count()
         rows = self.store.catalog(offset)
-        lines = [f"📚 Каталог · {count} товарів · {offset // 10 + 1}/{max(1, (count + 9) // 10)}", "Оберіть товар для повторної покупки, фото чи нотатки."]
+        lines = [f"{tr('ui_c974d4138a36')}{count}{tr('ui_06228fbc4c5c')}{offset // 10 + 1}/{max(1, (count + 9) // 10)}", tr('ui_39f5a80bbeaa')]
         keyboard = [[(f"{r['name'][:36]}{' ✅' if r['active'] else ''}", f"item:{r['id']}")] for r in rows]
         pages = []
         if offset > 0:
-            pages.append(("⬅️ Назад", f"catalog:{max(0, offset - 10)}"))
+            pages.append((tr('ui_0ea5d3b0ea95'), f"catalog:{max(0, offset - 10)}"))
         if offset + 10 < count:
-            pages.append(("Далі ➡️", f"catalog:{offset + 10}"))
+            pages.append((tr('ui_3c05029a0f2a'), f"catalog:{offset + 10}"))
         if pages:
             keyboard.append(pages)
         if not rows:
-            lines.append("Ще немає товарів. Надішліть назви або фото з підписом.")
-        keyboard.append([("🛒 До списку", "list:all")])
+            lines.append(tr('ui_fcb9bd9b2fa9'))
+        keyboard.append([(tr('ui_4dfffe931b00'), "list:all")])
         self.panel(user_id, "\n".join(lines), buttons(*keyboard), message_id)
 
     def show_item(self, user_id: int, product_id: int, message_id: int | None = None) -> None:
         product = self.store.product(product_id)
         if not product:
-            self.send(user_id, "Товар не знайдено.")
+            self.send(user_id, tr('ui_8823ca72a6bd'))
             return
         active = any(row["id"] == product_id for row in self.store.needs())
         text = f"{product['name']}\n{CATEGORIES.get(product['category'], CATEGORIES['other'])}"
-        text += "\nУ списку покупок" if active else "\nЗбережено в каталозі"
+        text += tr('ui_fe6c2bdb348e') if active else tr('ui_76967b28c5e3')
         if product["note"]:
             text += f"\n\n📝 {product['note']}"
-        rows = [[("✅ Куплено", f"buy:{product_id}:all")] if active else [("➕ До списку", f"readd:{product_id}")]]
-        rows.append([("📝 Змінити нотатку" if product["note"] else "📝 Додати нотатку", f"note:{product_id}")])
+        rows = [[(tr('ui_a573634f69eb'), f"buy:{product_id}:all")] if active else [(tr('ui_21a6c881ff8c'), f"readd:{product_id}")]]
+        rows.append([(tr('ui_675da4a00bf6') if product["note"] else tr('ui_d125eb4a052d'), f"note:{product_id}")])
         if product["note"]:
-            rows[-1].append(("Прибрати", f"clearnote:{product_id}"))
+            rows[-1].append((tr('ui_2bc919726f86'), f"clearnote:{product_id}"))
         if product["photo_file_id"]:
-            rows.append([("📷 Фото упаковки", f"photo:{product_id}")])
+            rows.append([(tr('ui_fa12e275c8fb'), f"photo:{product_id}")])
         else:
-            text += "\n\n📷 Щоб додати фото, надішліть його з назвою цього товару в підписі."
-        rows.append([("🗂 Категорія", f"categories:{product_id}")])
-        rows.append([("🛒 До списку", "list:all"), ("📚 Каталог", "catalog:0")])
+            text += tr('ui_2e00db9e6c39')
+        rows.append([(tr('ui_61a63f8e97e3'), f"categories:{product_id}")])
+        rows.append([(tr('ui_4dfffe931b00'), "list:all"), (tr('ui_1720591356f5'), "catalog:0")])
         self.panel(user_id, text, buttons(*rows), message_id)
 
     def show_history(self, user_id: int) -> None:
         events = self.store.recent_history()
         if not events:
-            self.send(user_id, "Історія поки порожня.")
+            self.send(user_id, tr('ui_f6e3f4b9e568'))
             return
-        lines = ["🕘 Останні дії:"]
-        verbs = {"added": "додав(ла)", "bought": "купив(ла)", "restored": "повернув(ла) у список"}
+        lines = [tr('ui_dd633808533d')]
+        verbs = {"added": tr('ui_529befd33c06'), "bought": tr('ui_d49c62c688ba'), "restored": tr('ui_719296f626b8')}
         for event in events:
             local = datetime.fromisoformat(event["happened_at"]).astimezone(ZoneInfo("Europe/Lisbon"))
-            suffix = f" у {event['store']}" if event["store"] else ""
+            suffix = f"{tr('ui_906385c193d8')}{event['store']}" if event["store"] else ""
             if event["undone"]:
-                suffix += " (скасовано)"
+                suffix += tr('ui_aafc9ef7302d')
             lines.append(f"{local:%d.%m %H:%M} — {event['actor_name']} {verbs.get(event['action'], event['action'])} "
                          f"{event['product_name']}{suffix}")
         self.send(user_id, "\n".join(lines))
@@ -570,14 +592,16 @@ class ShoppingBot:
             return
         items = self.store.batch_items(batch_id)
         actor = self.store.member_name(batch["actor_id"])
-        if items:
-            shown = [name[:70] + ("…" if len(name) > 70 else "") for name in items[:40]]
-            text = f"{actor} купив(ла):\n" + "\n".join(f"✅ {name}" for name in shown)
-            if len(items) > 40:
-                text += f"\n…і ще {len(items) - 40} товарів. Усі є в історії."
-        else:
-            text = f"{actor} скасував(ла) покупки."
+        original_language=language.get()
         for partner in partners:
+            language.set(self.families.preference(partner['user_id']) or 'uk')
+            if items:
+                shown = [name[:70] + ("…" if len(name) > 70 else "") for name in items[:40]]
+                text = f"{actor}{tr('ui_1c99972f606a')}" + "\n".join(f"✅ {name}" for name in shown)
+                if len(items) > 40:
+                    text += f"{tr('ui_820f672ef935')}{len(items) - 40}{tr('ui_f07b2d5ca38f')}"
+            else:
+                text = f"{actor}{tr('ui_6c75f0a9b94a')}"
             notification = self.store.notification(batch_id, partner["user_id"])
             if notification:
                 try:
@@ -596,6 +620,8 @@ class ShoppingBot:
             except TelegramError:
                 LOG.warning("Could not send purchase notification")
 
+        language.set(original_language)
+
     def handle_family_action(self,user_id,name,data,message_id=None):
         current=self.families.details(user_id)
         if data.startswith('family:join:'):
@@ -607,12 +633,12 @@ class ShoppingBot:
             if status in ('joined','already'):
                 self.clear_pending(user_id)
                 self.bind_user(user_id)
-                self.send(user_id,'Готово! Ви в спільній сім’ї. Відкрийте покупки.',reply_markup=self.menu())
+                self.send(user_id,tr('ui_c3255f2e1b92'),reply_markup=self.menu())
                 self.show_family(user_id)
                 self.show_web_app(user_id)
             else:
-                errors={'owner_required':'Спочатку передайте роль засновника іншому учаснику.','transfer_forbidden':'Перенесення доступне лише коли ви єдиний учасник попередньої сім’ї.','stale':'Сім’ю змінено. Відкрийте запрошення знову.'}
-                self.send(user_id,errors.get(status,'Запрошення використане, скасоване або недійсне.'))
+                errors={'owner_required':tr('ui_006b7c354b8a'),'transfer_forbidden':tr('ui_25e3420c9774'),'stale':tr('ui_ec20e7b8a7be')}
+                self.send(user_id,errors.get(status,tr('ui_5d077df0d079')))
             return
         if not current:
             self.show_family(user_id)
@@ -623,51 +649,51 @@ class ShoppingBot:
             self.show_invite(user_id)
         elif data.startswith('family:revoke:'):
             revoked=self.families.revoke_invite(user_id,data.split(':',2)[2])
-            self.send(user_id,'Запрошення скасовано.' if revoked else 'Запрошення вже недоступне або ви не маєте права його скасувати.')
+            self.send(user_id,tr('ui_1d0f050417a2') if revoked else tr('ui_386162c4df78'))
             self.show_family(user_id)
         elif data=='family:rename':
             self.clear_pending(user_id)
             self.pending_family_names.add(user_id)
-            self.send(user_id,'Надішліть нову назву сім’ї (до 60 символів) або /cancel.')
+            self.send(user_id,tr('ui_7d13c11f08e7'))
         elif data=='family:owners':
             if current['owner_id']!=user_id:
-                self.send(user_id,'Передати роль може лише засновник.')
+                self.send(user_id,tr('ui_04ac9baa9fd2'))
                 return
             rows=[[(row['name'],'family:owner:'+str(row['user_id']))] for row in self.families.members(current['id']) if row['user_id']!=user_id]
-            rows.append([('Скасувати','family:show')])
-            self.panel(user_id,'Кому передати роль засновника?',buttons(*rows),message_id)
+            rows.append([(tr('ui_816689e7ff0a'),'family:show')])
+            self.panel(user_id,tr('ui_7d5c1d952487'),buttons(*rows),message_id)
         elif data.startswith('family:owner:'):
             target=int(data.split(':',2)[2])
             if current['owner_id']==user_id and self.families.family(target)==current['id']:
-                self.panel(user_id,'Передати роль засновника учаснику «'+self.store.member_name(target)+'»? Він зможе видаляти сім’ю.',buttons([('Передати','family:owner-confirm:'+str(target))],[('Скасувати','family:show')]),message_id)
+                self.panel(user_id,tr('ui_5df60533ebdd')+self.store.member_name(target)+tr('ui_56611209bb82'),buttons([(tr('ui_df56e2b9b10b'),'family:owner-confirm:'+str(target))],[(tr('ui_816689e7ff0a'),'family:show')]),message_id)
         elif data.startswith('family:owner-confirm:'):
             success=self.families.transfer_owner(user_id,int(data.split(':',2)[2]))
-            self.send(user_id,'Роль передано.' if success else 'Передача недоступна. Оновіть сім’ю.')
+            self.send(user_id,tr('ui_06c3ca87d83f') if success else tr('ui_83e7aa0588c2'))
             self.show_family(user_id)
         elif data in ('family:delete','family:leave'):
             deleting=data=='family:delete'
             if deleting and current['owner_id']!=user_id:
-                self.send(user_id,'Видалити сім’ю може лише засновник.')
+                self.send(user_id,tr('ui_b8944434f42a'))
                 return
             people=self.families.members(current['id'])
             if not deleting and current['owner_id']==user_id and len(people)>1:
-                self.send(user_id,'Перед виходом передайте роль засновника іншому учаснику.')
+                self.send(user_id,tr('ui_f93c126bf4aa'))
                 self.show_family(user_id)
                 return
-            description=(f"Видалити «{current['name']}» для всіх? Учасників: {len(people)}, товарів: {self.store.catalog_count()}. Список і каталог стануть недоступними; резервні копії можуть містити попередні дані." if deleting else 'Вийти з сім’ї? Ви втратите доступ до спільного списку.'+(' Ви єдиний учасник, тому сім’ю буде видалено.' if len(people)==1 else ' Дані інших учасників залишаться.'))
+            description=(f"{tr('ui_caf54d9f01fc')}{current['name']}{tr('ui_8b81b838d587')}{len(people)}{tr('ui_cb39b2d52302')}{self.store.catalog_count()}{tr('ui_54f6af08aa14')}" if deleting else tr('ui_14d8fa71987c')+(tr('ui_e275e07e3d75') if len(people)==1 else tr('ui_fc25565fecaa')))
             action='family:delete-confirm:' if deleting else 'family:leave-confirm:'
-            self.panel(user_id,description,buttons([('Підтвердити',action+current['id'])],[('Скасувати','family:show')]),message_id)
+            self.panel(user_id,description,buttons([(tr('ui_649ac2cc1c8c'),action+current['id'])],[(tr('ui_816689e7ff0a'),'family:show')]),message_id)
         elif data.startswith(('family:delete-confirm:','family:leave-confirm:')):
             if data.split(':',2)[2]!=current['id']:
-                self.send(user_id,'Сім’ю змінено. Оновіть екран.')
+                self.send(user_id,tr('ui_4942d160189f'))
                 return
             status=self.families.delete(user_id) if data.startswith('family:delete-confirm:') else self.families.leave(user_id)
             if status is True or status=='left':
                 self.clear_pending(user_id)
                 self.bind_user(user_id)
-                self.send(user_id,'Готово. Створіть нову сім’ю або прийміть запрошення.',reply_markup=buttons([('Створити сім’ю','family:create'),('Приєднатися','family:joinhelp')]))
+                self.send(user_id,tr('ui_06917a88edee'),reply_markup=buttons([(tr('ui_fa354ddf77af'),'family:create'),(tr('ui_cc3a50c1e3fb'),'family:joinhelp')]))
             else:
-                self.send(user_id,'Дія недоступна. Засновник перед виходом має передати роль.')
+                self.send(user_id,tr('ui_cf0f99edcfc0'))
 
     def handle_callback(self, query: dict) -> None:
         user = query.get("from", {})
@@ -676,10 +702,23 @@ class ShoppingBot:
         if not user_id or message.get("chat", {}).get("type") != "private":
             return
         callback_id = query.get("id")
+        if query.get('data','').startswith('language:'):
+            chosen=query['data'].split(':',1)[1]
+            if chosen not in ('uk','en'):
+                return
+            self.families.set_language(user_id,chosen)
+            self.bind_user(user_id)
+            self.telegram.call('answerCallbackQuery',callback_query_id=callback_id)
+            start=self.families.pending_start(user_id)
+            self.clear_pending(user_id)
+            self.send(user_id,'Language: English' if chosen=='en' else 'Мова: українська',reply_markup=self.menu())
+            self.handle_message({'from':user,'chat':message['chat'],'text':start or '/start'})
+            return
+
         registered = self.bind_user(user_id)
         if query.get('data')=='family:joinhelp':
             self.telegram.call('answerCallbackQuery',callback_query_id=callback_id)
-            self.send(user_id,'Попросіть учасника сім’ї створити одноразове запрошення. Відкрийте посилання або надішліть його сюди.')
+            self.send(user_id,tr('ui_9efeebf17901'))
             return
         if query.get("data") == "family:create":
             self.telegram.call("answerCallbackQuery", callback_query_id=callback_id)
@@ -688,26 +727,26 @@ class ShoppingBot:
         if query.get('data','').startswith(('family:accept:','family:join:')):
             route=self.families.message_family(user_id,message.get('message_id'))
             if route and route!=(self.families.family(user_id) or 'none'):
-                self.telegram.call('answerCallbackQuery',callback_query_id=callback_id,text='Сім’ю змінено. Відкрийте запрошення знову.',show_alert=True)
+                self.telegram.call('answerCallbackQuery',callback_query_id=callback_id,text=tr('ui_ec20e7b8a7be'),show_alert=True)
                 return
-            self.handle_family_action(user_id,user.get('first_name') or 'Учасник',query['data'],message.get('message_id'))
+            self.handle_family_action(user_id,user.get('first_name') or tr('ui_9e0a513bdc07'),query['data'],message.get('message_id'))
             self.telegram.call('answerCallbackQuery',callback_query_id=callback_id)
             return
         if not registered:
             self.telegram.call("answerCallbackQuery", callback_query_id=callback_id,
-                               text="Відкрийте /start і створіть сім’ю або прийміть запрошення.", show_alert=True)
+                               text=tr('ui_5f728e9a36d5'), show_alert=True)
             return
         data=query.get('data','')
         message_family=self.families.message_family(user_id,message.get('message_id'))
         if data not in ('family:show','family:invite') and ((message_family and message_family!=self.families.family(user_id)) or (not message_family and len(self.families.choices(user_id))>1)):
-            self.telegram.call('answerCallbackQuery',callback_query_id=callback_id,text='Ця кнопка зі старої сім’ї. Відкрийте актуальний список.',show_alert=True)
+            self.telegram.call('answerCallbackQuery',callback_query_id=callback_id,text=tr('ui_a226357373e4'),show_alert=True)
             return
         if data.startswith('family:'):
             self.handle_family_action(user_id,user.get('first_name') or self.store.member_name(user_id),data,message.get('message_id'))
             self.telegram.call('answerCallbackQuery',callback_query_id=callback_id)
             return
         data = query.get("data", "")
-        answer = "Готово"
+        answer = tr('ui_ef05d57959cf')
         try:
             parts = data.split(":")
             action = parts[0]
@@ -719,8 +758,8 @@ class ShoppingBot:
             if panel_id == self.purchase_feedback.get(user_id) and action != "undo":
                 self.purchase_feedback.pop(user_id, None)
             if action == "add":
-                self.panel(user_id, "➕ Надішліть товари через кому або голосове українською.\nНаприклад: молоко, яйця, хліб.\nБот покаже список для підтвердження.",
-                           buttons([("🛒 До списку", "list:all")]), panel_id)
+                self.panel(user_id, tr('ui_aea2f162e25b'),
+                           buttons([(tr('ui_4dfffe931b00'), "list:all")]), panel_id)
             elif action == "list" and len(parts) == 2:
                 self.show_list(user_id, message_id=message.get("message_id"))
             elif action == "dedit" and len(parts) == 2:
@@ -732,17 +771,17 @@ class ShoppingBot:
                 items = self.store.draft(user_id, draft_id)
                 item = next((item for item in items or [] if item["key"] == key), None)
                 if item is None:
-                    answer = "Товар уже прибрано або чернетку оброблено"
+                    answer = tr('ui_30f4e78b3230')
                 elif action in {"dname", "dnote"}:
                     self.pending_notes.pop(user_id, None)
                     field = "name" if action == "dname" else "note"
                     self.pending_draft_edits[user_id] = (draft_id, key, panel_id, field)
-                    self.panel(user_id, f"✏️ {item['name']}\nНадішліть {'нову назву' if field == 'name' else 'нотатку (або - щоб прибрати)'} текстом.",
-                               buttons([("Скасувати", f"ditem:{draft_id}:{key}")]), panel_id)
+                    self.panel(user_id, f"✏️ {item['name']}{tr('ui_87a032f4ad8a')}{(tr('ui_54b55e2783f0') if field == 'name' else tr('ui_304a5e5d8b69'))}{tr('ui_292193705cc1')}",
+                               buttons([(tr('ui_816689e7ff0a'), f"ditem:{draft_id}:{key}")]), panel_id)
                 elif action == "dcats":
                     choices = [[(label, f"dcat:{draft_id}:{key}:{category}")] for category, label in CATEGORIES.items()]
-                    choices.append([("⬅️ Назад", f"ditem:{draft_id}:{key}")])
-                    self.panel(user_id, "Оберіть категорію:", buttons(*choices), panel_id)
+                    choices.append([(tr('ui_0ea5d3b0ea95'), f"ditem:{draft_id}:{key}")])
+                    self.panel(user_id, tr('ui_a8d4e8dbbdc1'), buttons(*choices), panel_id)
                 elif action == "ddel":
                     self.store.change_draft(user_id, draft_id, key, remove=True)
                     self.show_draft(user_id, draft_id, panel_id, editing=True)
@@ -752,7 +791,7 @@ class ShoppingBot:
             elif action == "confirm" and len(parts) == 2:
                 items = self.store.take_draft(user_id, int(parts[1]))
                 if items is None:
-                    answer = "Цей список уже оброблено"
+                    answer = tr('ui_7db7dd991015')
                 else:
                     added = 0
                     for item in items:
@@ -760,23 +799,23 @@ class ShoppingBot:
                         self.store.set_note(product_id, item["note"])
                         self.store.set_category(product_id, item["category"])
                         added += self.store.add_need(product_id, user_id)
-                    self.panel(user_id, f"✅ Додано: {added}. Уже у списку: {len(items) - added}.",
-                               buttons([("🛒 Відкрити список", "list:all")]), panel_id)
+                    self.panel(user_id, f"{tr('ui_34d3477683e3')}{added}{tr('ui_08e3e9dd9f8c')}{len(items) - added}.",
+                               buttons([(tr('ui_80f83082d444'), "list:all")]), panel_id)
                     if items:
                         self.refresh_views()
             elif action == "cancel" and len(parts) == 2:
                 self.store.cancel_draft(user_id, int(parts[1]))
-                answer = "Скасовано"
-                self.panel(user_id, "Додавання скасовано.", buttons([("🛒 До списку", "list:all")]), panel_id)
+                answer = tr('ui_db28b6f53d1f')
+                self.panel(user_id, tr('ui_d01a578fa19a'), buttons([(tr('ui_4dfffe931b00'), "list:all")]), panel_id)
             elif action == "buy" and len(parts) == 3:
                 product_id, store_name = int(parts[1]), ""
                 product = self.store.product(product_id)
                 bought, batch_id, event_id = self.store.purchase(product_id, user_id, store_name)
                 if bought:
-                    answer = f"Куплено: {product['name']}"[:180]
+                    answer = f"{tr('ui_b729d2e8c2e3')}{product['name']}"[:180]
                     self.purchase_feedback[user_id] = self.panel(user_id,
-                        f"✅ Остання покупка: {product['name']}",
-                        buttons([("↩️ Скасувати останню покупку", f"undo:{event_id}:{batch_id}")]),
+                        f"{tr('ui_40a72cd566c7')}{product['name']}",
+                        buttons([(tr('ui_d3b948f6dd1d'), f"undo:{event_id}:{batch_id}")]),
                         self.purchase_feedback.get(user_id))
                     self.show_list(user_id, message_id=panel_id)
                     try:
@@ -785,19 +824,19 @@ class ShoppingBot:
                         LOG.warning("Purchase saved; notification failed: %s", exc)
                     self.refresh_views()
                 else:
-                    answer = "Товар уже куплено"
+                    answer = tr('ui_7b21cb83167e')
                     self.show_list(user_id, store_name, message.get("message_id"))
             elif action == "undo" and len(parts) == 3:
                 product_id = self.store.undo_purchase(int(parts[1]), user_id)
                 if product_id is None:
-                    answer = "Уже скасовано"
+                    answer = tr('ui_0b40caf51cf2')
                 else:
                     try:
                         self.notify_partner(int(parts[2]))
                     except TelegramError as exc:
                         LOG.warning("Undo saved; notification failed: %s", exc)
-                    self.panel(user_id, f"↩️ Повернуто до списку: {self.store.product(product_id)['name']}",
-                               buttons([("🛒 До списку", "list:all")]), panel_id)
+                    self.panel(user_id, f"{tr('ui_92c34004480d')}{self.store.product(product_id)['name']}",
+                               buttons([(tr('ui_4dfffe931b00'), "list:all")]), panel_id)
                     self.refresh_views()
             elif action == "photo" and len(parts) == 2:
                 product = self.store.product(int(parts[1]))
@@ -805,7 +844,7 @@ class ShoppingBot:
                     self.telegram.call("sendPhoto", chat_id=user_id, photo=product["photo_file_id"],
                                        caption=product["name"])
                 else:
-                    answer = "Фото ще немає"
+                    answer = tr('ui_16aff7a8a36c')
             elif action == "catalog" and len(parts) == 2:
                 self.show_catalog(user_id, max(0, int(parts[1])), panel_id)
             elif action == "item" and len(parts) == 2:
@@ -814,18 +853,18 @@ class ShoppingBot:
                 product = self.store.product(int(parts[1]))
                 if product:
                     added = self.store.add_need(product["id"], user_id)
-                    answer = "Додано" if added else "Уже у списку"
+                    answer = tr('ui_1a2c42fd8298') if added else tr('ui_10ddc680bffb')
                     self.show_item(user_id, product["id"], panel_id)
                     if added:
                         self.refresh_views()
                 else:
-                    answer = "Товар не знайдено"
+                    answer = tr('ui_5383e75496a0')
             elif action == "categories" and len(parts) == 2:
                 product_id = int(parts[1])
                 if self.store.product(product_id):
                     choices = [[(label, f"setcategory:{product_id}:{key}")] for key, label in CATEGORIES.items()]
-                    choices.append([("⬅️ До товару", f"item:{product_id}")])
-                    self.panel(user_id, f"Категорія · {self.store.product(product_id)['name']}", buttons(*choices), panel_id)
+                    choices.append([(tr('ui_96c3acb549fc'), f"item:{product_id}")])
+                    self.panel(user_id, f"{tr('ui_1e4504a64734')}{self.store.product(product_id)['name']}", buttons(*choices), panel_id)
             elif action == "setcategory" and len(parts) == 3:
                 self.store.set_category(int(parts[1]), parts[2])
                 self.show_item(user_id, int(parts[1]), panel_id)
@@ -834,24 +873,24 @@ class ShoppingBot:
                 product_id = int(parts[1])
                 if self.store.product(product_id):
                     self.pending_notes[user_id] = product_id
-                    self.note_panels[user_id] = self.panel(user_id, f"📝 Нотатка · {self.store.product(product_id)['name']}\n\nНадішліть текст або голосове українською (до 200 символів).\nНаприклад: купити в Mercadona.",
-                               buttons([("Скасувати", f"item:{product_id}")]), panel_id)
+                    self.note_panels[user_id] = self.panel(user_id, f"{tr('ui_f692d923d3a6')}{self.store.product(product_id)['name']}{tr('ui_6df0af796887')}",
+                               buttons([(tr('ui_816689e7ff0a'), f"item:{product_id}")]), panel_id)
             elif action == "clearnote" and len(parts) == 2:
                 self.store.set_note(int(parts[1]), "")
                 self.show_item(user_id, int(parts[1]), panel_id)
                 self.refresh_views()
             elif action == "setstore" and len(parts) == 3:
-                self.store.set_note(int(parts[1]), "Купити в " + STORE_CODES[parts[2]])
+                self.store.set_note(int(parts[1]), tr('ui_b0c5ef5f2ea3') + STORE_CODES[parts[2]])
                 self.show_item(user_id, int(parts[1]), panel_id)
                 self.refresh_views()
             else:
-                answer = "Кнопка застаріла"
+                answer = tr('ui_fe2e2d2b67af')
         except TelegramError as exc:
             LOG.warning("Callback Telegram error for user %s: %s", user_id, exc)
-            answer = "Не вдалося виконати дію"
+            answer = tr('ui_94f482bc49a6')
         except (ValueError, KeyError, IndexError):
             LOG.exception("Callback failed for user %s", user_id)
-            answer = "Не вдалося виконати дію"
+            answer = tr('ui_94f482bc49a6')
         finally:
             try:
                 self.telegram.call("answerCallbackQuery", callback_query_id=callback_id, text=answer)
@@ -899,7 +938,7 @@ def main() -> None:
     web_url = os.getenv("SHOPPING_WEB_URL", "")
     if web_url.startswith("https://"):
         try:
-            bot.telegram.call("setChatMenuButton", menu_button={"type": "web_app", "text": "Покупки", "web_app": {"url": web_url}})
+            bot.telegram.call("setChatMenuButton", menu_button={"type": "web_app", "text": tr('ui_5dfb415e92a1'), "web_app": {"url": web_url}})
         except TelegramError:
             LOG.warning("Could not configure Mini App menu button")
     bot.run()

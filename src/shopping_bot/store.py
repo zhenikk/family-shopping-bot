@@ -28,7 +28,7 @@ def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str,
         r"^\s*(?:сьогодні\s+)?(?:(?:мені|нам)\s+)?(?:треба|потрібно)\s+(?:купити|взяти)\s+",
         "", raw, flags=re.I,
     )
-    raw = re.sub(r"^\s*(?:купи|купіть|buy)\s+", "", raw, flags=re.I)
+    raw = re.sub(r"^\s*(?:(?:please\s+)?buy|(?:today\s+)?(?:we|i)\s+need(?:\s+to\s+buy)?|купи|купіть)\s+", "", raw, flags=re.I)
     separator = r"[,;\n]+|(?<=[.!?])\s+"
     if split_conjunctions:
         separator += r"|\s+(?:і|й|та|e|and)\s+"

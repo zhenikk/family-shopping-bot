@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f7f7fa"><title>Our groceries</title>
+<link rel="preload" href="/fonts/onest.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/manrope.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/style.css">
+<script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+<script src="/app.js" defer></script>
+</head>
+<body>
+<div class="shell">
+<header><div class="eyebrow">FOR OUR FAMILY <span id="connection">● Shared list</span></div>
+<div class="headline"><h1 id="title">Shopping</h1><button id="refresh" class="icon-button" aria-label="Refresh list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10a8 8 0 1 0-2 8M20 4v6h-6"/></svg></button></div>
+<p id="subtitle">Loading your list…</p></header>
+<label class="language-picker">🌐 <select id="language" aria-label="Мова / Language"><option value="uk">Українська</option><option value="en">English</option></select></label>
+<button id="family" class="secondary" type="button">👥 Family</button>
+<div id="demo-banner" hidden>Design preview · demo products</div>
+<div class="tools"><label class="search"><span aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg></span><input id="search" type="search" placeholder="Find a product" aria-label="Find a product"></label><button class="add-button" id="add" aria-label="Add products"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
+<div id="filters" class="filters" aria-label="Categories"></div>
+<main id="content" aria-live="polite"><div class="loading">Loading…</div></main>
+<nav aria-label="Main navigation"><button data-tab="shopping" aria-current="page"><span aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="5"/><path d="m8 12 3 3 5-6"/></svg></span>Shopping</button><button data-tab="catalog"><span aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg></span>Catalog</button><button data-tab="history"><span aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>History</button></nav>
+</div>
+<dialog id="product-dialog"><form id="product-form"><div class="sheet-top"><span>PRODUCT CARD</span><button type="button" class="icon-button close" aria-label="Close product card">×</button></div><div id="product-photo"></div><h2 id="product-name"></h2><p id="product-status" class="muted"></p><label>Note<textarea id="note" maxlength="200" rows="3" placeholder="For example: buy at Mercadona"></textarea></label><label>Category<select id="category"></select></label><p id="photo-hint" class="hint">Add a packaging photo in chat: send a photo with the product name.</p><div class="sheet-actions"><button type="submit" class="primary">Save</button><button type="button" id="product-action" class="secondary"></button></div></form></dialog>
+<dialog id="add-dialog"><div class="sheet-top"><span>ADD TO LIST</span><button type="button" class="icon-button close" aria-label="Close add products">×</button></div><h2>What do we need?</h2><form id="add-form"><label>Products<textarea id="items" rows="4" maxlength="2400" placeholder="Milk, eggs, potatoes" required></textarea></label><p class="hint">Separate with commas or new lines. Note: potatoes :: buy at Mercadona.</p><div id="draft" hidden></div><button class="primary full" id="add-submit" type="submit">Review list</button></form><button type="button" class="text-button" id="voice">🎙 Add by voice in chat</button></dialog>
+<div id="toast" role="status" hidden><span></span><button id="undo" hidden>Cancel</button></div>
+<dialog id="family-dialog"><div class="sheet-top"><span>OUR FAMILY</span><button type="button" class="icon-button close" aria-label="Close family">×</button></div><h2>Members</h2><div id="family-members" aria-live="polite"></div></dialog>
+</body></html>

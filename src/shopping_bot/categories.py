@@ -29,11 +29,24 @@ WORDS = {
     "care": "шампунь шампуню мило мила дезодорант прокладки підгузки shampoo champô sabonete desodorizante fraldas",
 }
 
+ENGLISH_WORDS = {
+ 'vegetables':'potato potatoes tomato tomatoes cucumber cucumbers carrot carrots onion onions garlic broccoli cabbage',
+ 'fruit':'apple apples banana bananas mandarin mandarins orange oranges lemon lemons grapes strawberry strawberries pear pears',
+ 'dairy':'milk eggs egg butter cream yogurt cheese sour cream',
+ 'meat':'chicken beef pork fish salmon tuna sausage', 'bakery':'bread croissant bakery',
+ 'pantry':'rice pasta flour sugar salt oil beans', 'drinks':'water coffee tea juice beer wine',
+ 'frozen':'frozen ice cream fries', 'cleaning':'detergent bleach laundry', 'care':'shampoo soap deodorant toothpaste',
+}
+for category,words in ENGLISH_WORDS.items():
+    WORDS[category]+=' '+words
+
 def normalize(text):
     return unicodedata.normalize("NFKC", text).casefold()
 
 def infer_category(name):
     text = normalize(name)
+    if re.search(r"\b(?:ice cream|french fries)\b",text):
+        return "frozen"
     # Conditioner for hair belongs in personal care; laundry conditioner in cleaning.
     if re.search(r"\b(волосся|волос|cabelo|cabelos)\b", text):
         if re.search(r"\b(кондиціонер\w*|amaciador|condicionador)\b", text):

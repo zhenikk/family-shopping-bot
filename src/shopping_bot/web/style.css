@@ -86,3 +86,5 @@ header{margin-bottom:16px}h1{font-size:32px;letter-spacing:-1.2px}.headline{marg
 #family{margin:0 0 14px;min-height:40px;padding:8px 14px;font-size:13px}
 
 .family-controls{display:grid;gap:12px;margin-top:18px}.family-controls h3{font-size:15px;margin:16px 0 0}.family-controls label{margin-top:8px}dialog input{display:block;width:100%;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:16px;margin:8px 0 12px}.family-confirm{line-height:1.7;font-size:15px}.danger{color:#c74334}.family-controls .history-row{padding:10px 0}.family-controls .text-button{padding-top:8px}#family-join-form{margin-top:16px}#family-accept-transfer,#family-accept{margin-top:12px}
+
+.language-picker{display:inline-flex;align-items:center;gap:8px;margin:0 12px 12px 0}.language-picker select{padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:inherit;font:inherit}
