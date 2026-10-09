@@ -13,6 +13,7 @@ class GroqSpeechTests(unittest.TestCase):
                 self.assertIn(b'whisper-large-v3-turbo',request.data)
                 self.assertIn(b'\r\n\r\nuk\r\n',request.data)
                 self.assertEqual(request.get_header('Authorization'),'Bearer test-key')
+                self.assertEqual(request.get_header('User-agent'),'FamilyShoppingBot/1.0')
                 response.__enter__.return_value.read.return_value=b'{"text":12}'
                 with self.assertRaises(ValueError):transcribe_audio(wav,'uk')
     def test_api_failure_falls_back_to_local(self):

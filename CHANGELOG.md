@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.6 — 2026-10-09
+
+- Send an application User-Agent on speech and extraction requests; fixes Groq rejecting Python default requests with HTTP 403.
+
 ## 0.5.5 — 2026-10-09
 
 - Add opt-in Groq Whisper Large v3 Turbo transcription with a mounted credential, bounded responses and local Whisper fallback.

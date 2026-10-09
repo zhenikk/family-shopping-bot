@@ -16,7 +16,7 @@ def extract_products(text):
     if not isinstance(text,str) or len(text)>4000:
         return None
     payload={'model':'deepseek-flash','messages':[{'role':'system','content':PROMPT},{'role':'user','content':text}], 'thinking':{'type':'disabled'},'response_format':{'type':'json_object'},'max_tokens':1200,'temperature':0}
-    request=urllib.request.Request('https://api.deepseek.com/chat/completions',data=json.dumps(payload).encode(),headers={'Authorization':'Bearer '+key,'Content-Type':'application/json'})
+    request=urllib.request.Request('https://api.deepseek.com/chat/completions',data=json.dumps(payload).encode(),headers={'User-Agent':'FamilyShoppingBot/1.0','Authorization':'Bearer '+key,'Content-Type':'application/json'})
     with urllib.request.urlopen(request,timeout=12) as response:
         raw=response.read(65537)
     if len(raw)>65536:raise ValueError('Extraction response too large')
