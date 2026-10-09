@@ -446,11 +446,14 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
         def _POST(self):
             try:
                 path=urlsplit(self.path).path
-                if path in ('/api/shopping/key', '/api/shopping/revoke'):
+                if path in ('/api/shopping/key', '/api/shopping/revoke', '/api/shopping/download'):
                     user_id = self.member()
                     if self.body().get('confirm') is not True:
                         raise ValueError('Confirmation required')
-                    if path.endswith('/key'):
+                    if path.endswith('/download'):
+                        bot.send_shopping_shortcut(user_id)
+                        self.respond(200, {'sent': True})
+                    elif path.endswith('/key'):
                         self.respond(200, {'key': shortcuts.issue(user_id)})
                     else:
                         shortcuts.revoke(user_id)

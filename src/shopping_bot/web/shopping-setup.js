@@ -29,10 +29,10 @@ $('limits').textContent = text('Бета: 10 спроб на день, ауді�
 $('endpoint').value = location.origin + '/shortcuts/audio';
 $('create').onclick = async () => {
  if (!confirm(text('Замінити ключ? Попередній перестане працювати.', 'Rotate key? The previous key will stop working.'))) return;
- $('create').disabled = true; $('error').textContent = '';
+ $('create').disabled = true; $('create').textContent = text('Створюємо ключ…', 'Creating key…'); $('error').textContent = '';
  try { clearKey(); const result = await api('/api/shopping/key', {confirm:true}); $('key').value = 'Bearer ' + result.key; $('credentials').hidden = false; clearTimeout(clearTimer); clearTimer = setTimeout(clearKey, 90000); await refresh(); }
  catch (error) { $('error').textContent = error.message; }
- finally { $('create').disabled = false; }
+ finally { $('create').disabled = false; $('create').textContent = text('Створити / замінити ключ', 'Create / rotate key'); }
 };
 $('revoke').onclick = async () => {
  if (!confirm(text('Відкликати доступ Shopping?', 'Revoke Shopping access?'))) return;
@@ -41,9 +41,23 @@ $('revoke').onclick = async () => {
 };
 $('reveal').onclick = () => { $('key').type = $('key').type === 'password' ? 'text' : 'password'; };
 $('copy').onclick = async () => {
- try { await navigator.clipboard.writeText($('key').value); $('error').textContent = text('Скопійовано. Вставте у Shopping; не поширюйте.', 'Copied. Paste into Shopping; do not share.'); }
+ try { await navigator.clipboard.writeText($('key').value); $('copy').textContent = text('✓ Скопійовано', '✓ Copied'); $('error').textContent = text('Скопійовано. Вставте у Shopping; не поширюйте.', 'Copied. Paste into Shopping; do not share.'); }
  catch { $('key').type = 'text'; $('key').select(); $('error').textContent = text('Скопіюйте виділений текст вручну.', 'Copy the selected text manually.'); }
 };
 addEventListener('pagehide', clearKey);
 tg?.ready(); tg?.expand();
 refresh().catch(error => { $('error').textContent = error.message; });
+
+$('back').textContent = text('← Повернутися до бота', '← Back to bot');
+function backToBot() { clearKey(); if (tg?.initData) tg.close(); else location.href = '/'; }
+$('back').onclick = backToBot;
+tg?.BackButton?.show(); tg?.BackButton?.onClick(backToBot);
+$('download').onclick = async () => {
+ $('download').disabled = true; $('download').textContent = text('Надсилаємо файл…', 'Sending file…');
+ try { await api('/api/shopping/download', {confirm:true}); $('download').textContent = text('✓ Файл у чаті бота', '✓ File sent to bot chat'); $('error').textContent = text('Поверніться до бота кнопкою вище й відкрийте вкладення Shopping.shortcut.', 'Return to the bot with the button above and open the Shopping.shortcut attachment.'); tg?.HapticFeedback?.notificationOccurred('success'); }
+ catch(error) { $('error').textContent = error.message; $('download').textContent = text('Повторити надсилання файлу', 'Retry sending file'); }
+ finally { $('download').disabled = false; }
+};
+for (const button of document.querySelectorAll('button')) {
+ button.addEventListener('pointerdown', () => tg?.HapticFeedback?.impactOccurred('light'));
+}

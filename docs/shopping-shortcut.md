@@ -4,7 +4,7 @@
 
 1. У приватному чаті бота викличте `/shopping` → **Налаштувати Shopping**.
 2. У захищеному Mini App натисніть **Створити / замінити ключ**. Скопіюйте повне значення Authorization (`Bearer …`). Воно показується лише після створення; поле очищується за 90 секунд. Не надсилайте ключ у чат і не показуйте на скрінах.
-3. Завантажте підписаний **Shopping.shortcut**. За потреби відкрийте посилання у Safari, збережіть/відкрийте файл через Команди. Під час імпорту вставте Authorization у запит налаштування. Шаблон доступний за https://shopping.taranets.dev/Shopping.shortcut і не містить секретів.
+3. Натисніть **Завантажити Shopping iOS Shortcut**: бот надішле підписаний **Shopping.shortcut** файловим вкладенням у чат. Поверніться до бота й відкрийте вкладення. За потреби відкрийте посилання у Safari, збережіть/відкрийте файл через Команди. Під час імпорту вставте Authorization у запит налаштування. Шаблон доступний за https://shopping.taranets.dev/Shopping.shortcut і не містить секретів.
 4. Запустіть **Shopping** кнопкою, надайте дозволи на мікрофон і доступ до shopping.taranets.dev. Продиктуйте покупку, зупиніть запис дотиком. Результат прийде чернеткою в Telegram — перевірте та підтвердьте.
 5. Спробуйте «Siri, Shopping». Перший імпорт, роботу Siri та запис на заблокованому екрані потрібно перевірити на конкретному iPhone. Підписання файлу не доводить його працездатність на фізичному пристрої.
 
@@ -29,7 +29,7 @@
 
 ## English
 
-Send `/shopping` in the bot → **Set up Shopping**. Create a personal key in the authenticated Telegram window and copy the complete Authorization value. Download https://shopping.taranets.dev/Shopping.shortcut, open in Shortcuts, and enter that value when prompted during import. Never share the configured copy.
+Send `/shopping` in the bot → **Set up Shopping**. Create a personal key in the authenticated Telegram window and copy the complete Authorization value. Tap Download Shopping iOS Shortcut to receive a document in the bot chat. Return to the bot and open the attachment in Shortcuts, and enter that value when prompted during import. Never share the configured copy.
 
 Run manually first, grant microphone/network permissions, speak and tap to stop. Confirm the draft in Telegram. Then try “Siri, Shopping”. Physical iPhone import, Siri and locked-screen behavior still need device validation before wider distribution.
 

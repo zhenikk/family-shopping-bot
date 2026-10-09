@@ -511,5 +511,7 @@
   "⬇️ Завантажити Shopping": "⬇️ Download Shopping",
   "Shopping: створіть і скопіюйте ключ у налаштуваннях, потім завантажте шаблон і вставте ключ під час імпорту. Спочатку запустіть кнопкою, потім спробуйте Siri, Shopping.": "Shopping: create and copy your key in settings, then download the template and paste the key during import. Run manually first, then try Siri, Shopping.",
   "⚙️ Налаштувати Shopping iOS Shortcut": "⚙️ Set up Shopping iOS Shortcut",
-  "⬇️ Завантажити Shopping iOS Shortcut": "⬇️ Download Shopping iOS Shortcut"
+  "⬇️ Завантажити Shopping iOS Shortcut": "⬇️ Download Shopping iOS Shortcut",
+  "Shopping iOS Shortcut: відкрийте файл у Командах. Під час імпорту вставте персональне значення Authorization з налаштувань. Не поширюйте копію з ключем.": "Shopping iOS Shortcut: open this file in Shortcuts. During import, paste your personal Authorization value from settings. Never share a copy containing your key.",
+  "Файл надіслано в чат.": "File sent to chat."
 }

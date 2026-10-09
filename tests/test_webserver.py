@@ -161,6 +161,14 @@ class MiniAppTests(unittest.TestCase):
         self.assertGreater(len(response.read()), 1000)
         conn.close()
 
+    def test_shopping_download_from_setup_sends_document(self):
+        self.assertEqual(self.request('/api/shopping/download', {'confirm':True}, auth=False)[0], 401)
+        self.assertEqual(self.request('/api/shopping/download', {'confirm':True})[0], 200)
+        sent = [params for method, params in self.bot.telegram.calls if method == 'sendDocument']
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0]['chat_id'], 1)
+        self.assertEqual(sent[0]['document'].name, 'Shopping.shortcut')
+
     def test_shopping_key_expiry(self):
         from shopping_bot.shortcuts import Shortcuts
         keys = Shortcuts(self.bot.families)

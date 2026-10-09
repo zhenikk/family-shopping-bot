@@ -475,7 +475,7 @@ class ShoppingBot:
                 self.send(user_id, tr('Shopping потребує HTTPS.'))
                 return
             self.send(user_id, tr('Shopping: створіть і скопіюйте ключ у налаштуваннях, потім завантажте шаблон і вставте ключ під час імпорту. Спочатку запустіть кнопкою, потім спробуйте Siri, Shopping.'),
-                      reply_markup={'inline_keyboard': [[{'text': tr('⚙️ Налаштувати Shopping iOS Shortcut'), 'web_app': {'url': url + '/shopping-setup' + ('?lang=en' if language.get() == 'en' else '')}}], [{'text': tr('⬇️ Завантажити Shopping iOS Shortcut'), 'url': url + '/Shopping.shortcut'}]]})
+                      reply_markup={'inline_keyboard': [[{'text': tr('⚙️ Налаштувати Shopping iOS Shortcut'), 'web_app': {'url': url + '/shopping-setup' + ('?lang=en' if language.get() == 'en' else '')}}], [{'text': tr('⬇️ Завантажити Shopping iOS Shortcut'), 'callback_data': 'shopping:download'}]]})
             return
         if text in ("/family", tr('ui_33ed8513acbd')):
             self.clear_pending(user_id)
@@ -636,6 +636,16 @@ class ShoppingBot:
         self.store.change_draft(user_id, draft_id, key, {field: "" if field == "note" and text == "-" else text.strip()})
         self.pending_draft_edits.pop(user_id, None)
         self.show_draft_item(user_id, draft_id, key, panel_id)
+
+    def send_shopping_shortcut(self, user_id):
+        path = Path(__file__).with_name('web') / 'Shopping.shortcut'
+        result = self.telegram.call('sendDocument', chat_id=user_id, document=path,
+                                    caption=tr('Shopping iOS Shortcut: відкрийте файл у Командах. Під час імпорту вставте персональне значення Authorization з налаштувань. Не поширюйте копію з ключем.'))
+        previous = self.families.ui_panel(user_id, 'shopping-document')
+        self.families.save_ui_panel(user_id, 'shopping-document', result['message_id'], True, 'template')
+        if previous:
+            self.remove_obsolete_panel(user_id, previous['message_id'])
+        return result
 
     def queue_voice(self,user_id,file_id,note_product_id=None,*,message_id=None,uploaded_path=None):
         if not self.voice_limits.allow(user_id) or not self.voice_admission.acquire(user_id):
@@ -1143,7 +1153,10 @@ class ShoppingBot:
             panel_id = message.get("message_id")
             if panel_id == self.purchase_feedback.get(user_id) and action != "undo":
                 self.purchase_feedback.pop(user_id, None)
-            if action == "add":
+            if data == "shopping:download":
+                self.send_shopping_shortcut(user_id)
+                answer = tr("Файл надіслано в чат.")
+            elif action == "add":
                 self.panel(user_id, tr('ui_aea2f162e25b'),
                            buttons([(tr('ui_4dfffe931b00'), "list:all")]), panel_id)
             elif action == "list" and len(parts) == 2:

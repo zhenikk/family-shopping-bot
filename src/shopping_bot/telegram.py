@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -18,13 +19,27 @@ class Telegram:
         self.file_base = f"https://api.telegram.org/file/bot{token}/"
 
     def call(self, method: str, **params: Any) -> Any:
-        body = json.dumps(params, ensure_ascii=False).encode("utf-8")
-        request = urllib.request.Request(
-            self.base + method,
-            data=body,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
+        files = {key: value for key, value in params.items() if isinstance(value, Path)}
+        if files:
+            boundary = 'Shopping' + secrets.token_hex(16)
+            chunks = []
+            for key, value in params.items():
+                chunks.append(('--' + boundary + '\r\n').encode())
+                if key in files:
+                    chunks.append((f'Content-Disposition: form-data; name="{key}"; filename="{value.name}"\r\nContent-Type: application/octet-stream\r\n\r\n').encode())
+                    chunks.append(value.read_bytes())
+                else:
+                    chunks.append((f'Content-Disposition: form-data; name="{key}"\r\n\r\n').encode())
+                    chunks.append((json.dumps(value, ensure_ascii=False) if isinstance(value,(dict,list,bool)) else str(value)).encode())
+                chunks.append(b'\r\n')
+            chunks.append(('--' + boundary + '--\r\n').encode())
+            body = b''.join(chunks)
+            content_type = 'multipart/form-data; boundary=' + boundary
+        else:
+            body = json.dumps(params, ensure_ascii=False).encode('utf-8')
+            content_type = 'application/json'
+        request = urllib.request.Request(self.base + method, data=body,
+                                         headers={'Content-Type': content_type}, method='POST')
         try:
             with urllib.request.urlopen(request, timeout=45) as response:
                 payload = json.load(response)

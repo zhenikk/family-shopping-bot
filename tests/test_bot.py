@@ -21,7 +21,7 @@ class FakeTelegram:
         self.calls.append((method, params))
         if method == "getMe":
             return {"username": "test_shopping_bot"}
-        if method in ("sendMessage", "sendPhoto"):
+        if method in ("sendMessage", "sendPhoto", "sendDocument"):
             self.next_message_id += 1
             return {"message_id": self.next_message_id}
         return True
@@ -136,7 +136,15 @@ class ShoppingBotTests(unittest.TestCase):
         result = self.telegram.calls[-1][1]
         self.assertNotIn('Bearer', result['text'])
         self.assertEqual(result['reply_markup']['inline_keyboard'][0][0]['web_app']['url'], 'https://shopping.taranets.dev/shopping-setup')
-        self.assertEqual(result['reply_markup']['inline_keyboard'][1][0]['url'], 'https://shopping.taranets.dev/Shopping.shortcut')
+        self.assertEqual(result['reply_markup']['inline_keyboard'][1][0]['callback_data'], 'shopping:download')
+
+    def test_shopping_download_sends_document_in_chat(self):
+        self.bot.handle_callback(callback(1, 'shopping:download'))
+        documents = [params for method, params in self.telegram.calls if method == 'sendDocument']
+        self.assertEqual(len(documents), 1)
+        self.assertEqual(documents[0]['document'].name, 'Shopping.shortcut')
+        self.assertTrue(documents[0]['document'].is_file())
+        self.assertEqual(documents[0]['chat_id'], 1)
 
     def test_quantity_parsing(self):
         for raw, expected in [

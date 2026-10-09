@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.16 — 2026-10-09
+
+- Send Shopping as a Telegram document via multipart upload instead of opening raw shortcut bytes in an embedded browser. Both bot and setup-page download controls use chat delivery.
+- Add return-to-bot controls, pressed states, haptics and visible sending/copy/loading feedback in Shopping setup.
+
+
 ## 0.5.15 — 2026-10-09
 
 - Label bot setup and download buttons explicitly as Shopping iOS Shortcut in Ukrainian and English.
