@@ -474,10 +474,8 @@ class ShoppingBot:
             if not url.startswith('https://'):
                 self.send(user_id, tr('Shopping потребує HTTPS.'))
                 return
-            key = shortcuts.issue(user_id)
-            self.send(user_id, tr('Налаштування Shopping:') + '\n\nURL: ' + url + '/shortcuts/audio' +
-                      '\nAuthorization: Bearer ' + key + '\n\n' + tr('Ключ персональний, діє 90 днів. Не поширюйте його. /shopping створює новий ключ, /shoppingoff відкликає доступ.') +
-                      '\n\n' + tr('На iPhone: Команди → + → назва Shopping → Записати аудіо (почати одразу, завершити дотиком) → Отримати вміст URL. Метод POST, заголовок Authorization як вище, тіло запиту Файл → Записане аудіо. Відповідь збережеться чернеткою в цьому чаті.'))
+            self.send(user_id, tr('Shopping: підключення, ліміти та відкликання доступу — у захищеному вікні нижче.'),
+                      reply_markup={'inline_keyboard': [[{'text': tr('Налаштувати Shopping'), 'web_app': {'url': url + '/shopping-setup' + ('?lang=en' if language.get() == 'en' else '')}}]]})
             return
         if text in ("/family", tr('ui_33ed8513acbd')):
             self.clear_pending(user_id)
@@ -723,7 +721,8 @@ class ShoppingBot:
                         import shutil
                         shutil.copyfile(uploaded_path, destination)
                 source = Upload()
-            transcript = transcribe(source, file_id, self.whisper_cli, self.whisper_model, language_code=language.get(), vocabulary=vocabulary, shopping_context=note_product_id is None, benchmark=lambda row:self.analytics.record_speech_benchmark(user_id,dict(row,message_id=message_id)))
+            speech_options = {"max_seconds": 30} if uploaded_path else {}
+            transcript = transcribe(source, file_id, self.whisper_cli, self.whisper_model, language_code=language.get(), vocabulary=vocabulary, shopping_context=note_product_id is None, benchmark=lambda row:self.analytics.record_speech_benchmark(user_id,dict(row,message_id=message_id)), **speech_options)
             if on_transcribed:
                 on_transcribed()
             with self.families.lock:

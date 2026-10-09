@@ -107,6 +107,60 @@ class MiniAppTests(unittest.TestCase):
             row = db.execute('SELECT id FROM drafts WHERE actor_id=1').fetchone()
         self.assertEqual(self.store.draft(1, row[0])[0]['note'], '2 пачки')
 
+    def test_shopping_setup_requires_telegram_and_keys_stay_out_of_chat(self):
+        self.assertEqual(self.request('/api/shopping', auth=False)[0], 401)
+        self.assertEqual(self.request('/api/shopping/key', {'confirm':True}, auth=False)[0], 401)
+        self.assertEqual(self.request('/api/shopping/key', {})[0], 400)
+        status, raw = self.request('/api/shopping/key', {'confirm':True})
+        self.assertEqual(status, 200)
+        key = json.loads(raw)['key']
+        self.assertEqual(self.shortcut_request(key, b'x', {'Content-Type':'application/json'})[0], 415)
+        self.assertEqual(self.shortcut_request(key, b'x', {'Content-Length':str(2*1024*1024+1)})[0], 413)
+        self.assertNotIn(key, str(self.request('/api/shopping')))
+        self.assertEqual(self.request('/api/shopping/revoke', {'confirm':True})[0], 200)
+        self.assertEqual(self.shortcut_request(key)[0], 401)
+
+    def test_shopping_persistent_quotas_and_rotation_cannot_reset_them(self):
+        from shopping_bot.shortcuts import Shortcuts
+        keys = Shortcuts(self.bot.families)
+        key = keys.issue(1)
+        with patch.object(Shortcuts, 'DAILY_USER', 2):
+            self.assertTrue(keys.reserve(key))
+            key = Shortcuts(self.bot.families).issue(1)
+            self.assertTrue(keys.reserve(key))
+            self.assertFalse(Shortcuts(self.bot.families).reserve(key))
+        self.assertEqual(keys.status(1)['used_today'], 2)
+        with patch.object(Shortcuts, 'DAILY_TOTAL', 2):
+            self.assertFalse(keys.reserve(keys.issue(2)))
+
+    def test_shopping_quota_is_atomic(self):
+        from shopping_bot.shortcuts import Shortcuts
+        keys = Shortcuts(self.bot.families)
+        key = keys.issue(1)
+        with patch.object(Shortcuts, 'DAILY_USER', 2), ThreadPoolExecutor(max_workers=8) as pool:
+            self.assertEqual(sum(pool.map(lambda _: keys.reserve(key), range(8))), 2)
+
+    def test_legacy_chat_keys_are_revoked_on_upgrade(self):
+        from shopping_bot.shortcuts import Shortcuts
+        import hashlib
+        with self.bot.families.db() as db:
+            db.execute('DROP TABLE shortcut_keys')
+            db.execute('CREATE TABLE shortcut_keys (user_id INTEGER PRIMARY KEY,digest TEXT UNIQUE NOT NULL,expires REAL NOT NULL)')
+            db.execute('INSERT INTO shortcut_keys VALUES (?,?,?)', (1,hashlib.sha256(('x'*43).encode()).hexdigest(),time.time()+86400))
+        self.assertIsNone(Shortcuts(self.bot.families).authenticate('x'*43))
+
+    def test_public_shopping_template_and_setup_never_include_credentials(self):
+        status, body = self.request('/shopping-setup', auth=False)
+        self.assertEqual(status, 200)
+        self.assertNotIn(b'Bearer ', body)
+        conn = http.client.HTTPConnection('127.0.0.1', self.server.server_port, timeout=5)
+        conn.request('GET', '/Shopping.shortcut')
+        response = conn.getresponse()
+        self.assertEqual(response.status, 200)
+        self.assertIn('attachment', response.getheader('Content-Disposition'))
+        self.assertGreater(len(response.read()), 1000)
+        conn.close()
+
     def test_shopping_key_expiry(self):
         from shopping_bot.shortcuts import Shortcuts
         keys = Shortcuts(self.bot.families)

@@ -38,8 +38,10 @@ def transcribe(
     whisper_cli: Path,
     whisper_model: Path,
     timeout: int = 300,
-    *, language_code: str = "uk", vocabulary=(), shopping_context=True, benchmark=None,
+    *, language_code: str = "uk", vocabulary=(), shopping_context=True, benchmark=None, max_seconds=120,
 ) -> str:
+    if type(max_seconds) is not int or not 1 <= max_seconds <= 120:
+        raise ValueError("Invalid audio duration limit")
     if language_code not in ("uk", "en"):
         raise ValueError("Invalid language")
     request_started=time.monotonic()
@@ -52,11 +54,11 @@ def transcribe(
         try:
             subprocess.run(
                 ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", str(audio),
-                 "-t", "121", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", str(wav)],
+                 "-t", str(max_seconds + 1), "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", str(wav)],
                 check=True, timeout=60, capture_output=True,
             )
-            if wav.stat().st_size > 120 * 16000 * 2 + 4096:
-                raise SpeechError('Voice messages must be at most 2 minutes.' if language.get() == 'en' else 'Голосове має бути не довшим за 2 хвилини.')
+            if wav.stat().st_size > max_seconds * 16000 * 2 + 4096:
+                raise SpeechError(f'Audio limit: {max_seconds} seconds.' if language.get() == 'en' else f'Ліміт аудіо: {max_seconds} секунд.')
             prompt=shopping_prompt(language_code,vocabulary) if shopping_context else ''
             def local_recognize(path,prefix):
                 if not whisper_cli.is_file() or not whisper_model.is_file():

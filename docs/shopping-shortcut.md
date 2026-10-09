@@ -1,33 +1,46 @@
-# Shopping — Apple Shortcuts
+# Shopping — public beta setup
 
 ## Українською
 
-1. У приватному чаті бота надішліть `/shopping`. Бот видасть URL і персональний заголовок Authorization. Повторний виклик відкликає попередній ключ.
-2. На iPhone відкрийте **Команди / Shortcuts**, створіть команду `Shopping`.
-3. Додайте **Записати аудіо / Record Audio**. Початок: **Одразу / Immediately**. Завершення: **Дотиком / On Tap**. Звичайної якості достатньо. Не додавайте дію диктування тексту: розпізнавання робить наш сервер.
-4. Додайте **Отримати вміст URL / Get Contents of URL**. Вставте URL із бота.
-5. Розгорніть параметри: **POST** → Headers → `Authorization` → значення `Bearer …` з бота. **Request Body → File → Recorded Audio**. Саме File, не Form і не JSON.
-6. Спочатку запустіть команду кнопкою. Дозвольте мікрофон і доступ до домену сервера. Продиктуйте «дві пачки масла», завершіть запис дотиком.
-7. У Telegram має прийти чернетка. Перевірте та підтвердьте її. Без підтвердження покупки не змінюються.
-8. Тепер спробуйте «Siri, Shopping». Роботу на заблокованому екрані потрібно перевірити на конкретному пристрої; iOS може попросити розблокувати його. Можна також додати команду на головний екран або Action Button.
+1. У приватному чаті бота викличте `/shopping` → **Налаштувати Shopping**.
+2. У захищеному Mini App натисніть **Створити / замінити ключ**. Скопіюйте повне значення Authorization (`Bearer …`). Воно показується лише після створення; поле очищується за 90 секунд. Не надсилайте ключ у чат і не показуйте на скрінах.
+3. Завантажте підписаний **Shopping.shortcut**. За потреби відкрийте посилання у Safari, збережіть/відкрийте файл через Команди. Під час імпорту вставте Authorization у запит налаштування. Шаблон доступний за https://shopping.taranets.dev/Shopping.shortcut і не містить секретів.
+4. Запустіть **Shopping** кнопкою, надайте дозволи на мікрофон і доступ до shopping.taranets.dev. Продиктуйте покупку, зупиніть запис дотиком. Результат прийде чернеткою в Telegram — перевірте та підтвердьте.
+5. Спробуйте «Siri, Shopping». Перший імпорт, роботу Siri та запис на заблокованому екрані потрібно перевірити на конкретному iPhone. Підписання файлу не доводить його працездатність на фізичному пристрої.
 
-Не діліться командою після вставляння ключа. `/shoppingoff` відкликає доступ. Ключ дійсний 90 днів; при 401 викличте `/shopping` та замініть Authorization. 202 означає прийнято в чергу, не успішне розпізнавання. 429 — спробуйте пізніше. Аудіо — до 8 MB і 2 хвилин; короткі записи зручніші.
+Перед публічним поширенням перевірте пункти 3–5 на iPhone. Діліться лише оригінальним шаблоном, ніколи налаштованою копією.
 
-Готового iCloud-посилання немає: команду треба один раз створити на iPhone. Запис завершується дотиком, не автоматично після тиші. Безперервна фраза «Siri, Shopping, молоко…» не підтримується цим сценарієм.
+### Відкликання й ліміти
+
+- `/shoppingoff` або кнопка **Відкликати доступ** миттєво забороняє нові завантаження. Уже прийнятий у чергу запит може завершитися чернеткою; без підтвердження список не зміниться.
+- Ключ діє 30 днів і лише для поточного списку. Після переходу в іншу сім’ю створіть новий ключ.
+- Створення нового ключа відкликає попередній. Старі ключі з повідомлень у чаті автоматично відкликані під час оновлення до 0.5.13.
+- Shopping: 10 спроб на користувача, 100 спроб на весь сервіс за добу UTC; до 30 секунд і 2 MB на запис. Квоти переживають перезапуск і заміну ключа. Невдалі/неповні/відхилені чергою завантаження можуть витрачати квоту. Це ліміти Shopping, не всіх AI-викликів бота.
+- Ключ залишається у налаштуваннях Apple Shortcuts на вашому пристрої; система не може захистити його від людини з доступом до цього пристрою чи поширеної копії.
+
+### Ручний резервний варіант
+
+Створіть команду **Shopping** з діями:
+
+1. **Record Audio**: Normal, Immediately, On Tap.
+2. **Get Contents of URL**: `https://shopping.taranets.dev/shortcuts/audio`; POST; header Authorization with complete `Bearer …` value; Request Body **File → Recorded Audio**. Не Form/JSON.
+
+202 — прийнято у чергу, не підтверджено якість розпізнавання. 401 — неправильний/відкликаний/прострочений ключ. 413 — завеликий файл. 415 — неправильний формат тіла. 429 — квота або черга; повторіть пізніше. Запис не завершується автоматично після тиші.
 
 ## English
 
-Send `/shopping` to the bot in a private chat. In Apple Shortcuts create **Shopping** with two actions:
+Send `/shopping` in the bot → **Set up Shopping**. Create a personal key in the authenticated Telegram window and copy the complete Authorization value. Download https://shopping.taranets.dev/Shopping.shortcut, open in Shortcuts, and enter that value when prompted during import. Never share the configured copy.
 
-1. **Record Audio**: start Immediately, finish On Tap, Normal quality.
-2. **Get Contents of URL**: URL from the bot; POST; header Authorization with the complete `Bearer …` value; Request Body **File**, selecting **Recorded Audio**.
+Run manually first, grant microphone/network permissions, speak and tap to stop. Confirm the draft in Telegram. Then try “Siri, Shopping”. Physical iPhone import, Siri and locked-screen behavior still need device validation before wider distribution.
 
-Run manually first and grant microphone/network permissions. Stop the recording on tap and confirm the resulting Telegram draft. Then try “Siri, Shopping”. Locked-screen behavior requires device testing. Do not share your configured shortcut. `/shoppingoff` revokes access, `/shopping` rotates the key, and credentials expire after 90 days.
+Credentials last 30 days and are bound to the current list. `/shoppingoff` revokes new uploads; already queued work may finish. Quotas: 10/user and 100/service upload attempts per UTC day, 30 seconds/2 MB, preserved across restarts/rotation. These do not limit other bot entry points.
 
-## Implementation and validation
+## Validation and operations
 
-Only a SHA-256 hash of the random 256-bit per-user key is stored. The endpoint cannot read lists or mark products purchased. It accepts raw file bodies, rate-limits requests and uses the existing bounded voice queue, duration checks, transcription, extraction and confirmation workflow. Temporary files are removed after processing or rejected submissions. No credential is placed in the URL or request logs.
+Only SHA-256 hashes of random 256-bit keys are persisted. Plaintext keys are returned only to an authenticated Telegram session after an explicit POST. Setup/API responses use no-store. HTTP logs omit payloads and credentials. The upload endpoint cannot read lists or mark purchases. Two upload slots and existing bounded voice admission limit concurrent work. Raw audio is removed after processing; /tmp is a bounded tmpfs.
 
-Automated HTTP tests cover invalid/rotated/revoked/expired keys, empty uploads and upload → draft behavior with mocked transcription. Actual Siri activation, permission prompts and recording behavior must be checked on an iPhone. No physical-device validation is claimed.
+HTTP tests cover key rotation/revocation/expiry, migration, invalid uploads, authenticated management, atomic quotas and draft confirmation. Mocked transcription does not measure live speech quality. Signed template rebuild: `python3 scripts/build-shopping-shortcut.py`, then `shortcuts sign --mode anyone --input /private/tmp/Shopping-unsigned.shortcut --output src/shopping_bot/web/Shopping.shortcut` on macOS.
 
-Apple reference: https://support.apple.com/guide/shortcuts/request-your-first-api-apd58d46713f/ios
+DNS: explicit `shopping` A record at Vercel points to 185.217.124.92. The existing Caddy gateway routes this hostname to `family-shopping-bot-bot-1:8080` over the external `family-shopping-bot_default` Docker network. Gateway configuration/compose originals are backed up as `.before-shopping` on the VPS. Keep the external network attachment on gateway recreations. Other hostname routes are preserved.
+
+This is a bounded beta integration, not a completed whole-product security audit or a distributed DDoS defence. Do not describe the service-wide Shopping request quota as a monetary ceiling for every AI provider.

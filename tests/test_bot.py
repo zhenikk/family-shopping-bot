@@ -130,6 +130,13 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual({row['name'] for row in self.store.needs()}, {'Масло', 'Хліб'})
         self.assertEqual(self.store.product(product)['note'], '1 пачка')
 
+    def test_shopping_command_opens_authenticated_setup_without_key(self):
+        with patch.dict('os.environ', {'SHOPPING_WEB_URL':'https://shopping.taranets.dev'}):
+            self.bot.handle_message(message(1, '/shopping'))
+        result = self.telegram.calls[-1][1]
+        self.assertNotIn('Bearer', result['text'])
+        self.assertEqual(result['reply_markup']['inline_keyboard'][0][0]['web_app']['url'], 'https://shopping.taranets.dev/shopping-setup')
+
     def test_quantity_parsing(self):
         for raw, expected in [
             ('купи дві буханки хліба', [('Хліб', '2 буханки')]),

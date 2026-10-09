@@ -58,6 +58,8 @@ def validate_init_data(raw: str, token: str, now: float | None = None) -> int:
 
 def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
     shortcuts = Shortcuts(bot.families)
+    upload_slots = threading.BoundedSemaphore(2)
+    shortcut_ip_limits = RateLimiter(6, 1 / 10)
     shortcut_limits = RateLimiter(3, 1 / 30)
     reads = RateLimiter(100, 2)
     writes = RateLimiter(30, 0.5)
@@ -123,6 +125,8 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 bot.analytics.record('web_error',getattr(self,'user_profile',None),status='error',value=1)
             data = json.dumps(value, ensure_ascii=False).encode() if isinstance(value, (dict, list)) else value
             self.send_response(status)
+            if urlsplit(self.path).path == "/Shopping.shortcut":
+                self.send_header("Content-Disposition", 'attachment; filename="Shopping.shortcut"')
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", cache)
@@ -254,7 +258,13 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
             try:
                 path = urlsplit(self.path).path
                 if path == '/shortcuts/audio' and method == 'POST':
-                    self.shortcut_upload()
+                    if not shortcut_ip_limits.allow(self.client_address[0]) or not upload_slots.acquire(blocking=False):
+                        self.respond(429, {'error': 'Upload service is busy'})
+                        return
+                    try:
+                        self.shortcut_upload()
+                    finally:
+                        upload_slots.release()
                     return
                 if path.startswith('/api/'):
                     user_id = self.authenticated_user()
@@ -290,7 +300,8 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
 
         def shortcut_upload(self):
             auth = self.headers.get('Authorization', '')
-            user_id = shortcuts.authenticate(auth[7:] if auth.startswith('Bearer ') else '')
+            key = auth[7:] if auth.startswith('Bearer ') else ''
+            user_id = shortcuts.authenticate(key)
             if not user_id:
                 self.respond(401, {'error': 'Invalid or expired Shopping key'})
                 return
@@ -300,8 +311,15 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
             if self.headers.get('Transfer-Encoding'):
                 raise ValueError('Content-Length required')
             length = int(self.headers.get('Content-Length', '0'))
-            if not 1 <= length <= 8 * 1024 * 1024:
-                self.respond(413, {'error': 'Audio must be between 1 byte and 8 MB'})
+            if not 1 <= length <= 2 * 1024 * 1024:
+                self.respond(413, {'error': 'Audio must be between 1 byte and 2 MB'})
+                return
+            media_type = self.headers.get('Content-Type', '').split(';')[0].strip().lower()
+            if not (media_type.startswith('audio/') or media_type == 'application/octet-stream'):
+                self.respond(415, {'error': 'Send raw audio as File, not Form or JSON'})
+                return
+            if not shortcuts.reserve(key):
+                self.respond(429, {'error': 'Daily Shopping limit reached or key revoked'})
                 return
             data = self.rfile.read(length)
             if len(data) != length:
@@ -312,7 +330,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 with os.fdopen(fd, 'wb') as output:
                     output.write(data)
                 with bot.families.lock:
-                    if not bot.bind_user(user_id):
+                    if shortcuts.authenticate(key) != user_id or not bot.bind_user(user_id):
                         raise AccessError('Account required')
                     language.set(bot.families.preference(user_id) or 'uk')
                     handed_off = bot.queue_voice(user_id, 'shortcut', uploaded_path=filename)
@@ -330,6 +348,9 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
         def _GET(self):
             try:
                 path = urlsplit(self.path).path
+                if path == '/api/shopping':
+                    self.respond(200, shortcuts.status(self.member()))
+                    return
                 if path == '/healthz':
                     last_poll = bot.last_poll_at
                     ready = (time.monotonic() - (last_poll if last_poll is not None else bot.started_at)) < 120
@@ -345,6 +366,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                           "/admin.css": ("admin.css", "text/css; charset=utf-8"),
                           "/fonts/onest.woff2": ("fonts/onest.woff2", "font/woff2"),
                           "/fonts/manrope.woff2": ("fonts/manrope.woff2", "font/woff2")}
+                assets.update({'/Shopping.shortcut': ('Shopping.shortcut', 'application/octet-stream'), '/shopping-setup.css': ('shopping-setup.css', 'text/css; charset=utf-8'), '/shopping-setup': ('shopping-setup.html', 'text/html; charset=utf-8'), '/shopping-setup.js': ('shopping-setup.js', 'text/javascript; charset=utf-8')})
                 assets.update({'/help': ('help.html', 'text/html; charset=utf-8'), '/help.css': ('help.css', 'text/css; charset=utf-8'), '/help.js': ('help.js', 'text/javascript; charset=utf-8')})
                 assets.update({f'/help/{lang}-{role}-{step}.png': (f'help/{lang}-{role}-{step}.png', 'image/png') for lang in ('uk', 'en') for role in ('c', 'j') for step in range(6)})
                 if path in assets:
@@ -424,6 +446,16 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
         def _POST(self):
             try:
                 path=urlsplit(self.path).path
+                if path in ('/api/shopping/key', '/api/shopping/revoke'):
+                    user_id = self.member()
+                    if self.body().get('confirm') is not True:
+                        raise ValueError('Confirmation required')
+                    if path.endswith('/key'):
+                        self.respond(200, {'key': shortcuts.issue(user_id)})
+                    else:
+                        shortcuts.revoke(user_id)
+                        self.respond(200, {'revoked': True})
+                    return
                 if path == '/api/admin/support/resolve':
                     user_id = self.authenticated_user()
                     if user_id not in bot.admin_ids:

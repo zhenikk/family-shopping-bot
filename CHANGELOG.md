@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.13 — 2026-10-09
+
+- Move Shopping key creation out of chat into a Telegram-authenticated setup page; add status, rotation and revocation. Legacy chat-issued keys are revoked on upgrade.
+- Bind 30-day credentials to the current family, add atomic persistent 10/user and 100/global daily upload-attempt quotas, two upload slots, 2 MB/30 second limits and pre-auth throttling.
+- Add a signed, secret-free Shopping.shortcut template that asks for personal Authorization on import. Physical iPhone validation remains required.
+- Prepare stable shopping.taranets.dev HTTPS access and abuse/credential lifecycle regression tests.
+
+
 ## 0.5.12 — 2026-10-09
 
 - Add Shopping Apple Shortcuts raw-audio uploads with per-user hashed, expiring and revocable credentials (/shopping, /shoppingoff).
