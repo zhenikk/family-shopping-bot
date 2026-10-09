@@ -5,6 +5,7 @@ from pathlib import Path
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--language', choices=('uk', 'en'), default='uk')
+parser.add_argument('--output', type=Path)
 args = parser.parse_args()
 dictation_languages = {'uk': 'uk-UA', 'en': 'en-US'}
 
@@ -21,7 +22,7 @@ workflow = {
  'WFWorkflowImportQuestions':[{'ActionIndex':0,'Category':'Parameter','ParameterKey':'WFTextActionText','Text':'Paste your personal Authorization value (Bearer …) from the bot’s Shopping setup. Never share your configured copy.','DefaultValue':'Bearer PASTE_YOUR_PERSONAL_KEY'}],
  'WFWorkflowActions':[
   action('gettext',WFTextActionText='Bearer PASTE_YOUR_PERSONAL_KEY',UUID=AUTH),
-  action('dictatetext',WFDictateTextLanguage=dictation_languages[args.language],WFDictateTextStopListening='After Pause',UUID=AUDIO),
+  action('dictatetext',WFSpeechLanguage=dictation_languages[args.language],WFDictateTextStopListening='After Pause',UUID=AUDIO),
   action('downloadurl', UUID=HTTP, WFURL='https://shopping.taranets.dev/shortcuts/text',WFHTTPMethod='POST',WFHTTPBodyType='JSON',
    WFJSONValues={'WFSerializationType':'WFDictionaryFieldValue','Value':{'WFDictionaryFieldValueItems':[
     {'WFItemType':0,'WFKey':token('text'),'WFValue':{'WFSerializationType':'WFTextTokenString','Value':{'string':'\ufffc','attachmentsByRange':{'{0, 1}':ref(AUDIO,'Dictated Text')}}}}
@@ -35,5 +36,5 @@ workflow = {
 workflow['WFWorkflowActions'][-1] = action('showresult', Text={'WFSerializationType':'WFTextTokenString','Value':{'string':'\ufffc','attachmentsByRange':{'{0, 1}':ref(HTTP,'Contents of URL')}}})
 if args.language == 'uk':
  workflow['WFWorkflowImportQuestions'][0]['Text'] = 'Вставте персональне значення Authorization (Bearer …), скопійоване в боті. Не поширюйте налаштовану копію.'
-out=Path('/private/tmp/Shopping-' + args.language + '-unsigned.shortcut');out.write_bytes(plistlib.dumps(workflow,fmt=plistlib.FMT_BINARY))
+out=args.output or Path('/private/tmp/Shopping-' + args.language + '-unsigned.shortcut');out.write_bytes(plistlib.dumps(workflow,fmt=plistlib.FMT_BINARY))
 print(out)

@@ -1,3 +1,7 @@
+## 0.5.27
+
+- Fix Dictate Text language parameter: use WFSpeechLanguage instead of ignored WFDictateTextLanguage. Rebuild and sign both language templates; add generator regression test.
+
 ## 0.5.26
 
 - /shopping immediately creates a scoped key and sends one shortcut attachment with Copy key button, without setup or confirmation steps. Caption explains rotation.
