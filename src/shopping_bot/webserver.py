@@ -123,6 +123,9 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 return
             if status>=500:
                 bot.analytics.record('web_error',getattr(self,'user_profile',None),status='error',value=1)
+            request_path = urlsplit(self.path).path
+            if request_path in ('/shortcuts/audio', '/shortcuts/text'):
+                logging.getLogger(__name__).info('Shortcut request endpoint=%s status=%s', request_path, status)
             data = json.dumps(value, ensure_ascii=False).encode() if isinstance(value, (dict, list)) else value
             self.send_response(status)
             if urlsplit(self.path).path == "/Shopping.shortcut":

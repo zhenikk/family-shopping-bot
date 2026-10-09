@@ -1,3 +1,7 @@
+## 0.5.36
+
+- Log only shortcut endpoint and response status to diagnose silent delivery failures; no credentials, payload, query string or user identifiers.
+
 ## 0.5.35
 
 - Increase shortcut audio duration limit to 60 seconds; retain 2 MB upload size limit and existing quotas.
