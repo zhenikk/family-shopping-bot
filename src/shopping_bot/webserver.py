@@ -331,6 +331,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     if path=='/api/admin/stats':
                         result=bot.analytics.snapshot(query.get('days',30))
                         result['voice_queue']=bot.voice_metrics.snapshot()
+                    elif path=='/api/admin/speech':result=bot.analytics.speech_benchmarks(query.get('before'))
                     elif path=='/api/admin/users':result=bot.analytics.users(query.get('offset',0),query.get('q',''))
                     elif path=='/api/admin/support':result=bot.support.tickets(query.get('before'),query.get('resolved')=='1')
                     elif path=='/api/admin/events':result=bot.analytics.events(query.get('before'),query.get('user'),query.get('errors')=='1',query.get('version'),query.get('commit'))

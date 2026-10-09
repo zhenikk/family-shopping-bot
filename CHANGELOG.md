@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.7 — 2026-10-09
+
+- Add opt-in first-success Groq/local race with one bounded local Whisper slot; skip local samples when busy.
+- Add owner-only per-message timing comparison, statuses and normalized transcript agreement with 90-day retention and release identity. No transcript content is stored.
+
 ## 0.5.6 — 2026-10-09
 
 - Send an application User-Agent on speech and extraction requests; fixes Groq rejecting Python default requests with HTTP 403.

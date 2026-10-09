@@ -356,7 +356,7 @@ class ShoppingBot:
                "Надішлю чернетку в особистий чат із ботом. Підтвердьте її там.")
         self.analytics.record("guest_voice" if voice else "guest_text", user)
         if voice:
-            self.queue_voice(user_id, voice["file_id"])
+            self.queue_voice(user_id, voice["file_id"],message_id=message.get("message_id"))
         else:
             self.make_draft(user_id, raw)
 
@@ -510,7 +510,7 @@ class ShoppingBot:
             self.handle_photo(user_id, message)
             return
         if message.get("voice"):
-            self.queue_voice(user_id,message["voice"]["file_id"],self.pending_notes.get(user_id))
+            self.queue_voice(user_id,message["voice"]["file_id"],self.pending_notes.get(user_id),message_id=message.get("message_id"))
             return
         if not text:
             self.send(user_id, tr('ui_a83f7bb5f025'))
@@ -601,7 +601,7 @@ class ShoppingBot:
         self.pending_draft_edits.pop(user_id, None)
         self.show_draft_item(user_id, draft_id, key, panel_id)
 
-    def queue_voice(self,user_id,file_id,note_product_id=None):
+    def queue_voice(self,user_id,file_id,note_product_id=None,*,message_id=None):
         if not self.voice_limits.allow(user_id) or not self.voice_admission.acquire(user_id):
             self.voice_metrics.reject()
             self.send(user_id, 'Voice queue is busy. Try again in a minute.' if language.get() == 'en' else 'Голосова черга зайнята. Спробуй за хвилину.')
@@ -637,7 +637,7 @@ class ShoppingBot:
             metric_failed=False
             started.set()
             try:
-                self.process_voice(user_id,file_id,note_product_id,on_transcribed=ready)
+                self.process_voice(user_id,file_id,note_product_id,on_transcribed=ready,message_id=message_id)
             except Exception:
                 metric_failed=True
                 raise
@@ -660,7 +660,7 @@ class ShoppingBot:
             ready()
             LOG.warning('Could not start delayed voice status timer')
 
-    def process_voice(self, user_id: int, file_id: str, note_product_id: int | None = None, *, on_transcribed=None) -> None:
+    def process_voice(self, user_id: int, file_id: str, note_product_id: int | None = None, *, on_transcribed=None,message_id=None) -> None:
         started=time.monotonic()
         successful=False
         selected_language=language.get()
@@ -673,7 +673,7 @@ class ShoppingBot:
         language.set(selected_language)
         try:
             vocabulary = [row["name"] for row in self.store.catalog(limit=12)] if note_product_id is None else []
-            transcript = transcribe(self.telegram, file_id, self.whisper_cli, self.whisper_model, language_code=language.get(), vocabulary=vocabulary, shopping_context=note_product_id is None)
+            transcript = transcribe(self.telegram, file_id, self.whisper_cli, self.whisper_model, language_code=language.get(), vocabulary=vocabulary, shopping_context=note_product_id is None, benchmark=lambda row:self.analytics.record_speech_benchmark(user_id,dict(row,message_id=message_id)))
             if on_transcribed:
                 on_transcribed()
             with self.families.lock:

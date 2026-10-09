@@ -73,12 +73,12 @@ class ShoppingBotTests(unittest.TestCase):
         guest = message(1, "@test_shopping_bot", guest_query_id="g2", reply_to_message=message(2, voice={"file_id":"voice-2"}))
         with patch.object(self.bot, "queue_voice") as queue:
             self.bot.handle_update({"guest_message": guest})
-            queue.assert_called_once_with(1, "voice-2")
+            queue.assert_called_once_with(1, "voice-2",message_id=None)
 
     def test_guest_direct_voice_reply_is_supported(self):
         with patch.object(self.bot, "queue_voice") as queue:
             self.bot.handle_update({"guest_message": message(1, guest_query_id="g3", voice={"file_id":"voice-1"})})
-            queue.assert_called_once_with(1, "voice-1")
+            queue.assert_called_once_with(1, "voice-1",message_id=None)
 
     def test_unregistered_guest_does_not_create_family_or_queue_voice(self):
         with patch.object(self.bot, "queue_voice") as queue:

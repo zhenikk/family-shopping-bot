@@ -16,6 +16,8 @@ class Analytics:
         self.path=Path(families.root)/'families.sqlite3'
         with self.db() as db:
             db.executescript('''
+                CREATE TABLE IF NOT EXISTS speech_benchmarks(request_id TEXT PRIMARY KEY,occurred REAL NOT NULL,user_id INTEGER NOT NULL,version TEXT NOT NULL,commit_sha TEXT NOT NULL,language TEXT NOT NULL,audio_ms INTEGER,local_ms INTEGER,groq_ms INTEGER,local_status TEXT,groq_status TEXT,winner TEXT,delivered_ms INTEGER,agreement INTEGER,message_id INTEGER);
+                CREATE INDEX IF NOT EXISTS speech_benchmark_time ON speech_benchmarks(occurred);
                 CREATE TABLE IF NOT EXISTS analytics_users(user_id INTEGER PRIMARY KEY,name TEXT NOT NULL,username TEXT NOT NULL,first_seen REAL NOT NULL,last_seen REAL NOT NULL);
                 CREATE TABLE IF NOT EXISTS analytics_events(id INTEGER PRIMARY KEY,user_id INTEGER,kind TEXT NOT NULL,occurred REAL NOT NULL,status TEXT NOT NULL,value INTEGER NOT NULL,duration_ms INTEGER);
                 CREATE TABLE IF NOT EXISTS analytics_daily(day TEXT NOT NULL,kind TEXT NOT NULL,count INTEGER NOT NULL,PRIMARY KEY(day,kind));
@@ -80,6 +82,20 @@ class Analytics:
         except sqlite3.Error:
             LOG.warning('Analytics write unavailable')
             return False
+
+    def record_speech_benchmark(self,user_id,row):
+        try:
+            identity=release()
+            values=(row['request_id'],row['occurred'],user_id,identity['version'],identity['commit'],row['language'],row['audio_ms'],row['local_ms'],row['groq_ms'],row['local_status'],row['groq_status'],row['winner'],row['delivered_ms'],row['agreement'])
+            with self.db() as db:
+                db.execute("INSERT OR REPLACE INTO speech_benchmarks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",values+(row.get('message_id'),))
+                db.execute('DELETE FROM speech_benchmarks WHERE occurred<?',(time.time()-90*86400,))
+        except (sqlite3.Error,KeyError):LOG.warning('Speech benchmark write unavailable')
+
+    def speech_benchmarks(self,before=None):
+        with self.db() as db:
+            rows=db.execute('SELECT * FROM speech_benchmarks WHERE occurred<? ORDER BY occurred DESC LIMIT 101',(float(before) if before else time.time()+1,)).fetchall()
+        return {'items':[dict(row) for row in rows[:100]],'has_more':len(rows)>100,'retention_days':90}
 
     def snapshot(self,days=30):
         stamp=time.time();days=max(1,min(int(days),90));since=stamp-days*86400

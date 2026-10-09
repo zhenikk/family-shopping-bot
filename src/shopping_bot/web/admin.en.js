@@ -49,9 +49,19 @@ async function supportTickets(append=false){
 }
 $('support-resolved').onchange=()=>supportTickets().catch(error=>$('status').textContent=error.message);
 $('support-more').onclick=()=>supportTickets(true).catch(error=>$('status').textContent=error.message);
+let speechCursor=null;
+async function speechBenchmarks(append=false){
+ const data=await api('/api/admin/speech'+(append&&speechCursor?'?before='+encodeURIComponent(speechCursor):''));
+ const seconds=value=>value===null?'—':(value/1000).toFixed(2);
+ const rows=data.items.map(row=>'<tr><td>'+date(row.occurred)+'<small>'+escape(row.request_id.slice(0,8))+' · msg '+(row.message_id||'—')+' · '+row.user_id+' · '+escape(row.language)+' · '+escape(row.version)+'</small></td><td>'+seconds(row.audio_ms)+'</td><td>'+seconds(row.groq_ms)+'<small>'+escape(row.groq_status)+'</small></td><td>'+seconds(row.local_ms)+'<small>'+escape(row.local_status)+'</small></td><td>'+escape(row.winner||'—')+' · '+seconds(row.delivered_ms)+'</td><td>'+(row.agreement===null?'—':row.agreement?'✓':'≠')+'</td></tr>').join('');
+ if(append)$('speech-benchmarks').insertAdjacentHTML('beforeend',rows);else $('speech-benchmarks').innerHTML=rows;
+ if(data.items.length)speechCursor=data.items[data.items.length-1].occurred;
+ $('speech-more').hidden=!data.has_more;
+}
+$('speech-more').onclick=()=>speechBenchmarks(true).catch(error=>$('status').textContent=error.message);
 async function refresh(){
  if(refreshing)return;refreshing=true;$('refresh').disabled=true;
- try{await Promise.all([stats(),users(),events(),supportTickets()]);$('dashboard').hidden=false;$('denied').hidden=true;$('status').textContent='Updated: '+date(Date.now()/1000);}
+ try{await Promise.all([stats(),users(),events(),supportTickets(),speechBenchmarks()]);$('dashboard').hidden=false;$('denied').hidden=true;$('status').textContent='Updated: '+date(Date.now()/1000);}
  catch(error){$('status').textContent=error.message;if($('dashboard').hidden)$('denied').hidden=false;}
  finally{refreshing=false;$('refresh').disabled=false;}
 }

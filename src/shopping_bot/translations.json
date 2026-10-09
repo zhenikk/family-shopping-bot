@@ -480,5 +480,13 @@
   "Очікування p95": "Wait p95",
   "Обробка p95": "Processing p95",
   "Секунди · останні 512 завдань після перезапуску": "Seconds · last 512 jobs since restart",
-  "Секунди · повний цикл голосового": "Seconds · full voice workflow"
+  "Секунди · повний цикл голосового": "Seconds · full voice workflow",
+  "Порівняння розпізнавання": "Transcription comparison",
+  "Один рядок на голосове. Час у секундах; збіг текстів не є оцінкою точності. Без вмісту повідомлень.": "One row per voice message. Times in seconds; transcript agreement is not accuracy. No message content stored.",
+  "Час / ID / користувач": "Time / ID / user",
+  "Аудіо": "Audio",
+  "Локально": "Local",
+  "Перший результат": "First result",
+  "Збіг": "Agreement",
+  "Показати старіші виміри": "Show older measurements"
 }
