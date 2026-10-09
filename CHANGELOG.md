@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.11 — 2026-10-09
+
+- Preserve dietary product variants before name deduplication in extraction, text parsing and draft creation; regular and lactose-free milk remain separate.
+- Add a natural-language QA corpus, duplicate lifecycle/ownership/replay tests and malformed extraction response tests. Fix local parsing of explicit negations, corrections, English packaging and semicolons in notes.
+- Normalize творог to Сир кисломолочний so it is categorized as dairy.
+
+
 ## 0.5.10 — 2026-10-09
 
 - Extract Ukrainian/English quantity prefixes into editable product notes and retain existing descriptive notes when replacing an amount.

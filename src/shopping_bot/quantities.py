@@ -34,7 +34,12 @@ def quantity_note(name, note=None):
         return name, note
     if not words:
         return name, note
-    if unit is None and normalized_name(' '.join(words)) not in LOOKUP:
+    if unit and words and words[0].casefold() == 'of':
+        words.pop(0)
+    if not words:
+        return name, note
+    base = re.sub(r'\s+без\s+(?:лактози|глютену|цукру)$', '', ' '.join(words), flags=re.I)
+    if unit is None and normalized_name(base) not in LOOKUP:
         return name, note
     if amount == '1':
         unit = {'буханки':'буханка', 'пачки':'пачка', 'упаковки':'упаковка', 'пляшки':'пляшка', 'packs':'pack', 'loaves':'loaf', 'bottles':'bottle'}.get(unit, unit)
@@ -52,3 +57,16 @@ def merge_note(incoming, existing):
             combined = incoming + '; ' + previous
             return combined if len(combined) <= 200 else incoming
     return incoming
+
+
+def product_variant(name, note=None):
+    """Dietary requirements distinguish products, unlike packaging or store notes."""
+    pattern = r'\b(?:без\s+(?:лактози|глютену|цукру)|lactose[- ]free|gluten[- ]free|sugar[- ]free)\b'
+    modifiers = re.findall(pattern, note or '', flags=re.I)
+    for modifier in modifiers:
+        if modifier.casefold() not in name.casefold():
+            name += ' ' + modifier.casefold()
+    if modifiers:
+        note = re.sub(pattern, '', note, flags=re.I)
+        note = re.sub(r'\s*;\s*', '; ', note).strip(' ;,') or None
+    return name, note

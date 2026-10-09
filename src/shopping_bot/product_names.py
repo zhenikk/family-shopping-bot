@@ -3,6 +3,7 @@ import unicodedata
 import re
 
 ALIASES = {
+    "сир кисломолочний": ("творог", "творогу", "творожний сир", "кисломолочний сир"),
     "картопля": ("картошка", "картоплю", "картоплі", "картошку", "картофель"),
     "картопля фрі": ("картошка фрі", "картошка фри", "картопля фри", "картофель фри", "фріха", "фриха", "фрі", "фри"),
     "помідори": ("помідор", "помідорів", "помидоры", "помидор", "томати", "томат"),
@@ -46,6 +47,12 @@ LOOKUP = {alias: canonical for canonical, aliases in ALIASES.items() for alias i
 def canonical_name(name):
     cleaned = " ".join(unicodedata.normalize("NFKC", name).split())
     key = normalized_name(cleaned)
+    dietary = re.search(r'\s+(без\s+(?:лактози|глютену|цукру))$', key)
+    if dietary:
+        base = key[:dietary.start()]
+        if base in LOOKUP:
+            cleaned = LOOKUP[base] + ' ' + dietary.group(1)
+            key = normalized_name(cleaned)
     value = cleaned if re.search(r"[a-z]",key) else LOOKUP.get(key, cleaned)
     return value[:1].upper() + value[1:]
 

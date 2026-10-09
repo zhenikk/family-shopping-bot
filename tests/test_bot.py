@@ -85,6 +85,51 @@ class ShoppingBotTests(unittest.TestCase):
         self.bot.handle_callback(callback(1, f'confirm:{draft_id}'))
         self.assertEqual(self.store.product(product)['note'], '2 пачки')
 
+    def test_voice_milk_variants_do_not_disappear(self):
+        self.bot.make_draft(1, '', extracted=[('Масло','2 пачки'), ('Творог',None), ('Кефір',None), ('Молоко','3 шт.'), ('Молоко','1 шт.; без лактози')])
+        with self.store.db() as db:
+            draft_id = db.execute('SELECT id FROM drafts WHERE actor_id=1').fetchone()[0]
+        items = self.store.draft(1, draft_id)
+        self.assertEqual(len(items), 5)
+        variants = {item['name']: item for item in items}
+        self.assertIn('Молоко без лактози', variants)
+        self.assertEqual(variants['Молоко']['note'], '3 шт.')
+        self.assertEqual(variants['Молоко без лактози']['note'], '1 шт.')
+        self.assertEqual(variants['Сир кисломолочний']['category'], 'dairy')
+
+    def test_qa_foreign_draft_cannot_change_or_confirm(self):
+        self.bot.make_draft(1, 'дві пачки масла')
+        with self.store.db() as db:
+            draft_id = db.execute('SELECT id FROM drafts WHERE actor_id=1').fetchone()[0]
+        item = self.store.draft(1, draft_id)[0]
+        for action in (f"dkeep:{draft_id}:{item['key']}", f"confirm:{draft_id}"):
+            self.bot.handle_callback(callback(2, action))
+        self.assertIsNotNone(self.store.draft(1, draft_id))
+        self.assertFalse(self.store.needs())
+
+    def test_qa_replayed_confirmation_does_not_add_or_overwrite_twice(self):
+        self.bot.make_draft(1, 'дві пачки масла')
+        with self.store.db() as db:
+            draft_id = db.execute('SELECT id FROM drafts WHERE actor_id=1').fetchone()[0]
+        self.bot.handle_callback(callback(1, f'confirm:{draft_id}'))
+        product = self.store.needs()[0]
+        self.store.set_note(product['id'], '3 пачки')
+        self.bot.handle_callback(callback(1, f'confirm:{draft_id}'))
+        self.assertEqual(len(self.store.needs()), 1)
+        self.assertEqual(self.store.needs()[0]['note'], '3 пачки')
+
+    def test_qa_keep_duplicate_and_add_new_product_in_same_draft(self):
+        product = self.store.ensure_product('масло', '1 пачка')
+        self.store.add_need(product, 1)
+        self.bot.make_draft(1, 'дві пачки масла і хліб')
+        with self.store.db() as db:
+            draft_id = db.execute('SELECT id FROM drafts WHERE actor_id=1').fetchone()[0]
+        item = next(item for item in self.store.draft(1, draft_id) if item['name'] == 'Масло')
+        self.bot.handle_callback(callback(1, f"dkeep:{draft_id}:{item['key']}"))
+        self.bot.handle_callback(callback(1, f'confirm:{draft_id}'))
+        self.assertEqual({row['name'] for row in self.store.needs()}, {'Масло', 'Хліб'})
+        self.assertEqual(self.store.product(product)['note'], '1 пачка')
+
     def test_quantity_parsing(self):
         for raw, expected in [
             ('купи дві буханки хліба', [('Хліб', '2 буханки')]),

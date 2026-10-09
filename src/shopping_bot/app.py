@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 
 from .categories import CATEGORIES, infer_category, food_dictionary, normalize
 from .speech import SpeechError, transcribe
-from .quantities import quantity_note, merge_note
+from .quantities import quantity_note, merge_note, product_variant
 from .store import STORES, Store, parse_items
 from .telegram import Telegram, TelegramError
 from .families import Families
@@ -551,6 +551,7 @@ class ShoppingBot:
         seen_names=set()
         for name, note in items:
             name, note = quantity_note(name, note)
+            name, note = product_variant(name, note)
             name=self.store.resolve_name(name)
             if name.casefold() in seen_names:
                 continue

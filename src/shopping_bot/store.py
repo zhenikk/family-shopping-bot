@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from .quantities import quantity_note
+from .quantities import quantity_note, product_variant
 from .categories import CATEGORIES, infer_category
 from .product_names import canonical_name, product_key, suggested_name
 
@@ -26,6 +26,8 @@ def key_for(name: str) -> str:
 def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str, str | None]]:
     """Parse a dictated list. Explicit @Store is optional; no generative parsing."""
     # Strip a conversational introduction only when followed by an explicit buy command.
+    # Notes may contain semicolons; separators before :: still separate products.
+    raw = re.sub(r'::[^,\n]*', lambda match: match[0].replace(';', '\ue000'), raw)
     trip_store = None
     command = re.search(r"\b(?:купи|купіть|купити|buy)\s+", raw, flags=re.I)
     if command:
@@ -49,7 +51,16 @@ def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str,
     result: list[tuple[str, str | None]] = []
     seen: set[str] = set()
     for part in parts:
-        part = part.strip(" .!?:\t\r\n")
+        part = part.replace('\ue000', ';').strip(" .!?:\t\r\n")
+        if re.match(r"^(?:не\s+(?:купи|купуй|купуйте|треба|потрібно)|don['’]t\s+buy|do\s+not\s+buy)\b", part, re.I):
+            continue
+        if re.fullmatch(r'(?:ні|no)', part, re.I):
+            if result:
+                removed = result.pop()
+                seen.discard(key_for(removed[0]))
+            continue
+        part = re.sub(r'^(?:краще|rather|instead)\s+', '', part, flags=re.I)
+        part = re.sub(r'^(?:купи|купіть|купити|buy|add|додай)\s+', '', part, flags=re.I)
         if not part:
             continue
         part = re.sub(r"^(?:(?:купи|купіть|додай|додайте|buy|add)\s+)?(?:будь ласка[, ]*|please\s+)", "", part, flags=re.I).strip()
@@ -78,6 +89,7 @@ def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str,
             trip_note = "Store: " + trip_store if re.search(r"[a-z]", part, flags=re.I) else "Купити в " + trip_store
             store = "; ".join(value for value in (store, trip_note) if value)
         part, store = quantity_note(part, store)
+        part, store = product_variant(part, store)
         part = canonical_name(part)
         normalized = key_for(part)
         if normalized not in seen:

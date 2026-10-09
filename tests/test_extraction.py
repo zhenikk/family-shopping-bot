@@ -10,8 +10,29 @@ class ExtractionTests(unittest.TestCase):
     def test_valid_empty_and_dedup(self):
         self.assertEqual(self.call([]),[])
         self.assertEqual(self.call([{'name':'молоко','note':''},{'name':'Молоко','note':''}]),[('Молоко',None)])
+    def test_preserves_dietary_variants_before_deduplication(self):
+        self.assertEqual(self.call([{'name':'молоко','note':'3 шт.'},{'name':'молоко','note':'1 шт.; без лактози'}]),
+                         [('Молоко','3 шт.'), ('Молоко без лактози','1 шт.')])
+
     def test_reject_invalid(self):
         with self.assertRaises(ValueError):self.call([{'name':'молоко','note':42}])
+    def test_invalid_model_outputs_are_rejected(self):
+        cases = [
+            [{'name':'', 'note':''}],
+            [{'name':'x' * 101, 'note':''}],
+            [{'name':'молоко', 'note':'x' * 201}],
+            [{'name':'молоко\nхліб', 'note':''}],
+            [{'name':'молоко', 'note':'\x00'}],
+            [{'name':None, 'note':''}],
+            [{'name':'молоко'}],
+            [{'name':'молоко', 'note':'', 'action':'delete'}],
+            [{'name':'молоко', 'note':''}] * 31,
+        ]
+        for items in cases:
+            with self.subTest(items=items):
+                with self.assertRaises(ValueError):
+                    self.call(items)
+
     def test_secret_file_takes_precedence(self):
         import tempfile
         from pathlib import Path
