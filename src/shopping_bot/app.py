@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .jev import submit as submit_jev
 from .extraction import extract_products
 from .voice_metrics import VoiceMetrics
 from .support import Support
@@ -22,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .categories import CATEGORIES, infer_category
+from .categories import CATEGORIES, infer_category, food_dictionary, normalize
 from .speech import SpeechError, transcribe
 from .store import STORES, Store, parse_items
 from .telegram import Telegram, TelegramError
@@ -558,6 +559,9 @@ class ShoppingBot:
         self.pending_draft_edits.pop(user_id, None)
         draft_id = self.store.save_draft(user_id, draft_items)
         self.show_draft(user_id, draft_id)
+        for item in draft_items:
+            if normalize(item['name']) not in food_dictionary():
+                submit_jev(self.analytics,user_id,draft_id,item)
 
     def show_draft(self, user_id: int, draft_id: int, panel_id=None, editing=False) -> None:
         items = self.store.draft(user_id, draft_id)

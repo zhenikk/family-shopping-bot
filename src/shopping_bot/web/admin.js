@@ -59,9 +59,14 @@ async function speechBenchmarks(append=false){
  $('speech-more').hidden=!data.has_more;
 }
 $('speech-more').onclick=()=>speechBenchmarks(true).catch(error=>$('status').textContent=error.message);
+async function jevExperiments(){
+ const data=await api('/api/admin/jev');const t=data.totals;
+ $('jev-totals').textContent='Requests: '+t.requests+' · OK: '+(t.successful||0)+' · Errors: '+(t.errors||0)+' · Estimated USD: '+Number(t.estimated_usd||0).toFixed(6)+' · Unknown cost: '+(t.unknown_cost||0)+' · UTC daily cap: '+data.daily_request_cap+' · '+data.retention_days+' days';
+ $('jev-experiments').innerHTML=data.items.map(row=>'<tr><td>'+date(row.occurred)+'<small>'+row.user_id+' · '+row.draft_id+'/'+escape(row.item_key)+' · '+escape(row.version)+'</small></td><td>'+escape(row.baseline)+'</td><td>'+escape(row.category||row.status)+'</td><td>'+(row.confidence===null?'—':(row.confidence*100).toFixed(1)+'%')+'</td><td>'+(row.latency_ms===null?'—':row.latency_ms+' ms')+'<small>'+(row.input_tokens===null?'—':row.input_tokens+' in / '+row.output_tokens+' out')+' · '+(row.estimated_usd===null?'—':'$'+Number(row.estimated_usd).toFixed(8))+'</small></td></tr>').join('');
+}
 async function refresh(){
  if(refreshing)return;refreshing=true;$('refresh').disabled=true;
- try{await Promise.all([stats(),users(),events(),supportTickets(),speechBenchmarks()]);$('dashboard').hidden=false;$('denied').hidden=true;$('status').textContent='Оновлено: '+date(Date.now()/1000);}
+ try{await Promise.all([stats(),users(),events(),supportTickets(),speechBenchmarks(),jevExperiments()]);$('dashboard').hidden=false;$('denied').hidden=true;$('status').textContent='Оновлено: '+date(Date.now()/1000);}
  catch(error){$('status').textContent=error.message;if($('dashboard').hidden)$('denied').hidden=false;}
  finally{refreshing=false;$('refresh').disabled=false;}
 }

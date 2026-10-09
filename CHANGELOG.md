@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.8 — 2026-10-09
+
+- Add opt-in TypeSafe Jev shadow categorization for names absent from the offline dictionary, without updating user categories.
+- Add private experiment timing, confidence, token usage and estimated cost dashboard with bounded background work and 100 attempts per UTC day.
+- Read TypeSafe credentials from an external Docker secret.
+
 ## 0.5.7 — 2026-10-09
 
 - Add opt-in first-success Groq/local race with one bounded local Whisper slot; skip local samples when busy.

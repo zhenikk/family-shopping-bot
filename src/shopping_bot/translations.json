@@ -488,5 +488,11 @@
   "Локально": "Local",
   "Перший результат": "First result",
   "Збіг": "Agreement",
-  "Показати старіші виміри": "Show older measurements"
+  "Показати старіші виміри": "Show older measurements",
+  "Jev · експеримент": "Jev · experiment",
+  "Тіньова категоризація: списки не змінюються. Останні 100 вимірів; витрати розрахункові за usage API, без кредитів і знижок.": "Shadow classification: lists stay unchanged. Latest 100 samples; costs estimated from API usage, excluding credits and discounts.",
+  "Час / користувач / чернетка": "Time / user / draft",
+  "Поточна категорія": "Current category",
+  "Впевненість": "Confidence",
+  "Час / токени / USD": "Time / tokens / USD"
 }

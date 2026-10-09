@@ -6,6 +6,7 @@ from pathlib import Path
 import logging
 import sqlite3
 import time
+import uuid
 
 LOG=logging.getLogger(__name__)
 KINDS={'guest_voice','guest_text','bot_start','bot_message','bot_photo','bot_callback','voice_queued','voice_done','voice_error','web_session','web_add','web_buy','web_edit','web_undo','web_family','language','products_added','purchase','bot_error','web_error','poll_error'}
@@ -16,6 +17,7 @@ class Analytics:
         self.path=Path(families.root)/'families.sqlite3'
         with self.db() as db:
             db.executescript('''
+                CREATE TABLE IF NOT EXISTS jev_experiments(request_id TEXT PRIMARY KEY,occurred REAL NOT NULL,user_id INTEGER,draft_id INTEGER,item_key TEXT,baseline TEXT,status TEXT,category TEXT,confidence REAL,input_tokens INTEGER,output_tokens INTEGER,estimated_usd REAL,latency_ms INTEGER,model TEXT,version TEXT,commit_sha TEXT);
                 CREATE TABLE IF NOT EXISTS speech_benchmarks(request_id TEXT PRIMARY KEY,occurred REAL NOT NULL,user_id INTEGER NOT NULL,version TEXT NOT NULL,commit_sha TEXT NOT NULL,language TEXT NOT NULL,audio_ms INTEGER,local_ms INTEGER,groq_ms INTEGER,local_status TEXT,groq_status TEXT,winner TEXT,delivered_ms INTEGER,agreement INTEGER,message_id INTEGER);
                 CREATE INDEX IF NOT EXISTS speech_benchmark_time ON speech_benchmarks(occurred);
                 CREATE TABLE IF NOT EXISTS analytics_users(user_id INTEGER PRIMARY KEY,name TEXT NOT NULL,username TEXT NOT NULL,first_seen REAL NOT NULL,last_seen REAL NOT NULL);
@@ -82,6 +84,26 @@ class Analytics:
         except sqlite3.Error:
             LOG.warning('Analytics write unavailable')
             return False
+
+    def reserve_jev(self,user_id,draft_id,item_key,baseline):
+        stamp=time.time();day=datetime.fromtimestamp(stamp,timezone.utc).replace(hour=0,minute=0,second=0,microsecond=0).timestamp()
+        request_id=uuid.uuid4().hex;identity=release()
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            if db.execute('SELECT count(*) FROM jev_experiments WHERE occurred>=?',(day,)).fetchone()[0]>=100:return None
+            db.execute('INSERT INTO jev_experiments(request_id,occurred,user_id,draft_id,item_key,baseline,status,version,commit_sha) VALUES (?,?,?,?,?,?,?,?,?)',(request_id,stamp,user_id,draft_id,item_key,baseline,'pending',identity['version'],identity['commit']))
+            db.execute('DELETE FROM jev_experiments WHERE occurred<?',(stamp-90*86400,))
+        return request_id
+
+    def finish_jev(self,request_id,status,result):
+        with self.db() as db:
+            db.execute('UPDATE jev_experiments SET status=?,category=?,confidence=?,input_tokens=?,output_tokens=?,estimated_usd=?,latency_ms=?,model=? WHERE request_id=?',(status,result.get('category'),result.get('confidence'),result.get('input_tokens'),result.get('output_tokens'),result.get('estimated_usd'),result.get('latency_ms'),result.get('model'),request_id))
+
+    def jev_experiments(self):
+        with self.db() as db:
+            rows=[dict(row) for row in db.execute('SELECT * FROM jev_experiments ORDER BY occurred DESC LIMIT 100')]
+            totals=dict(db.execute("SELECT count(*) requests,sum(status='ok') successful,sum(status='error') errors,sum(input_tokens) input_tokens,sum(output_tokens) output_tokens,sum(estimated_usd) estimated_usd,sum(estimated_usd IS NULL) unknown_cost FROM jev_experiments").fetchone())
+        return dict(items=rows,totals=totals,retention_days=90,daily_request_cap=100,input_usd_per_million=.042,pricing_date='2026-10-09')
 
     def record_speech_benchmark(self,user_id,row):
         try:
