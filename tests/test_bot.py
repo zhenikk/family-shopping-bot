@@ -151,6 +151,13 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertNotIn(credential[7:].encode(), document['document'].read_bytes())
         self.assertNotIn(credential, document['caption'])
 
+    def test_shopping_shortcut_uses_saved_interface_language(self):
+        self.bot.families.set_language(1, 'en')
+        self.bot.handle_callback(callback(1, 'shopping:download'))
+        document = next(params for method, params in self.telegram.calls if method == 'sendDocument')
+        self.assertEqual(document['document'].name, 'Shopping-en.shortcut')
+        self.assertTrue(document['document'].is_file())
+
     def test_shopping_download_sends_document_in_chat(self):
         self.bot.handle_callback(callback(1, 'shopping:download'))
         documents = [params for method, params in self.telegram.calls if method == 'sendDocument']

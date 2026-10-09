@@ -637,7 +637,9 @@ class ShoppingBot:
         self.show_draft_item(user_id, draft_id, key, panel_id)
 
     def send_shopping_shortcut(self, user_id, *, instructions=True, key=None):
-        path = Path(__file__).with_name('web') / 'Shopping.shortcut'
+        shortcut_files = {'uk': 'Shopping.shortcut', 'en': 'Shopping-en.shortcut'}
+        selected_language = self.families.preference(user_id) or 'uk'
+        path = Path(__file__).with_name('web') / shortcut_files.get(selected_language, shortcut_files['uk'])
         extra = {'reply_markup': buttons([('Set up Shopping' if language.get() == 'en' else 'Налаштувати Shopping', 'shopping:key')])}
         if key:
             extra = {'protect_content': True, 'reply_markup': {'inline_keyboard': [[{'text': 'Copy key' if language.get() == 'en' else 'Скопіювати ключ', 'copy_text': {'text': 'Bearer ' + key}}]]}}

@@ -1,3 +1,7 @@
+## 0.5.25
+
+- Select signed Ukrainian or English dictation shortcut from the user’s saved bot interface language. Localize the Ukrainian import prompt.
+
 ## 0.5.23
 
 - Consolidate Shopping setup into a single document message with caption and inline controls. Confirmation edits its caption; key creation replaces the old attachment.
