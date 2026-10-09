@@ -1,3 +1,7 @@
+## 0.5.19
+
+- Create and copy Shopping key in one gesture using Safari-compatible asynchronous clipboard writes, with explicit fallback. Show setup content before Telegram SDK finishes loading.
+
 ## 0.5.18
 
 - Copy Shopping credentials and receive the shortcut attachment in Telegram. Remove Mini App download control; show installation instructions before the attachment.

@@ -18,7 +18,7 @@ async function refresh() {
 }
 $('intro').textContent = text('Siri, Shopping → диктування → підтвердження в Telegram.', 'Siri, Shopping → dictate → confirm in Telegram.');
 $('install').textContent = text('Встановіть шаблон без секретів, потім вставте персональне значення Authorization. Імпорт на iPhone потребує першої перевірки. Не поширюйте налаштовану копію.', 'Install the secret-free template, then enter your personal Authorization value. iPhone import needs initial device validation. Do not share your configured copy.');
-$('create').textContent = text('Створити / замінити ключ', 'Create / rotate key');
+$('create').textContent = text('Створити / замінити й скопіювати ключ', 'Create / rotate and copy key');
 $('revoke').textContent = text('Відкликати доступ', 'Revoke access');
 $('reveal').textContent = text('Показати ключ', 'Show key');
 $('copy').textContent = text('Скопіювати ключ і отримати файл у боті', 'Copy key and receive file in bot');
@@ -28,11 +28,30 @@ $('manual').textContent = text('Dictate Text: українська, зупинк
 $('limits').textContent = text('Бета: 10 спроб на день, текст до 4000 символів. Загальна квота сервісу — 100 спроб на день. Невдалі завантаження теж можуть витрачати квоту. /shoppingoff вимикає доступ.', 'Beta: 10 attempts/day, text up to 4000 characters. Service-wide quota: 100 attempts/day. Failed uploads may also consume quota. /shoppingoff revokes access.');
 $('endpoint').value = location.origin + '/shortcuts/text';
 $('create').onclick = async () => {
- if (!confirm(text('Замінити ключ? Попередній перестане працювати.', 'Rotate key? The previous key will stop working.'))) return;
- $('create').disabled = true; $('create').textContent = text('Створюємо ключ…', 'Creating key…'); $('error').textContent = '';
- try { clearKey(); const result = await api('/api/shopping/key', {confirm:true}); $('key').value = 'Bearer ' + result.key; $('credentials').hidden = false; clearTimeout(clearTimer); clearTimer = setTimeout(clearKey, 90000); await refresh(); }
- catch (error) { $('error').textContent = error.message; }
- finally { $('create').disabled = false; $('create').textContent = text('Створити / замінити ключ', 'Create / rotate key'); }
+ if (!confirm(text('Створити новий ключ і скопіювати? Попередній перестане працювати.', 'Create and copy a new key? The previous key will stop working.'))) return;
+ $('create').disabled = true; $('create').textContent = text('Готуємо…', 'Preparing…'); $('error').textContent = '';
+ clearKey();
+ const pendingKey = api('/api/shopping/key', {confirm:true}).then(result => 'Bearer ' + result.key);
+ // Safari needs clipboard.write to begin inside the user's click, before awaiting the network.
+ let clipboard;
+ try {
+  if (navigator.clipboard?.write && window.ClipboardItem) {
+   clipboard = navigator.clipboard.write([new ClipboardItem({'text/plain': pendingKey.then(value => new Blob([value], {type:'text/plain'}))})]).then(() => true, () => false);
+  }
+ } catch { clipboard = Promise.resolve(false); }
+ try {
+  $('key').value = await pendingKey; $('credentials').hidden = false;
+  clearTimeout(clearTimer); clearTimer = setTimeout(clearKey, 90000);
+  let copied = clipboard ? await clipboard : false;
+  if (!clipboard) { try { await navigator.clipboard.writeText($('key').value); copied = true; } catch {} }
+  $('error').textContent = copied ? text('✓ Ключ скопійовано. Надсилаємо файл у бот…', '✓ Key copied. Sending the file to the bot…') : text('Ключ створено. Натисніть «Скопіювати ключ» нижче — iOS заблокувала автоматичне копіювання.', 'Key created. Tap Copy key below; iOS blocked automatic copying.');
+  if (copied) {
+   await api('/api/shopping/download', {confirm:true});
+   $('error').textContent = text('✓ Ключ у буфері, файл у чаті. Поверніться до бота й відкрийте вкладення.', '✓ Key copied, file in chat. Return to the bot and open the attachment.');
+  }
+  await refresh();
+ } catch(error) { $('error').textContent = error.message; }
+ finally { $('create').disabled = false; $('create').textContent = text('Створити / замінити й скопіювати ключ', 'Create / rotate and copy key'); }
 };
 $('revoke').onclick = async () => {
  if (!confirm(text('Відкликати доступ Shopping?', 'Revoke Shopping access?'))) return;
@@ -54,6 +73,7 @@ $('copy').onclick = async () => {
 };
 addEventListener('pagehide', clearKey);
 tg?.ready(); tg?.expand();
+tg?.setBackgroundColor?.('#f7f7fa'); tg?.setHeaderColor?.('#f7f7fa');
 refresh().catch(error => { $('error').textContent = error.message; });
 
 $('back').textContent = text('← Повернутися до бота', '← Back to bot');
