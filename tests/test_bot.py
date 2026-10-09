@@ -159,7 +159,7 @@ class ShoppingBotTests(unittest.TestCase):
         document = next(params for method, params in self.telegram.calls if method == 'sendDocument')
         self.assertEqual(document['document'].name, 'Shopping-audio.shortcut')
         self.assertTrue(document['document'].is_file())
-        self.assertIn('30', document['caption'])
+        self.assertIn('60', document['caption'])
         self.assertTrue(document['reply_markup']['inline_keyboard'][0][0]['copy_text']['text'].startswith('Bearer '))
 
     def test_shopping_key_copy_button_with_secret_free_file(self):

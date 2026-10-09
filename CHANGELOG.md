@@ -1,3 +1,7 @@
+## 0.5.35
+
+- Increase shortcut audio duration limit to 60 seconds; retain 2 MB upload size limit and existing quotas.
+
 ## 0.5.34
 
 - Experimental audio shortcut opens Shortcuts through Apple-documented shortcuts:// URL; remove deprecated Dismiss Siri and invalid app picker. Device recording continuity remains unverified.

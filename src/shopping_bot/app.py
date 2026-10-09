@@ -643,7 +643,7 @@ class ShoppingBot:
         if key:
             extra = {'protect_content': True, 'reply_markup': {'inline_keyboard': [[{'text': 'Copy key' if language.get() == 'en' else 'Скопіювати ключ', 'copy_text': {'text': 'Bearer ' + key}}]]}}
         if audio:
-            extra['caption'] = ('TEST: Copy key, import Shopping Audio. Siri runs Shopping Audio → Shortcuts opens → record, tap to stop (max 30 sec). Recognition uses your bot language. New key replaces the previous one. /shoppingoff revokes access.' if language.get() == 'en' else 'ТЕСТ: скопіюй ключ, імпортуй Shopping Audio. Siri запускає Shopping Audio → відкриваються Команди → говори й натисни стоп (до 30 с). Мова розпізнавання — як у боті. Новий ключ замінює попередній. /shoppingoff вимикає доступ.')
+            extra['caption'] = ('TEST: Copy key, import Shopping Audio. Siri runs Shopping Audio → Shortcuts opens → record, tap to stop (max 60 sec). Recognition uses your bot language. New key replaces the previous one. /shoppingoff revokes access.' if language.get() == 'en' else 'ТЕСТ: скопіюй ключ, імпортуй Shopping Audio. Siri запускає Shopping Audio → відкриваються Команди → говори й натисни стоп (до 60 с). Мова розпізнавання — як у боті. Новий ключ замінює попередній. /shoppingoff вимикає доступ.')
         custom_caption = extra.pop('caption', None)
         result = self.telegram.call('sendDocument', chat_id=user_id, document=path,
                                     caption=custom_caption or (('1. Copy key below. 2. Open this file in Shortcuts and paste it when prompted. New key created; the previous key is revoked. Valid for 30 days. /shoppingoff revokes access.' if language.get() == 'en' else '1. Натисни «Скопіювати ключ». 2. Відкрий цей файл у Командах і встав ключ під час імпорту. Новий ключ створено, попередній відкликано. Діє 30 днів. /shoppingoff вимикає доступ.') if key else ('Tap Set up Shopping to create a key, then copy it and open this file in Shortcuts. Already configured? Open the file directly.' if language.get() == 'en' else 'Натисни «Налаштувати Shopping», створи й скопіюй ключ, потім відкрий цей файл у Командах. Якщо ключ уже є — відкрий файл одразу.')), **extra)
@@ -737,7 +737,7 @@ class ShoppingBot:
                         import shutil
                         shutil.copyfile(uploaded_path, destination)
                 source = Upload()
-            speech_options = {"max_seconds": 30} if uploaded_path else {}
+            speech_options = {"max_seconds": 60} if uploaded_path else {}
             transcript = transcribe(source, file_id, self.whisper_cli, self.whisper_model, language_code=language.get(), vocabulary=vocabulary, shopping_context=note_product_id is None, benchmark=lambda row:self.analytics.record_speech_benchmark(user_id,dict(row,message_id=message_id)), **speech_options)
             if on_transcribed:
                 on_transcribed()

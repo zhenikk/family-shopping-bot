@@ -46,7 +46,7 @@ class Shortcuts:
             count = db.execute('SELECT requests FROM shortcut_usage WHERE day=? AND user_id=?', (day,user_id)).fetchone()
         return {'active': bool(row and row['expires'] > time.time() and row['family_id'] == self.families.family(user_id)),
                 'expires': row['expires'] if row else None, 'last_used': row['last_used'] if row else None,
-                'used_today': count[0] if count else 0, 'daily_limit': self.DAILY_USER, 'max_seconds': 30}
+                'used_today': count[0] if count else 0, 'daily_limit': self.DAILY_USER, 'max_seconds': 60}
 
     def reserve(self, key):
         """Charge an attempt atomically before reading its body; no retries or refunds."""
