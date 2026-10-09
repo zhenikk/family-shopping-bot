@@ -1,3 +1,7 @@
+## 0.5.20
+
+- Remove all shortcut delivery actions from Mini App. Download only using Telegram bot attachment button; setup only manages credentials.
+
 ## 0.5.19
 
 - Create and copy Shopping key in one gesture using Safari-compatible asynchronous clipboard writes, with explicit fallback. Show setup content before Telegram SDK finishes loading.

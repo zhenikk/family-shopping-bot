@@ -21,7 +21,7 @@ $('install').textContent = text('Встановіть шаблон без сек
 $('create').textContent = text('Створити / замінити й скопіювати ключ', 'Create / rotate and copy key');
 $('revoke').textContent = text('Відкликати доступ', 'Revoke access');
 $('reveal').textContent = text('Показати ключ', 'Show key');
-$('copy').textContent = text('Скопіювати ключ і отримати файл у боті', 'Copy key and receive file in bot');
+$('copy').textContent = text('Скопіювати ключ', 'Copy key');
 $('private').textContent = text('Показуємо один раз. Поле очиститься за 90 секунд. Ключ діє 30 днів і лише для поточного списку.', 'Shown once. This field clears after 90 seconds. The key lasts 30 days and is bound to your current list.');
 $('manual-title').textContent = text('Ручне налаштування', 'Manual setup');
 $('manual').textContent = text('Dictate Text: українська, зупинка після паузи. Get Contents of URL: POST, заголовок Authorization, тіло JSON, поле text → Dictated Text. Спочатку запустіть кнопкою і надайте дозволи.', 'Dictate Text: stop after pause. Get Contents of URL: POST, Authorization header, JSON body, text → Dictated Text. Run manually first to grant permissions.');
@@ -45,10 +45,7 @@ $('create').onclick = async () => {
   let copied = clipboard ? await clipboard : false;
   if (!clipboard) { try { await navigator.clipboard.writeText($('key').value); copied = true; } catch {} }
   $('error').textContent = copied ? text('✓ Ключ скопійовано. Надсилаємо файл у бот…', '✓ Key copied. Sending the file to the bot…') : text('Ключ створено. Натисніть «Скопіювати ключ» нижче — iOS заблокувала автоматичне копіювання.', 'Key created. Tap Copy key below; iOS blocked automatic copying.');
-  if (copied) {
-   await api('/api/shopping/download', {confirm:true});
-   $('error').textContent = text('✓ Ключ у буфері, файл у чаті. Поверніться до бота й відкрийте вкладення.', '✓ Key copied, file in chat. Return to the bot and open the attachment.');
-  }
+  if (copied) $('error').textContent = text('✓ Ключ скопійовано. Поверніться до бота й натисніть «Завантажити Shopping iOS Shortcut».', '✓ Key copied. Return to the bot and tap Download Shopping iOS Shortcut.');
   await refresh();
  } catch(error) { $('error').textContent = error.message; }
  finally { $('create').disabled = false; $('create').textContent = text('Створити / замінити й скопіювати ключ', 'Create / rotate and copy key'); }
@@ -64,8 +61,7 @@ $('copy').onclick = async () => {
  try {
   await navigator.clipboard.writeText($('key').value);
   $('copy').textContent = text('✓ Ключ скопійовано', '✓ Key copied');
-  await api('/api/shopping/download', {confirm:true});
-  $('error').textContent = text('Ключ скопійовано, файл надіслано в бот. Поверніться до чату й відкрийте вкладення.', 'Key copied and file sent to bot. Return to chat and open the attachment.');
+  $('error').textContent = text('Ключ скопійовано. Завантажте файл кнопкою в чаті бота.', 'Key copied. Download the file using the button in the bot chat.');
  } catch(error) {
   $('key').type = 'text'; $('key').select();
   $('error').textContent = text('Якщо копіювання заблоковано, скопіюйте ключ вручну. Файл можна отримати кнопкою в боті.', 'If copying is blocked, copy the key manually. Receive the file using the button in the bot.');
