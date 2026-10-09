@@ -655,7 +655,8 @@ class ShoppingBot:
             return
         language.set(selected_language)
         try:
-            transcript = transcribe(self.telegram, file_id, self.whisper_cli, self.whisper_model, language_code=language.get())
+            vocabulary = [row["name"] for row in self.store.catalog(limit=12)] if note_product_id is None else []
+            transcript = transcribe(self.telegram, file_id, self.whisper_cli, self.whisper_model, language_code=language.get(), vocabulary=vocabulary, shopping_context=note_product_id is None)
             if on_transcribed:
                 on_transcribed()
             with self.families.lock:

@@ -731,8 +731,43 @@ class ShoppingBotTests(unittest.TestCase):
         ])
         self.assertEqual(parse_items("Кава і вершки", split_conjunctions=False), [("Кава і вершки", None)])
 
+    def test_off_dictionary_and_bounded_speech_context(self):
+        from shopping_bot.categories import food_dictionary
+        from shopping_bot.speech import shopping_prompt
+        self.assertGreater(len(food_dictionary()), 10000)
+        self.assertEqual(infer_category("Pineapples"), "produce")
+        self.assertEqual(infer_category("невідома особлива річ"), "other")
+        self.assertLessEqual(len(shopping_prompt("uk", ["x" * 60] * 100)), 480)
+        self.assertIn("Milk", shopping_prompt("en"))
+
+    def test_expanded_categories_and_specific_context(self):
+        cases = {"Зубна паста":"care", "Мʼясо":"meat", "Авокади":"produce",
+                 "Буряк":"produce", "Горішки":"snacks", "Снекі льоша":"snacks",
+                 "Олія":"spices", "Макарони":"pantry", "Корм для кота":"pets",
+                 "Моторна олива":"auto", "Автошампунь":"auto", "Лампочка":"home",
+                 "Картопля":"produce", "Картопля фрі":"frozen",
+                 "Frozen broccoli":"frozen", "Dog food":"pets", "Engine oil":"auto"}
+        for name, category in cases.items():
+            with self.subTest(name=name):
+                self.assertEqual(infer_category(name), category)
+
+    def test_taxonomy_migration_preserves_product_data_and_runs_once(self):
+        product = self.store.ensure_product("Зубна паста")
+        self.store.add_need(product, 1)
+        self.store.set_note(product, "улюблена")
+        with self.store.db() as db:
+            db.execute("UPDATE products SET category='pantry' WHERE id=?", (product,))
+            db.execute("DELETE FROM meta WHERE key='category_taxonomy_v2'")
+        migrated = Store(self.store.path)
+        self.assertEqual(migrated.product_by_name("Зубна паста")["category"], "care")
+        self.assertEqual(migrated.product_by_name("Зубна паста")["note"], "улюблена")
+        self.assertEqual(migrated.needs()[0]["id"], product)
+        migrated.set_category(product, "other")
+        reopened = Store(self.store.path)
+        self.assertEqual(reopened.product_by_name("Зубна паста")["category"], "other")
+
     def test_categories_group_list_and_preserve_manual_choice(self):
-        for name, expected in [("картоплю", "vegetables"), ("Мандарини", "fruit"),
+        for name, expected in [("картоплю", "produce"), ("Мандарини", "produce"),
                                ("кондиціонер для білизни", "cleaning"),
                                ("кондиціонер для волосся", "care"),
                                ("Leite Hacendado", "dairy"), ("невідома пачка", "other"),
@@ -743,8 +778,8 @@ class ShoppingBotTests(unittest.TestCase):
         self.store.add_need(potato, 1)
         self.store.add_need(fruit, 2)
         content, _ = self.bot.list_content("Mercadona")
-        self.assertIn("🥕 Овочі\n• Картопля", content)
-        self.assertIn("🍊 Фрукти\n• Мандарини", content)
+        self.assertIn("🥬 Овочі та фрукти\n• Картопля", content)
+        self.assertIn("• Мандарини", content)
         self.bot.handle_callback(callback(2, f"setcategory:{potato}:other"))
         self.store.ensure_product("картопля")
         self.assertEqual(self.store.product(potato)["category"], "other")
@@ -848,7 +883,7 @@ class ShoppingBotTests(unittest.TestCase):
             db.execute("INSERT INTO products VALUES (7, 'мандарини', 'мандарини', 'Lidl', 'photo', NULL, 'old')")
         migrated = Store(old_path)
         row = migrated.product(7)
-        self.assertEqual(row["category"], "fruit")
+        self.assertEqual(row["category"], "produce")
         self.assertEqual(row["photo_file_id"], "photo")
         self.assertEqual(row["preferred_store"], "Lidl")
 

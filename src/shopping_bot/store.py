@@ -170,6 +170,17 @@ class Store:
                 row=db.execute("SELECT name FROM products WHERE id=?",(product_id,)).fetchone()
                 db.execute("UPDATE products SET name=?,normalized=? WHERE id=?",(canonical_name(row['name']),key,product_id))
 
+            # One-time aisle taxonomy upgrade. Later manual choices remain untouched.
+            if not db.execute("SELECT 1 FROM meta WHERE key='category_taxonomy_v2'").fetchone():
+                for product in db.execute("SELECT id,name FROM products").fetchall():
+                    db.execute("UPDATE products SET category=? WHERE id=?", (infer_category(product["name"]), product["id"]))
+                for draft in db.execute("SELECT id,items_json FROM drafts").fetchall():
+                    items = json.loads(draft["items_json"])
+                    for item in items:
+                        item["category"] = infer_category(item["name"])
+                    db.execute("UPDATE drafts SET items_json=? WHERE id=?", (json.dumps(items, ensure_ascii=False), draft["id"]))
+                db.execute("INSERT INTO meta(key,value) VALUES ('category_taxonomy_v2','1')")
+
     def resolve_name(self, name):
         exact=self.product_by_name(name)
         if exact:
@@ -198,6 +209,8 @@ class Store:
             return db.execute("SELECT p.*, n.added_by, n.added_at FROM needs n JOIN products p ON p.id=n.product_id ORDER BY p.name COLLATE NOCASE").fetchall()
 
     def set_category(self, product_id: int, category: str) -> None:
+        if category in ("vegetables", "fruit"):
+            category = "produce"
         if category not in CATEGORIES:
             raise ValueError("Unknown category")
         with self.db() as db:

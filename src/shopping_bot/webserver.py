@@ -451,6 +451,8 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                         result = {"added": bot.store.add_need(product_id, user_id)}
                     else:
                         note, category = data.get("note"), data.get("category")
+                        if category in ("vegetables", "fruit"):
+                            category = "produce"
                         if not isinstance(note, str) or len(note) > 200 or category not in CATEGORIES:
                             raise ValueError("Invalid product edit")
                         # Both fields are committed atomically.

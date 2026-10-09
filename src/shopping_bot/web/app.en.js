@@ -51,12 +51,12 @@ let signature = '', loading = false, reloadNeeded = false, revision = 0, toastTi
 const pending = new Set(), operations = new Map(), photos = new Map();
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-const fallbackCategories = {vegetables:'🥕 Vegetables',fruit:'🍊 Fruit',dairy:'🥛 Dairy and eggs',meat:'🥩 Meat and fish',bakery:'🍞 Bread and bakery',pantry:'🥫 Pantry',drinks:'🥤 Drinks',frozen:'🧊 Frozen',cleaning:'🧽 Household cleaning',care:'🧴 Personal care',other:'📦 Other'};
+const fallbackCategories = {"produce": "🥬 Fruits & vegetables", "bakery": "🍞 Bread & pastries", "dairy": "🥛 Dairy and eggs", "meat": "🥩 Meat and fish", "pantry": "🍚 Grains & pasta", "spices": "🧂 Spices, sauces & oil", "frozen": "🧊 Frozen & convenience", "snacks": "🍫 Snacks & sweets", "drinks": "🥤 Drinks", "cleaning": "🧽 Household cleaning", "care": "🧴 Care & health", "pets": "🐾 Pet supplies", "home": "🏡 Home & garden", "auto": "🚗 Car supplies", "other": "📦 Other"};
 const demoData = {categories:fallbackCategories, products:[
 {id:1,name:'Milk',note:'Favorite packaging, 1 l',category:'dairy',active:true,photo:false},
 {id:2,name:'Eggs',note:'',category:'dairy',active:true,photo:false},
-{id:3,name:'Potatoes',note:'Buy at Mercadona',category:'vegetables',active:true,photo:false},
-{id:4,name:'Mandarins',note:'',category:'fruit',active:true,photo:false},
+{id:3,name:'Potatoes',note:'Buy at Mercadona',category:'produce',active:true,photo:false},
+{id:4,name:'Mandarins',note:'',category:'produce',active:true,photo:false},
 {id:5,name:'Laundry conditioner',note:'The same as last time',category:'cleaning',active:true,photo:false},
 {id:6,name:'Coffee',note:'Decaf',category:'drinks',active:false,photo:false}],history:[]};
 function theme(){

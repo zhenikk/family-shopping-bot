@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 — 2026-10-09
+
+- Add a standalone 11,024-entry Ukrainian/English/Portuguese Open Food Facts category dictionary (ODbL).
+- Supply bounded local shopping vocabulary hints to Whisper; keep free-form voice notes unprompted.
+- Introduce 15 shopping aisle categories, including snacks, spices, pets, home and car supplies.
+- Reclassify existing catalog items and drafts once, preserving subsequent manual category choices.
+- Correct toothpaste, meat spelling, avocado variants and frozen-food context matching.
+- Update category labels in Ukrainian and English across bot and Mini App.
+
 ## 0.4.1 — 2026-10-09
 
 - Fix guest mentions replying to text shopping lists: use the referenced text when the mention has no items.

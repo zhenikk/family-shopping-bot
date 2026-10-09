@@ -159,7 +159,7 @@ class MiniAppTests(unittest.TestCase):
         self.assertIsNone(self.bot.families.family(55))
         status,body=self.request('/api/state',user=55)
         self.assertEqual(json.loads(body)['language'],'en')
-        self.assertIn('Vegetables',json.loads(body)['categories']['vegetables'])
+        self.assertIn('vegetables',json.loads(body)['categories']['produce'])
         self.assertEqual(self.request('/api/language',{'language':'de'},user=55)[0],400)
         self.assertEqual(self.request('/api/language',{'language':'en'},user=55,auth=False)[0],401)
         self.request('/api/language',{'language':'en'},user=1)

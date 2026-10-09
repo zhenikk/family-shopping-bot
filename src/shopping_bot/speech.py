@@ -12,13 +12,27 @@ class SpeechError(RuntimeError):
     pass
 
 
+def shopping_prompt(language_code, catalog=()):
+    """A short context hint, not a constrained output vocabulary."""
+    base = ("Молоко, яйця, хліб, картопля, помідори, огірки, банани, сир, сметана, макарони, олія, кава, зубна паста, кондиціонер для білизни."
+            if language_code == "uk" else
+            "Milk, eggs, bread, potatoes, tomatoes, cucumbers, bananas, cheese, pasta, olive oil, coffee, toothpaste, laundry detergent.")
+    names = []
+    for value in catalog:
+        value = " ".join(str(value).split())
+        if 1 <= len(value) <= 60 and value not in names:
+            names.append(value)
+        if len(names) >= 12:
+            break
+    return (base + (" " + ", ".join(names) if names else ""))[:480]
+
 def transcribe(
     telegram: Telegram,
     file_id: str,
     whisper_cli: Path,
     whisper_model: Path,
     timeout: int = 300,
-    *, language_code: str = "uk",
+    *, language_code: str = "uk", vocabulary=(), shopping_context=True,
 ) -> str:
     if language_code not in ("uk", "en"):
         raise ValueError("Invalid language")
@@ -40,7 +54,7 @@ def transcribe(
                 raise SpeechError('Voice messages must be at most 2 minutes.' if language.get() == 'en' else 'Голосове має бути не довшим за 2 хвилини.')
             subprocess.run(
                 [str(whisper_cli), "-m", str(whisper_model), "-f", str(wav), "-l", language_code, "-t", "2",
-                 "-otxt", "-of", str(output_prefix)],
+                 "--prompt", shopping_prompt(language_code, vocabulary) if shopping_context else "", "-otxt", "-of", str(output_prefix)],
                 check=True, timeout=timeout, capture_output=True,
             )
         except FileNotFoundError as exc:

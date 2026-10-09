@@ -51,12 +51,12 @@ let signature = '', loading = false, reloadNeeded = false, revision = 0, toastTi
 const pending = new Set(), operations = new Map(), photos = new Map();
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-const fallbackCategories = {vegetables:'🥕 Овочі',fruit:'🍊 Фрукти',dairy:'🥛 Молочне та яйця',meat:'🥩 М’ясо та риба',bakery:'🍞 Хліб та випічка',pantry:'🥫 Бакалія',drinks:'🥤 Напої',frozen:'🧊 Заморожене',cleaning:'🧽 Побутова хімія',care:'🧴 Особиста гігієна',other:'📦 Інше'};
+const fallbackCategories = {"produce": "🥬 Овочі та фрукти", "bakery": "🍞 Хліб і випічка", "dairy": "🥛 Молочне та яйця", "meat": "🥩 М’ясо та риба", "pantry": "🍚 Крупи та макарони", "spices": "🧂 Приправи, соуси й олія", "frozen": "🧊 Заморожене та напівфабрикати", "snacks": "🍫 Снеки та солодощі", "drinks": "🥤 Напої", "cleaning": "🧽 Побутова хімія", "care": "🧴 Догляд і здоров’я", "pets": "🐾 Для тварин", "home": "🏡 Дім і сад", "auto": "🚗 Для авто", "other": "📦 Інше"};
 const demoData = {categories:fallbackCategories, products:[
 {id:1,name:'Молоко',note:'Улюблена упаковка, 1 л',category:'dairy',active:true,photo:false},
 {id:2,name:'Яйця',note:'',category:'dairy',active:true,photo:false},
-{id:3,name:'Картопля',note:'Купити в Mercadona',category:'vegetables',active:true,photo:false},
-{id:4,name:'Мандарини',note:'',category:'fruit',active:true,photo:false},
+{id:3,name:'Картопля',note:'Купити в Mercadona',category:'produce',active:true,photo:false},
+{id:4,name:'Мандарини',note:'',category:'produce',active:true,photo:false},
 {id:5,name:'Кондиціонер для білизни',note:'Такий самий, як минулого разу',category:'cleaning',active:true,photo:false},
 {id:6,name:'Кава',note:'Без кофеїну',category:'drinks',active:false,photo:false}],history:[]};
 function theme(){

@@ -229,3 +229,10 @@ After choosing a language, new users choose **Just for me**, **With others**, or
 ### Guest Mode (0.4.0)
 
 Enable **Guest Mode** in the bot settings in BotFather’s Mini App. Existing list members can mention the bot with items in any supported chat, or reply to a voice message with the bot username. Voice replies to the bot are also supported when Telegram delivers them as guest updates. Drafts are sent to the caller’s private bot chat for confirmation; the originating chat receives no product details. Merely saying the bot name in an audio recording does not invoke it. Secret chats are not supported.
+
+
+### Offline product vocabulary
+
+`src/shopping_bot/food_dictionary.json` is a standalone derived category dictionary from [Open Food Facts](https://github.com/openfoodfacts/openfoodfacts-server/blob/main/taxonomies/food/categories.txt), licensed under [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/). It contains Ukrainian, English and Portuguese category names/synonyms, not every branded SKU. Source URL and SHA-256 are embedded. Regenerate with `PYTHONPATH=src python3 scripts/import_food_dictionary.py /path/to/categories.txt`. This public dictionary is distributed separately from private family catalogs; no family data is exported into it.
+
+Runtime lookup is offline and exact; unknown items remain allowed. Whisper receives a short generic shopping hint plus at most 12 names from the caller’s own catalog (480 characters maximum), never another family’s catalog. Free-form voice notes receive no shopping hint. This provides context, not guaranteed accuracy or model training; verify on real recordings.
