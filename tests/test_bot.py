@@ -983,7 +983,8 @@ class ShoppingBotTests(unittest.TestCase):
         text, markup = self.bot.list_content()
         self.assertIn("купити в Mercadona", text)
         self.assertNotIn("Улюблений магазин", text)
-        self.assertEqual(self.bot.menu()["keyboard"][0], [{"text": "🛍 Покупки"}])
+        self.assertFalse(self.bot.menu()['is_persistent'])
+        self.assertTrue(self.bot.menu()['one_time_keyboard'])
         self.bot.handle_callback(callback(2, f"note:{potato['id']}"))
         self.bot.handle_message(message(2, "велика пачка, жовта упаковка"))
         self.store.ensure_product("картопля")
@@ -1050,6 +1051,20 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual(len(notices), 1)
         feedback_id = self.bot.purchase_feedback[1]
         self.assertTrue(any(m == "editMessageText" and p["message_id"] == feedback_id for m, p in self.telegram.calls))
+
+    def test_chat_list_has_full_width_product_and_no_mini_app_button(self):
+        name = 'Молоко без лактози у великій упаковці'
+        product = self.store.ensure_product(name)
+        self.store.add_need(product, 1)
+        with patch.dict('os.environ', {'SHOPPING_WEB_URL': 'https://shopping.example'}):
+            text, markup = self.bot.list_content()
+        rows = [row for row in markup['inline_keyboard'] if any(button.get('callback_data') == f'item:{product}' for button in row)]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(len(rows[0]), 1)
+        self.assertEqual(rows[0][0]['text'], name)
+        self.assertNotIn('web_app', str(markup))
+        self.assertNotIn('buy:', str(markup))
+        self.assertIn(name, text)
 
     def test_mini_app_uses_authenticated_inline_launch(self):
         with patch.dict("os.environ", {"SHOPPING_WEB_URL": "https://shopping.example"}):

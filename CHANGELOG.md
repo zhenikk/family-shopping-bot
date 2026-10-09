@@ -1,3 +1,7 @@
+## 0.5.33
+
+- Full-width product buttons in chat list; purchase action stays in product card. Remove repeated Mini App launch button and compact the reply menu with auto-hide behavior.
+
 ## 0.5.32
 
 - Strip explicit conversational buy-request prefixes in Ukrainian and English, including greeting and want-to-buy phrases; preserve negation handling. Add regression examples from user report.

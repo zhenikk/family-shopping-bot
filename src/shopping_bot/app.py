@@ -277,12 +277,11 @@ class ShoppingBot:
 
     def menu(self) -> dict:
         return {
-            "keyboard": [[{"text": tr('ui_58d659bf993e')}],
-                         [{"text": tr('ui_8c4317311ad3')}, {"text": tr('ui_45b58c75117f')}],
-                         [{"text": tr('ui_33ed8513acbd')}, {"text": "🌐 Language" if language.get()=="en" else "🌐 Мова"}],
-                         [{"text": tr("🐞 Повідомити про проблему")}, {"text": "📖 How to use" if language.get()=="en" else "📖 Як користуватися"}]],
+            "keyboard": [[{"text": tr('ui_45b58c75117f')}, {"text": tr('ui_1720591356f5')}],
+                         [{"text": tr('ui_33ed8513acbd')}, {"text": "📖 How to use" if language.get()=="en" else "📖 Як користуватися"}],
+                         [{"text": "🌐 Language" if language.get()=="en" else "🌐 Мова"}, {"text": tr("🐞 Повідомити про проблему")}]],
             "input_field_placeholder": tr('ui_366933c83ece'),
-            "resize_keyboard": True, "is_persistent": True,
+            "resize_keyboard": True, "is_persistent": False, "one_time_keyboard": True,
         }
 
     def show_web_app(self, user_id: int) -> None:
@@ -828,7 +827,7 @@ class ShoppingBot:
             if row["category"] != previous:
                 block.append("\n<b>" + html.escape(CATEGORIES.get(row["category"], CATEGORIES["other"])) + "</b>")
             suffix = " 📷" if row["photo_file_id"] else ""
-            block.append(f"• {html.escape(row['name'][:70])}{suffix}")
+            block.append(f"• {html.escape(row['name'])}{suffix}")
             if row["note"]:
                 block.append(f"  📝 {html.escape(row['note'])}")
             if len("\n".join(lines + block)) > 3600:
@@ -836,9 +835,7 @@ class ShoppingBot:
             lines.extend(block)
             shown += 1
             previous = row["category"]
-            controls = [(row["name"][:28], f"item:{row['id']}"), (tr('ui_a573634f69eb'), f"buy:{row['id']}:all")]
-            if row["photo_file_id"]:
-                controls.append(("📷", f"photo:{row['id']}"))
+            controls = [(row["name"] + suffix, f"item:{row['id']}")]
             keyboard.append(controls)
         if not rows:
             lines.append(tr('ui_2ae6a665289d'))
@@ -847,9 +844,6 @@ class ShoppingBot:
             lines.append(f"{tr('ui_b21c9aac6065')}{shown}{tr('ui_e2b3417bc1de')}{len(rows)}{tr('ui_dd922ebd0935')}")
         keyboard.append([(tr('ui_e303bf93e660'), "list:all"), (tr('ui_1720591356f5'), "catalog:0")])
         markup = buttons(*keyboard)
-        url = os.getenv('SHOPPING_WEB_URL', '')
-        if url.startswith('https://'):
-            markup['inline_keyboard'].insert(0, [{'text': '🛒 Shopping' if language.get() == 'en' else '🛒 Покупки', 'web_app': {'url': url}}])
         return "\n".join(lines), markup
 
     def show_list(self, user_id: int, store_name: str = "", message_id: int | None = None, *, bring_to_bottom=False) -> None:
