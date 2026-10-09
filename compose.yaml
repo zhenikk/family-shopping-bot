@@ -5,6 +5,9 @@ services:
     env_file: .env
     environment:
       SHOPPING_WEB_HOST: 0.0.0.0
+      DEEPSEEK_API_KEY_FILE: /run/secrets/deepseek_api_key
+    secrets:
+      - deepseek_api_key
     ports:
       - "127.0.0.1:8080:8080"
     restart: unless-stopped
@@ -47,3 +50,7 @@ services:
         max-file: "3"
     security_opt:
       - no-new-privileges:true
+
+secrets:
+  deepseek_api_key:
+    file: ${DEEPSEEK_SECRET_FILE:-/dev/null}

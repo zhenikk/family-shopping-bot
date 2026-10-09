@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.4 — 2026-10-09
+
+- Load production DeepSeek credentials from a read-only Docker secret outside the repository and data backups.
+- Exclude local secrets from Git and image build contexts.
+
 ## 0.5.3 — 2026-10-09
 
 - Fix generated English admin translations that broke the locale consistency CI gate.
