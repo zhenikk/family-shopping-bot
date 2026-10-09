@@ -297,6 +297,8 @@ class ShoppingBot:
     def handle_update(self, update: dict) -> None:
         event = update.get('guest_message') or update.get('message') or update.get('callback_query') or {}
         user_id = event.get('from', {}).get('id')
+        if 'guest_message' in update:
+            LOG.info('Guest update: caller=%s query=%s voice=%s reply=%s', type(user_id) is int, bool(event.get('guest_query_id')), bool(event.get('voice')), bool(event.get('reply_to_message')))
         if type(user_id) is not int or not self.update_limits.allow(user_id):
             return
         previous = self.family_context.set("legacy")
@@ -340,6 +342,9 @@ class ShoppingBot:
             if raw.lower().startswith(prefix):
                 raw = raw[len(prefix):].strip()
                 break
+        if not raw and not voice:
+            original = message.get("reply_to_message", {})
+            raw = (original.get("text") or original.get("caption") or "").strip()
         if not voice and (not raw or len(raw) > 4000):
             answer("Mention me with your items, or reply to a voice message with my @username." if english else
                    "Згадайте мене разом зі списком товарів або відповідайте на голосове моїм @username.")

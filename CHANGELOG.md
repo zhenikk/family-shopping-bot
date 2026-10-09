@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1 — 2026-10-09
+
+- Fix guest mentions replying to text shopping lists: use the referenced text when the mention has no items.
+- Add content-free guest delivery diagnostics.
+
 ## 0.4.0 — 2026-10-09
 
 - Support Telegram Guest Mode text and voice replies using the existing local speech queue.

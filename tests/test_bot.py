@@ -61,6 +61,14 @@ class ShoppingBotTests(unittest.TestCase):
         with self.store.db() as db:
             self.assertEqual(db.execute("SELECT count(*) FROM drafts WHERE actor_id=1").fetchone()[0], 1)
 
+    def test_guest_text_reply_creates_draft_from_referenced_text(self):
+        guest = message(1, "@test_shopping_bot", guest_query_id="text-reply", reply_to_message=message(2, "молоко, яйця, хліб"))
+        self.bot.handle_update({"guest_message": guest})
+        with self.store.db() as db:
+            row = db.execute("SELECT id FROM drafts WHERE actor_id=1").fetchone()
+        self.assertIsNotNone(row)
+        self.assertEqual(len(self.store.draft(1, row[0])), 3)
+
     def test_guest_voice_reply_uses_caller_and_existing_queue(self):
         guest = message(1, "@test_shopping_bot", guest_query_id="g2", reply_to_message=message(2, voice={"file_id":"voice-2"}))
         with patch.object(self.bot, "queue_voice") as queue:
