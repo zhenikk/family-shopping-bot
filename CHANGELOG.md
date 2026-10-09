@@ -1,3 +1,7 @@
+## 0.5.22
+
+- Configure Shopping in Telegram: explicit key creation, protected shortcut attachment with Copy key button, secret-free template.
+
 ## 0.5.21
 
 - Send the Shopping shortcut attachment immediately after /shopping instructions, without an extra download step.

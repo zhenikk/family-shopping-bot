@@ -136,8 +136,18 @@ class ShoppingBotTests(unittest.TestCase):
         result = next(params for method, params in self.telegram.calls if method == 'sendMessage' and 'inline_keyboard' in (params.get('reply_markup') or {}))
         self.assertEqual(self.telegram.calls[-1][0], 'sendDocument')
         self.assertNotIn('Bearer', result['text'])
-        self.assertEqual(result['reply_markup']['inline_keyboard'][0][0]['web_app']['url'], 'https://shopping.taranets.dev/shopping-setup')
+        self.assertEqual(result['reply_markup']['inline_keyboard'][0][0]['callback_data'], 'shopping:key')
         self.assertEqual(result['reply_markup']['inline_keyboard'][1][0]['callback_data'], 'shopping:download')
+
+    def test_shopping_key_copy_button_with_secret_free_file(self):
+        from shopping_bot.shortcuts import Shortcuts
+        self.bot.handle_callback(callback(1, 'shopping:key-confirm'))
+        document = next(params for method, params in self.telegram.calls if method == 'sendDocument')
+        credential = document['reply_markup']['inline_keyboard'][0][0]['copy_text']['text']
+        self.assertEqual(Shortcuts(self.bot.families).authenticate(credential[7:]), 1)
+        self.assertTrue(document['protect_content'])
+        self.assertNotIn(credential[7:].encode(), document['document'].read_bytes())
+        self.assertNotIn(credential, document['caption'])
 
     def test_shopping_download_sends_document_in_chat(self):
         self.bot.handle_callback(callback(1, 'shopping:download'))
