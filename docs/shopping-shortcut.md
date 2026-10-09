@@ -54,3 +54,7 @@ This is a bounded beta integration, not a completed whole-product security audit
 Use `/shoppingaudio` to receive a separate signed `Shopping Audio` shortcut with a Copy key button. This rotates the previous key, just like `/shopping`. The template first continues in the Shortcuts app, records normal-quality audio until tapped, then POSTs the raw recording to `/shortcuts/audio`. Limit: 30 seconds / 2 MB. Recognition uses the current bot interface language through the existing Whisper pipeline. No Apple Dictate Text action is used. Text templates remain available through `/shopping`.
 
 Device acceptance check: import with the copied key, run manually and grant permissions, then on an unlocked iPhone say the shortcut name using Siri’s configured language. Verify Shortcuts opens, the recording timer advances, stopping sends audio, and Telegram receives a Ukrainian draft. Siri launch, microphone handoff and locked-screen behavior are experimental until verified on an actual iPhone.
+
+### Updated foreground transition (0.5.34)
+
+Replaced deprecated handoff/dismiss actions and empty app picker with URL `shortcuts://` → Open URLs. Apple documents this app-launch URL: https://support.apple.com/guide/shortcuts/open-create-and-run-a-shortcut-apda283236d7/ios . This confirms launching the app, not microphone/continuation behavior; verify on an unlocked iPhone.

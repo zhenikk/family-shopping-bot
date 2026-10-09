@@ -38,7 +38,7 @@ if args.mode == 'audio':
  workflow['WFWorkflowName'] = 'Shopping Audio'
  actions = workflow['WFWorkflowActions']
  actions[1] = action('recordaudio', WFRecordingCompression='Normal', WFRecordingStart='Immediately', WFRecordingEnd='On Tap', UUID=AUDIO)
- actions[1:1] = [action('dismisssiri'), action('openapp', WFAppIdentifier='com.apple.shortcuts', WFAppName='Shortcuts')]
+ actions[1:1] = [action('url', WFURLActionURL='shortcuts://', UUID='44444444-4444-4444-8444-444444444444'), action('openurl', WFInput={'WFSerializationType':'WFTextTokenAttachment','Value':ref('44444444-4444-4444-8444-444444444444', 'URL')})]
  request = next(item['WFWorkflowActionParameters'] for item in actions if item['WFWorkflowActionIdentifier'].endswith('.downloadurl'))
  request['WFURL'] = 'https://shopping.taranets.dev/shortcuts/audio'
  request['WFHTTPBodyType'] = 'File'

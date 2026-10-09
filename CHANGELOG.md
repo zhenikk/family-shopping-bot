@@ -1,3 +1,7 @@
+## 0.5.34
+
+- Experimental audio shortcut opens Shortcuts through Apple-documented shortcuts:// URL; remove deprecated Dismiss Siri and invalid app picker. Device recording continuity remains unverified.
+
 ## 0.5.33
 
 - Full-width product buttons in chat list; purchase action stays in product card. Remove repeated Mini App launch button and compact the reply menu with auto-hide behavior.

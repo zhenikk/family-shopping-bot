@@ -29,9 +29,12 @@ class ShortcutTemplateTests(unittest.TestCase):
             subprocess.run([sys.executable, str(root / 'scripts/build-shopping-shortcut.py'), '--mode', 'audio', '--output', str(output)], check=True, capture_output=True)
             workflow = plistlib.loads(output.read_bytes())
             actions = workflow['WFWorkflowActions']
-            self.assertEqual(actions[1]['WFWorkflowActionIdentifier'], 'is.workflow.actions.dismisssiri')
-            self.assertEqual(actions[2]['WFWorkflowActionIdentifier'], 'is.workflow.actions.openapp')
-            self.assertEqual(actions[2]['WFWorkflowActionParameters']['WFAppIdentifier'], 'com.apple.shortcuts')
+            self.assertEqual(actions[1]['WFWorkflowActionIdentifier'], 'is.workflow.actions.url')
+            self.assertEqual(actions[1]['WFWorkflowActionParameters']['WFURLActionURL'], 'shortcuts://')
+            self.assertEqual(actions[2]['WFWorkflowActionIdentifier'], 'is.workflow.actions.openurl')
+            self.assertEqual(actions[2]['WFWorkflowActionParameters']['WFInput']['Value']['OutputUUID'], actions[1]['WFWorkflowActionParameters']['UUID'])
+            self.assertNotIn('is.workflow.actions.dismisssiri', [item['WFWorkflowActionIdentifier'] for item in actions])
+            self.assertNotIn('is.workflow.actions.openapp', [item['WFWorkflowActionIdentifier'] for item in actions])
             self.assertNotIn('is.workflow.actions.handoff', [item['WFWorkflowActionIdentifier'] for item in actions])
             self.assertEqual(actions[3]['WFWorkflowActionIdentifier'], 'is.workflow.actions.recordaudio')
             request = actions[4]['WFWorkflowActionParameters']
