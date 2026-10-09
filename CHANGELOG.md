@@ -1,3 +1,7 @@
+## 0.5.17
+
+- Shopping iOS shortcut now dictates text and sends it to a validated, authenticated text endpoint for bot confirmation.
+
 # Changelog
 
 ## 0.5.16 — 2026-10-09

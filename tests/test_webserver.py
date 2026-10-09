@@ -71,6 +71,26 @@ class MiniAppTests(unittest.TestCase):
         conn.close()
         return result
 
+    def test_shortcut_text_auth_validation_and_draft(self):
+        from shopping_bot.shortcuts import Shortcuts
+        keys = Shortcuts(self.bot.families)
+        key = keys.issue(1)
+        def send(value, credential=key):
+            conn = http.client.HTTPConnection('127.0.0.1', self.server.server_port, timeout=5)
+            conn.request('POST', '/shortcuts/text', json.dumps({'text': value}),
+                         {'Authorization': 'Bearer ' + credential, 'Content-Type': 'application/json'})
+            response = conn.getresponse()
+            status = response.status
+            response.read()
+            conn.close()
+            return status
+        self.assertEqual(send('Молоко', 'invalid'), 401)
+        self.assertEqual(send(''), 400)
+        with patch.object(self.bot, 'make_draft') as draft:
+            self.assertEqual(send(' Молоко, хліб '), 200)
+            draft.assert_called_once_with(1, 'Молоко, хліб')
+        self.assertEqual(keys.status(1)['used_today'], 1)
+
     def test_shopping_upload_key_rotation_revoke_and_bounds(self):
         from shopping_bot.shortcuts import Shortcuts
         keys = Shortcuts(self.bot.families)

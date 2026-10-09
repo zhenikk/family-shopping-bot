@@ -15,13 +15,13 @@ workflow = {
  'WFWorkflowImportQuestions':[{'ActionIndex':0,'Category':'Parameter','ParameterKey':'WFTextActionText','Text':'Paste your personal Authorization value (Bearer …) from the bot’s Shopping setup. Never share your configured copy.','DefaultValue':'Bearer PASTE_YOUR_PERSONAL_KEY'}],
  'WFWorkflowActions':[
   action('gettext',WFTextActionText='Bearer PASTE_YOUR_PERSONAL_KEY',UUID=AUTH),
-  action('recordaudio',WFRecordingCompression='Normal',WFRecordingStart='Immediately',WFRecordingEnd='On Tap',UUID=AUDIO),
-  action('downloadurl', UUID=HTTP, WFURL='https://shopping.taranets.dev/shortcuts/audio',WFHTTPMethod='POST',WFHTTPBodyType='File',
-   WFRequestVariable={'WFSerializationType':'WFTextTokenAttachment','Value':ref(AUDIO,'Recorded Audio')},
-   WFFormValues={'WFSerializationType':'WFDictionaryFieldValue','Value':{'WFDictionaryFieldValueItems':[]}},
+  action('dictatetext',WFDictateTextLanguage='uk-UA',WFDictateTextStopListening='After Pause',UUID=AUDIO),
+  action('downloadurl', UUID=HTTP, WFURL='https://shopping.taranets.dev/shortcuts/text',WFHTTPMethod='POST',WFHTTPBodyType='JSON',
+   WFJSONValues={'WFSerializationType':'WFDictionaryFieldValue','Value':{'WFDictionaryFieldValueItems':[
+    {'WFItemType':0,'WFKey':token('text'),'WFValue':{'WFSerializationType':'WFTextTokenString','Value':{'string':'\ufffc','attachmentsByRange':{'{0, 1}':ref(AUDIO,'Dictated Text')}}}}
+   ]}},
    WFHTTPHeaders={'WFSerializationType':'WFDictionaryFieldValue','Value':{'WFDictionaryFieldValueItems':[
-    {'WFItemType':0,'WFKey':token('Authorization'),'WFValue':{'WFSerializationType':'WFTextTokenString','Value':{'string':'\ufffc','attachmentsByRange':{'{0, 1}':ref(AUTH,'Text')}}}},
-    {'WFItemType':0,'WFKey':token('Content-Type'),'WFValue':token('audio/mp4')}
+    {'WFItemType':0,'WFKey':token('Authorization'),'WFValue':{'WFSerializationType':'WFTextTokenString','Value':{'string':'\ufffc','attachmentsByRange':{'{0, 1}':ref(AUTH,'Text')}}}}
    ]}}),
   action('showresult',Text='\ufffc',WFInput={'WFSerializationType':'WFTextTokenAttachment','Value':ref(HTTP,'Contents of URL')}),
  ]}

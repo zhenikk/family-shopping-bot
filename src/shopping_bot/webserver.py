@@ -257,12 +257,12 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
             # Read sockets before taking the membership lock; write after releasing it.
             try:
                 path = urlsplit(self.path).path
-                if path == '/shortcuts/audio' and method == 'POST':
+                if path in ('/shortcuts/audio', '/shortcuts/text') and method == 'POST':
                     if not shortcut_ip_limits.allow(self.client_address[0]) or not upload_slots.acquire(blocking=False):
                         self.respond(429, {'error': 'Upload service is busy'})
                         return
                     try:
-                        self.shortcut_upload()
+                        self.shortcut_upload(text_mode=path.endswith('/text'))
                     finally:
                         upload_slots.release()
                     return
@@ -298,7 +298,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     self.server.sync_slots.release()
                 self.close_connection = True
 
-        def shortcut_upload(self):
+        def shortcut_upload(self, *, text_mode=False):
             auth = self.headers.get('Authorization', '')
             key = auth[7:] if auth.startswith('Bearer ') else ''
             user_id = shortcuts.authenticate(key)
@@ -307,6 +307,27 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 return
             if not shortcut_limits.allow(user_id):
                 self.respond(429, {'error': 'Try again in a minute'})
+                return
+            if text_mode:
+                length = int(self.headers.get('Content-Length', '0'))
+                if self.headers.get('Transfer-Encoding') or not 1 <= length <= 8192:
+                    self.respond(413, {'error': 'Text must be between 1 byte and 8 KB'})
+                    return
+                if self.headers.get('Content-Type', '').split(';')[0].lower() != 'application/json':
+                    self.respond(415, {'error': 'Send JSON with a text field'})
+                    return
+                payload = json.loads(self.rfile.read(length))
+                value = payload.get('text') if isinstance(payload, dict) else None
+                if not isinstance(value, str) or not value.strip() or len(value) > 4000:
+                    raise ValueError('Invalid shopping text')
+                with bot.families.lock:
+                    if shortcuts.authenticate(key) != user_id or not bot.bind_user(user_id):
+                        raise AccessError('Account required')
+                    if not shortcuts.reserve(key):
+                        self.respond(429, {'error': 'Daily Shopping limit reached'})
+                        return
+                    bot.make_draft(user_id, value.strip())
+                self.respond(200, {'status': 'sent', 'message': 'Check Telegram to confirm your list'})
                 return
             if self.headers.get('Transfer-Encoding'):
                 raise ValueError('Content-Length required')

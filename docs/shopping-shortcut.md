@@ -1,3 +1,7 @@
+## Updated template (0.5.17)
+
+Shopping now uses Dictate Text (Ukrainian) and POST JSON to `/shortcuts/text`. Download the new template using `/shopping`, replace the old shortcut, and enter your personal Authorization value. Audio uploads remain supported for older shortcuts. Siri execution still requires verification on a physical iPhone.
+
 # Shopping — public beta setup
 
 ## Українською
