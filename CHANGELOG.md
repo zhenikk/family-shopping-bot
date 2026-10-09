@@ -1,3 +1,7 @@
+## 0.5.30
+
+- Replace deprecated Continue in Shortcuts action in experimental audio template with Dismiss Siri and Open App (Shortcuts). Physical device validation still required.
+
 ## 0.5.29
 
 - Add experimental /shoppingaudio template: hand off from Siri to Shortcuts, record audio and upload to existing language-aware Whisper pipeline. Keep text templates unchanged.
