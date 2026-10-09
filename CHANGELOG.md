@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.14 — 2026-10-09
+
+- Offer a direct secret-free Shopping template download in the bot alongside secure key setup, with Ukrainian/English installation guidance.
+
+
 ## 0.5.13 — 2026-10-09
 
 - Move Shopping key creation out of chat into a Telegram-authenticated setup page; add status, rotation and revocation. Legacy chat-issued keys are revoked on upgrade.

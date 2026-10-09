@@ -136,6 +136,7 @@ class ShoppingBotTests(unittest.TestCase):
         result = self.telegram.calls[-1][1]
         self.assertNotIn('Bearer', result['text'])
         self.assertEqual(result['reply_markup']['inline_keyboard'][0][0]['web_app']['url'], 'https://shopping.taranets.dev/shopping-setup')
+        self.assertEqual(result['reply_markup']['inline_keyboard'][1][0]['url'], 'https://shopping.taranets.dev/Shopping.shortcut')
 
     def test_quantity_parsing(self):
         for raw, expected in [

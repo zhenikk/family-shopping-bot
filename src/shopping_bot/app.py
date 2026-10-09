@@ -474,8 +474,8 @@ class ShoppingBot:
             if not url.startswith('https://'):
                 self.send(user_id, tr('Shopping потребує HTTPS.'))
                 return
-            self.send(user_id, tr('Shopping: підключення, ліміти та відкликання доступу — у захищеному вікні нижче.'),
-                      reply_markup={'inline_keyboard': [[{'text': tr('Налаштувати Shopping'), 'web_app': {'url': url + '/shopping-setup' + ('?lang=en' if language.get() == 'en' else '')}}]]})
+            self.send(user_id, tr('Shopping: створіть і скопіюйте ключ у налаштуваннях, потім завантажте шаблон і вставте ключ під час імпорту. Спочатку запустіть кнопкою, потім спробуйте Siri, Shopping.'),
+                      reply_markup={'inline_keyboard': [[{'text': tr('Налаштувати Shopping'), 'web_app': {'url': url + '/shopping-setup' + ('?lang=en' if language.get() == 'en' else '')}}], [{'text': tr('⬇️ Завантажити Shopping'), 'url': url + '/Shopping.shortcut'}]]})
             return
         if text in ("/family", tr('ui_33ed8513acbd')):
             self.clear_pending(user_id)
