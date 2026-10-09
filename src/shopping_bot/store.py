@@ -28,6 +28,10 @@ def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str,
     # Strip a conversational introduction only when followed by an explicit buy command.
     # Notes may contain semicolons; separators before :: still separate products.
     raw = re.sub(r'::[^,\n]*', lambda match: match[0].replace(';', '\ue000'), raw)
+    # Match whole conversational prefixes, not arbitrary words inside product names.
+    greeting = r'(?:(?:привіт|добрий день|доброго дня|hi|hello)[,!. ]+)?'
+    raw = re.sub(r'^\s*' + greeting + r'(?:(?:я|ми)\s+)?не\s+(?:хочу|хочемо|хотів|хотіла)\s+(?:б\s+)?купити\s+[^,;\n]+(?:[,;\n]|$)', '', raw, flags=re.I)
+    raw = re.sub(r'^\s*' + greeting + r'(?:(?:(?:я|ми)\s+)?(?:хочу|хочемо|хотів|хотіла)\s+(?:б\s+)?купити|(?:i|we)\s+(?:want\s+to|would\s+like\s+to)\s+buy)\s+', '', raw, flags=re.I)
     trip_store = None
     command = re.search(r"\b(?:купи|купіть|купити|buy)\s+", raw, flags=re.I)
     if command:

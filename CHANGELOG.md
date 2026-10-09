@@ -1,3 +1,7 @@
+## 0.5.32
+
+- Strip explicit conversational buy-request prefixes in Ukrainian and English, including greeting and want-to-buy phrases; preserve negation handling. Add regression examples from user report.
+
 ## 0.5.31
 
 - Register private-chat command suggestions at startup, including shopping, shoppingaudio and shoppingoff, with Ukrainian and English descriptions.

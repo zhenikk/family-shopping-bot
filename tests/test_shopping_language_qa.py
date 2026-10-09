@@ -3,6 +3,13 @@ import unittest
 from shopping_bot.store import parse_items
 
 class ShoppingLanguageQA(unittest.TestCase):
+    def test_conversational_buy_request(self):
+        for phrase in ('Привіт я хотів купити яйця, молоко', 'Привіт, я хочу купити яйця і молоко', 'Добрий день, хотіла б купити яйця, молоко'):
+            with self.subTest(phrase=phrase):
+                self.assertEqual(parse_items(phrase), [('Яйця', None), ('Молоко', None)])
+        self.assertEqual(parse_items('Hi, I would like to buy milk and bread'), [('Milk', None), ('Bread', None)])
+        self.assertEqual(parse_items('Я не хочу купити молоко'), [])
+
     def test_user_phrase_matrix(self):
         cases = [
             ('купи дві пачки масла', [('Масло', '2 пачки')]),
