@@ -134,7 +134,9 @@ class Families:
         info=self.details(user_id)
         return [(info['id'],info['name'],info['owner_id'])] if info else []
 
-    def enroll(self,user_id,name,invite=None,*,legacy=False):
+    def enroll(self,user_id,name,invite=None,*,legacy=False,mode=None):
+        if mode not in (None, 'solo', 'shared'):
+            raise ValueError('Invalid list mode')
         if invite:
             status=self.accept_invite(user_id,name,invite)
             return self.family(user_id),status
@@ -149,7 +151,9 @@ class Families:
             db.execute('ATTACH DATABASE ? AS family_data',(store.path,))
             db.execute('BEGIN IMMEDIATE')
             if not legacy:
-                db.execute('INSERT INTO families(id,invite,name,owner_id) VALUES (?,?,?,?)',(family_id,secrets.token_urlsafe(24),('Family ' if self.preference(user_id)=='en' else 'Сім’я ')+name[:40],user_id))
+                english = self.preference(user_id) == 'en'
+                title = (('My shopping' if english else 'Мої покупки') if mode == 'solo' else ('Shared shopping' if english else 'Спільні покупки')) if mode else ('Family ' if english else 'Сім’я ') + name[:40]
+                db.execute('INSERT INTO families(id,invite,name,owner_id) VALUES (?,?,?,?)',(family_id,secrets.token_urlsafe(24),title,user_id))
             db.execute('INSERT OR REPLACE INTO family_data.members VALUES (?,?,?)',(user_id,name[:80],now()))
             db.execute('INSERT INTO users VALUES (?,?)',(user_id,family_id))
             db.execute("INSERT OR IGNORE INTO preferences(user_id,language) VALUES (?,'uk')",(user_id,))

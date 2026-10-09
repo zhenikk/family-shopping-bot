@@ -12,14 +12,14 @@
           "tip": "Мову можна змінити пізніше: /language."
         },
         {
-          "title": "Створіть сім’ю",
-          "body": "Натисніть «Створити сім’ю». Потім відкрийте «Сім’я» та запросіть близьку людину.",
-          "tip": "Створена сім’я ще не означає, що інша людина приєдналася."
+          "title": "Оберіть свій варіант",
+          "body": "Натисніть «Для себе» для особистого списку або «Разом з іншими» для спільних покупок.",
+          "tip": "Обидва варіанти мають усі функції. Запросити когось можна пізніше."
         },
         {
-          "title": "Надішліть запрошення",
-          "body": "У «Сім’я» натисніть «Запросити учасника». Надішліть посилання партнеру або партнерці.",
-          "tip": "Людина має відкрити посилання й підтвердити приєднання. Один учасник = список поки бачите лише ви."
+          "title": "Запрошення необов’язкове",
+          "body": "Користуєтеся самостійно? Одразу додавайте товари. Щоб запросити когось, відкрийте «Сім’я» → «Запросити учасника».",
+          "tip": "Список для однієї людини повноцінний. Інші побачать його лише після підтвердження запрошення."
         },
         {
           "title": "Скажіть, що купити",
@@ -84,14 +84,14 @@
           "tip": "You can change it later with /language."
         },
         {
-          "title": "Create a family",
-          "body": "Tap “Create family”. Then open “Family” to invite someone.",
-          "tip": "Creating a family does not automatically add another person."
+          "title": "Choose how to start",
+          "body": "Choose “Just for me” for a personal list or “With others” for shared shopping.",
+          "tip": "Both options include all shopping features. You can invite someone later."
         },
         {
-          "title": "Share your invitation",
-          "body": "In “Family”, tap “Invite a member”. Send the link to your partner.",
-          "tip": "They must open the link and confirm joining. With one member, only you can see this list."
+          "title": "Inviting others is optional",
+          "body": "Shopping on your own? Start adding items straight away. To invite someone, open “Family” → “Invite a member”.",
+          "tip": "A one-person list has all shopping features. Others see it only after accepting your invitation."
         },
         {
           "title": "Say what you need",

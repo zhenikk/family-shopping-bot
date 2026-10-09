@@ -94,6 +94,21 @@ class ShoppingBot:
         self.family_context.set(family or "legacy")
         return family is not None
 
+    def show_usage_choice(self, user_id):
+        self.send(user_id, tr('Як плануєте користуватися списком? Для себе або разом з іншими — обидва варіанти повноцінні. Запросити когось можна пізніше.'), reply_markup=buttons([(tr('🙋 Для себе'), 'family:solo')], [(tr('👥 Разом з іншими'), 'family:shared')], [(tr('У мене є запрошення'), 'family:joinhelp')]))
+
+    def start_list(self, user_id, name, mode):
+        _, status = self.families.enroll(user_id, name, mode=mode)
+        self.bind_user(user_id)
+        if status == 'already':
+            self.show_list(user_id, bring_to_bottom=True)
+            return
+        text = 'Ваш особистий список готовий. Додавайте товари текстом або голосом. Запрошувати когось не потрібно; за бажанням це можна зробити пізніше.' if mode == 'solo' else 'Список готовий — вже можна додавати товари. Щоб користуватися разом, запросіть інших у розділі «Сім’я». Це можна зробити пізніше.'
+        self.send(user_id, tr(text), reply_markup=self.menu())
+        if mode == 'shared':
+            self.show_family(user_id)
+        self.show_list(user_id)
+
     def show_invite(self, user_id):
         username=self.telegram.call('getMe')['username']
         token=self.families.create_invite(user_id)
@@ -132,7 +147,7 @@ class ShoppingBot:
         members=self.families.members(current['id'])
         lines=[f"👥 {current['name']} · {len(members)}{tr('ui_5f022cf87ad2')}",'']
         if len(members)==1:
-            lines.append(tr('Зараз у сім’ї лише ви. Інший учасник побачить список після того, як відкриє ваше запрошення й підтвердить приєднання.'))
+            lines.append(tr('Списком можна повноцінно користуватися самостійно. Запрошення необов’язкове: за бажанням додайте інших учасників пізніше.'))
             lines.append('')
         for member in members:
             suffix=(tr('ui_109e3f46b4ae') if member['user_id']==user_id else '')+(tr('ui_d22aad051523') if member['user_id']==current['owner_id'] else '')
@@ -207,7 +222,7 @@ class ShoppingBot:
             if legacy and message['message_id'] != target:
                 self.remove_obsolete_panel(user_id, message['message_id'])
             return
-        photo = f'{url}/help/{chosen}-{role}-{step}.png'
+        photo = f"{url}/help/{chosen}-{role}-{step}.png?v={release()['commit']}"
         if target:
             try:
                 if media:
@@ -359,12 +374,11 @@ class ShoppingBot:
         if text.startswith('/start invite_'):
             self.show_invite_preview(user_id,text.split('invite_',1)[1])
             return
-        if text=='/create':
-            _,status=self.families.enroll(user_id,name)
-            self.bind_user(user_id)
-            self.send(user_id,tr('ui_d68371904f25') if status=='already' else tr('ui_6f7df4bd00b9'),reply_markup=self.menu())
-            self.show_family(user_id)
-            self.show_web_app(user_id)
+        if text == '/create':
+            if registered:
+                self.show_list(user_id, bring_to_bottom=True)
+            else:
+                self.show_usage_choice(user_id)
             return
         if text.startswith("/whoami"):
             self.send(user_id, f"{tr('ui_4f0929df6f64')}{user_id}")
@@ -382,7 +396,7 @@ class ShoppingBot:
             self.send(user_id, tr('ui_06ea442c02cb'), reply_markup=self.menu())
             return
         if not registered:
-            self.send(user_id, tr('ui_ecf6cf5bcc46'), reply_markup=buttons([(tr('ui_fa354ddf77af'), "family:create"),(tr('ui_cc3a50c1e3fb'), "family:joinhelp")]))
+            self.show_usage_choice(user_id)
             self.show_web_app(user_id)
             return
         if user_id in self.pending_family_names and text and not text.startswith('/'):
@@ -967,9 +981,12 @@ class ShoppingBot:
             self.telegram.call('answerCallbackQuery',callback_query_id=callback_id)
             self.send(user_id,tr('ui_9efeebf17901'))
             return
-        if query.get("data") == "family:create":
-            self.telegram.call("answerCallbackQuery", callback_query_id=callback_id)
-            self.handle_message({"from": user, "chat": message["chat"], "text": "/create"})
+        if query.get('data') in ('family:create', 'family:solo', 'family:shared'):
+            self.telegram.call('answerCallbackQuery', callback_query_id=callback_id)
+            if query['data'] == 'family:create':
+                self.show_usage_choice(user_id)
+            else:
+                self.start_list(user_id, user.get('first_name') or tr('ui_9e0a513bdc07'), query['data'].split(':')[1])
             return
         if query.get('data','').startswith(('family:accept:','family:join:')):
             route=self.families.message_family(user_id,message.get('message_id'))

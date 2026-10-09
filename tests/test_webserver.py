@@ -61,6 +61,15 @@ class MiniAppTests(unittest.TestCase):
         conn.close()
         return status, body
 
+    def test_personal_list_creation_isolated_and_invalid_mode_rejected(self):
+        self.assertEqual(self.request('/api/family/create', {'mode':'invalid'}, user=55)[0], 400)
+        self.assertIsNone(self.bot.families.family(55))
+        self.assertEqual(self.request('/api/family/create', {'mode':'solo'}, user=55)[0], 200)
+        self.assertEqual(len(self.bot.families.members(self.bot.families.family(55))), 1)
+        self.assertEqual(self.request('/api/add', {'text':'milk'}, user=55)[0], 200)
+        self.assertNotEqual(self.bot.families.family(55), self.bot.families.family(1))
+        self.assertEqual(self.store.catalog_count(), 0)
+
     def test_release_attribution_and_owner_filter(self):
         identity = {'version':'0.2.0', 'commit':'a' * 40}
         with patch('shopping_bot.analytics.release', return_value=identity):
@@ -166,7 +175,7 @@ class MiniAppTests(unittest.TestCase):
         self.assertIn(b'Our groceries',body)
         status,body=self.request('/app.js?lang=en',auth=False)
         self.assertEqual(status,200)
-        self.assertIn(b'Add to the shared list?',body)
+        self.assertIn(b'Add to the list?',body)
 
     def test_admin_auth_sessions_privacy_and_successful_purchase_counts(self):
         self.bot.admin_ids={1}

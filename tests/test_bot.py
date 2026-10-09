@@ -63,7 +63,7 @@ class ShoppingBotTests(unittest.TestCase):
             self.bot.show_help(1, 'en', 'j', 2)
             method, payload = self.telegram.calls[-1]
             self.assertEqual(method, 'sendPhoto')
-            self.assertEqual(payload['photo'], 'https://example.com/help/en-j-2.png')
+            self.assertEqual(payload['photo'], 'https://example.com/help/en-j-2.png?v=unknown')
             query = callback(1, 'help:uk:j:3')
             query['message']['photo'] = [{}]
             self.bot.handle_callback(query)
@@ -160,6 +160,27 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertIn('list:all', str(self.telegram.calls[-1][1]['reply_markup']))
         with self.store.db() as db:
             self.assertEqual(db.execute("SELECT count(*) FROM drafts WHERE actor_id=1").fetchone()[0], 0)
+
+    def test_solo_and_shared_start_choices_and_later_invite(self):
+        self.bot.families.set_language(55, 'en')
+        self.bot.handle_message(message(55, '/start'))
+        choice = next(params for method, params in reversed(self.telegram.calls) if method == 'sendMessage' and 'family:solo' in str(params))
+        self.assertIn('Just for me', str(choice))
+        self.bot.handle_callback(callback(55, 'family:solo'))
+        own = self.bot.families.details(55)
+        self.assertEqual(own['name'], 'My shopping')
+        self.assertEqual(len(self.bot.families.members(own['id'])), 1)
+        self.assertFalse(self.bot.families.invites(55))
+        self.bot.handle_message(message(55, 'milk'))
+        self.assertIn('Add to the list?', self.telegram.calls[-1][1]['text'])
+        token = self.bot.families.create_invite(55)
+        self.assertEqual(self.bot.families.accept_invite(56, 'Friend', token), 'joined')
+        self.assertEqual(self.bot.families.family(56), own['id'])
+        self.assertNotEqual(own['id'], self.bot.families.family(1))
+        self.bot.handle_callback(callback(55, 'family:shared'))
+        self.assertEqual(self.bot.families.details(55)['name'], 'My shopping')
+        self.bot.handle_callback(callback(57, 'family:shared'))
+        self.assertEqual(len(self.bot.families.members(self.bot.families.family(57))), 1)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -305,7 +326,7 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual(len(self.store.recent_history()), 0)
 
     def test_family_onboarding_invitation_and_persisted_routing(self):
-        self.bot.handle_message(message(3, "/create"))
+        self.bot.handle_callback(callback(3, "family:shared"))
         family = self.bot.families.family(3)
         self.assertNotEqual(family, "legacy")
         invite = self.bot.families.invite(3)
@@ -569,7 +590,7 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual(self.bot.families.preference(1),'uk')
         self.bot.handle_message(message(10,'milk, eggs and bread'))
         text=self.telegram.calls[-1][1]['text']
-        self.assertIn('Add to the shared list?',text)
+        self.assertIn('Add to the list?',text)
         self.assertIn('Dairy and eggs',text)
         self.assertIn('Milk',text)
         self.assertEqual(self.store.resolved_items('milk, молоко'),[('Milk',None)])

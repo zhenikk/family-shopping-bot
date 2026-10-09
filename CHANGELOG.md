@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 — 2026-10-09
+
+- Add “Just for me” and “With others” choices to Telegram and Mini App onboarding.
+- Personal lists start immediately, with all shopping features and optional invitations later.
+- Use neutral shopping copy and explain that one-person lists are fully supported.
+- Update Ukrainian/English help and illustrations for optional sharing.
+
 ## 0.2.1 — 2026-10-08
 
 - Fix “List in chat” appearing unresponsive: explicit opening sends the current list to the bottom and removes the previous tracked panel; purchase callbacks continue editing in place.

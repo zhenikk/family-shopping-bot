@@ -94,3 +94,5 @@ header{margin-bottom:16px}h1{font-size:32px;letter-spacing:-1.2px}.headline{marg
 #family{vertical-align:middle;min-height:44px;margin-bottom:12px}
 .language-picker~button.secondary{min-height:44px;padding:9px 12px;font-size:13px;vertical-align:middle;margin-bottom:12px}
 @media(max-width:380px){.language-picker{gap:5px;margin-right:4px}.language-picker select{max-width:155px;padding-right:20px}.language-picker~button.secondary{padding-left:10px;padding-right:10px}}
+
+.usage-choices{display:grid;gap:12px;width:min(100%,360px);margin:24px auto 0}.usage-choices button{min-height:48px}

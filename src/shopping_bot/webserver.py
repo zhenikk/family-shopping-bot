@@ -164,7 +164,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     self.respond(409,{'error':tr('ui_4942d160189f')})
                     return
                 if path=='/api/family/create':
-                    _,status=bot.families.enroll(user_id,self.user_name)
+                    _,status=bot.families.enroll(user_id,self.user_name,mode=data.get('mode'))
                     bot.bind_user(user_id)
                     self.respond(200,{'status':status})
                     return

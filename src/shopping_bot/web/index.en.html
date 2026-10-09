@@ -11,12 +11,12 @@
 </head>
 <body>
 <div class="shell">
-<header><div class="eyebrow">FOR OUR FAMILY <span id="connection">● Shared list</span></div>
+<header><div class="eyebrow">YOUR SHOPPING <span id="connection">● Your list</span></div>
 <div class="headline"><h1 id="title">Shopping</h1><button id="refresh" class="icon-button" aria-label="Refresh list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10a8 8 0 1 0-2 8M20 4v6h-6"/></svg></button></div>
 <p id="subtitle">Loading your list…</p></header>
 <label class="language-picker">🌐 <select id="language" aria-label="Мова / Language"><option value="" disabled>Оберіть мову / Choose language</option><option value="uk">Українська</option><option value="en">English</option></select></label>
 <button id="help-guide" class="secondary" type="button">📖 Help</button>
-<button id="family" class="secondary" type="button">👥 Family</button>
+<button id="family" class="secondary" type="button">👥 Members</button>
 <div id="demo-banner" hidden>Design preview · demo products</div>
 <div class="tools"><label class="search"><span aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg></span><input id="search" type="search" placeholder="Find a product" aria-label="Find a product"></label><button class="add-button" id="add" aria-label="Add products"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></div>
 <div id="filters" class="filters" aria-label="Categories"></div>
@@ -26,5 +26,5 @@
 <dialog id="product-dialog"><form id="product-form"><div class="sheet-top"><span>PRODUCT CARD</span><button type="button" class="icon-button close" aria-label="Close product card">×</button></div><div id="product-photo"></div><h2 id="product-name"></h2><p id="product-status" class="muted"></p><label>Note<textarea id="note" maxlength="200" rows="3" placeholder="For example: buy at Mercadona"></textarea></label><label>Category<select id="category"></select></label><p id="photo-hint" class="hint">Add a packaging photo in chat: send a photo with the product name.</p><div class="sheet-actions"><button type="submit" class="primary">Save</button><button type="button" id="product-action" class="secondary"></button></div></form></dialog>
 <dialog id="add-dialog"><div class="sheet-top"><span>ADD TO LIST</span><button type="button" class="icon-button close" aria-label="Close add products">×</button></div><h2>What do we need?</h2><form id="add-form"><label>Products<textarea id="items" rows="4" maxlength="2400" placeholder="Milk, eggs, potatoes" required></textarea></label><p class="hint">Separate with commas or new lines. Note: potatoes :: buy at Mercadona.</p><div id="draft" hidden></div><button class="primary full" id="add-submit" type="submit">Review list</button></form><button type="button" class="text-button" id="voice">🎙 Add by voice in chat</button></dialog>
 <div id="toast" role="status" hidden><span></span><button id="undo" hidden>Cancel</button></div>
-<dialog id="family-dialog"><div class="sheet-top"><span>OUR FAMILY</span><button type="button" class="icon-button close" aria-label="Close family">×</button></div><h2>Members</h2><div id="family-members" aria-live="polite"></div></dialog>
+<dialog id="family-dialog"><div class="sheet-top"><span>LIST ACCESS</span><button type="button" class="icon-button close" aria-label="Close members window">×</button></div><h2>Members</h2><div id="family-members" aria-live="polite"></div></dialog>
 </body></html>
