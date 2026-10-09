@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1 — 2026-10-09
+
+- Filter conversational shopping introductions, politeness and trailing urgency before creating draft items.
+- Preserve trip store and packaging details in notes, and keep unknown product names available for correction.
+- Add a copy-name button to draft renaming prompts in both languages.
+
 ## 0.5.0 — 2026-10-09
 
 - Add a standalone 11,024-entry Ukrainian/English/Portuguese Open Food Facts category dictionary (ODbL).

@@ -1089,8 +1089,13 @@ class ShoppingBot:
                     self.pending_notes.pop(user_id, None)
                     field = "name" if action == "dname" else "note"
                     self.pending_draft_edits[user_id] = (draft_id, key, panel_id, field)
-                    self.panel(user_id, f"✏️ {item['name']}{tr('ui_87a032f4ad8a')}{(tr('ui_54b55e2783f0') if field == 'name' else tr('ui_304a5e5d8b69'))}{tr('ui_292193705cc1')}",
-                               buttons([(tr('ui_816689e7ff0a'), f"ditem:{draft_id}:{key}")]), panel_id)
+                    markup = buttons([(tr('ui_816689e7ff0a'), f"ditem:{draft_id}:{key}")])
+                    hint = ""
+                    if field == "name":
+                        markup["inline_keyboard"].insert(0, [{"text": tr("📋 Скопіювати назву"), "copy_text": {"text": item["name"]}}])
+                        hint = "\n" + tr("Скопіюйте назву кнопкою нижче, вставте в поле повідомлення та відредагуйте.")
+                    self.panel(user_id, f"✏️ {item['name']}{tr('ui_87a032f4ad8a')}{(tr('ui_54b55e2783f0') if field == 'name' else tr('ui_304a5e5d8b69'))}{hint}{tr('ui_292193705cc1')}", markup, panel_id)
+
                 elif action == "dcats":
                     choices = [[(label, f"dcat:{draft_id}:{key}:{category}")] for category, label in CATEGORIES.items()]
                     choices.append([(tr('ui_0ea5d3b0ea95'), f"ditem:{draft_id}:{key}")])

@@ -740,6 +740,25 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertLessEqual(len(shopping_prompt("uk", ["x" * 60] * 100)), 480)
         self.assertIn("Milk", shopping_prompt("en"))
 
+    def test_draft_name_edit_offers_clipboard_button(self):
+        self.bot.make_draft(1, "Буряк")
+        with self.store.db() as db:
+            draft_id = db.execute("SELECT id FROM drafts WHERE actor_id=1").fetchone()[0]
+        item = self.store.draft(1, draft_id)[0]
+        self.bot.handle_callback(callback(1, f"dname:{draft_id}:{item['key']}"))
+        panels = [p for _,p in self.telegram.calls if "reply_markup" in p]
+        self.assertTrue(any(button.get("copy_text", {}).get("text") == "Буряк"
+                            for p in panels for row in p["reply_markup"].get("inline_keyboard", []) for button in row))
+
+    def test_conversational_shopping_request_filters_chatter(self):
+        raw = "Женя, як пидеш в Меркадону, купи будь ласка буряк і фасоль біленько в маленькій упаковці. Манівини дуже треба. Дякую."
+        items = parse_items(raw)
+        self.assertEqual([name for name, _ in items], ["Буряк", "Квасоля біла", "Манівини"])
+        self.assertIn("маленькій упаковці", items[1][1])
+        self.assertTrue(all("Mercadona" in note for _, note in items))
+        self.assertEqual(parse_items("Please buy milk and bread. Thank you."), [("Milk", None), ("Bread", None)])
+        self.assertEqual(parse_items("Молоко без лактози, картопля фрі, незнайомий товар"), [("Молоко без лактози", None), ("Картопля фрі", None), ("Незнайомий товар", None)])
+
     def test_expanded_categories_and_specific_context(self):
         cases = {"Зубна паста":"care", "Мʼясо":"meat", "Авокади":"produce",
                  "Буряк":"produce", "Горішки":"snacks", "Снекі льоша":"snacks",

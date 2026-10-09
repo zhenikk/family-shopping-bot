@@ -24,6 +24,18 @@ def key_for(name: str) -> str:
 
 def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str, str | None]]:
     """Parse a dictated list. Explicit @Store is optional; no generative parsing."""
+    # Strip a conversational introduction only when followed by an explicit buy command.
+    trip_store = None
+    command = re.search(r"\b(?:купи|купіть|купити|buy)\s+", raw, flags=re.I)
+    if command:
+        prelude = raw[:command.start()]
+        stores = {"Mercadona": r"меркадон\w*|міркадон\w*|mercadona", "Lidl": r"лідл\w*|lidl", "Auchan": r"ашан\w*|auchan"}
+        for label, pattern in stores.items():
+            if re.search(r"\b(?:" + pattern + r")\b", prelude, flags=re.I):
+                trip_store = label
+                break
+        if not prelude.strip() or re.search(r"\b(?:як|коли|підеш|пидеш|треба|потрібно|please|need|when)\b", prelude, flags=re.I):
+            raw = raw[command.end():]
     raw = re.sub(
         r"^\s*(?:сьогодні\s+)?(?:(?:мені|нам)\s+)?(?:треба|потрібно)\s+(?:купити|взяти)\s+",
         "", raw, flags=re.I,
@@ -39,6 +51,10 @@ def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str,
         part = part.strip(" .!?:\t\r\n")
         if not part:
             continue
+        part = re.sub(r"^(?:(?:купи|купіть|додай|додайте|buy|add)\s+)?(?:будь ласка[, ]*|please\s+)", "", part, flags=re.I).strip()
+        part = re.sub(r"\s+(?:(?:мені|нам|вони|це)\s+)*(?:дуже\s+)?(?:треба|потрібн[оі])$", "", part, flags=re.I).strip()
+        if re.fullmatch(r"(?:дуже\s+)?(?:дякую|спасибі|thank you|thanks)(?:\s+(?:тобі|вам|a lot|very much))?", part, flags=re.I) or not part:
+            continue
         store = None
         match = re.search(r"\s+@\s*(Mercadona|Lidl|Auchan)\s*$", part, flags=re.I)
         if match:
@@ -51,6 +67,15 @@ def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str,
             if not part or len(note) > 200:
                 continue
             store = note or None
+        if "::" not in part:
+            packaging = re.search(r"\s+((?:в|у)\s+(?:(?:маленькій|великій|малій|невеликій)\s+)?(?:упаковці|пачці|банці|пляшці)\b.*|in (?:a )?(?:small |large )?(?:pack|package|bottle|jar)\b.*)$", part, flags=re.I)
+            if packaging:
+                store = "; ".join(value for value in (store, packaging.group(1)) if value)
+                part = part[:packaging.start()].strip()
+        part = re.sub(r"^(?:фасоль|квасоля)\s+(?:біленьк\w*|біл[аоу])$", "Квасоля біла", part, flags=re.I)
+        if trip_store:
+            trip_note = "Store: " + trip_store if re.search(r"[a-z]", part, flags=re.I) else "Купити в " + trip_store
+            store = "; ".join(value for value in (store, trip_note) if value)
         part = canonical_name(part)
         normalized = key_for(part)
         if normalized not in seen:
