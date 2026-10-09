@@ -1,6 +1,10 @@
 from __future__ import annotations
 from .i18n import tr, language
 
+import os
+import logging
+from .groq_speech import transcribe_audio
+
 import subprocess
 import tempfile
 from pathlib import Path
@@ -36,8 +40,6 @@ def transcribe(
 ) -> str:
     if language_code not in ("uk", "en"):
         raise ValueError("Invalid language")
-    if not whisper_cli.is_file() or not whisper_model.is_file():
-        raise SpeechError(tr('ui_cec30466e9b4'))
     with tempfile.TemporaryDirectory(prefix="shopping-voice-") as directory:
         root = Path(directory)
         audio = root / "voice.ogg"
@@ -52,6 +54,13 @@ def transcribe(
             )
             if wav.stat().st_size > 120 * 16000 * 2 + 4096:
                 raise SpeechError('Voice messages must be at most 2 minutes.' if language.get() == 'en' else 'Голосове має бути не довшим за 2 хвилини.')
+            if os.getenv('SHOPPING_SPEECH_PROVIDER','local')=='groq':
+                try:
+                    return transcribe_audio(wav,language_code,shopping_prompt(language_code,vocabulary) if shopping_context else '')
+                except Exception:
+                    logging.getLogger(__name__).warning('Groq unavailable; using local Whisper')
+            if not whisper_cli.is_file() or not whisper_model.is_file():
+                raise SpeechError(tr('ui_cec30466e9b4'))
             subprocess.run(
                 [str(whisper_cli), "-m", str(whisper_model), "-f", str(wav), "-l", language_code, "-t", "2",
                  "--prompt", shopping_prompt(language_code, vocabulary) if shopping_context else "", "-otxt", "-of", str(output_prefix)],

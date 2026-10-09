@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.5 — 2026-10-09
+
+- Add opt-in Groq Whisper Large v3 Turbo transcription with a mounted credential, bounded responses and local Whisper fallback.
+- Retain duration limits, Ukrainian/English preference and one worker during initial rollout.
+
 ## 0.5.4 — 2026-10-09
 
 - Load production DeepSeek credentials from a read-only Docker secret outside the repository and data backups.
