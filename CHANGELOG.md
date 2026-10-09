@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.15 — 2026-10-09
+
+- Label bot setup and download buttons explicitly as Shopping iOS Shortcut in Ukrainian and English.
+
+
 ## 0.5.14 — 2026-10-09
 
 - Offer a direct secret-free Shopping template download in the bot alongside secure key setup, with Ukrainian/English installation guidance.
