@@ -295,19 +295,62 @@ class ShoppingBot:
             self.send(user_id, tr('ui_486022a30c33'))
 
     def handle_update(self, update: dict) -> None:
-        event = update.get('message') or update.get('callback_query') or {}
+        event = update.get('guest_message') or update.get('message') or update.get('callback_query') or {}
         user_id = event.get('from', {}).get('id')
         if type(user_id) is not int or not self.update_limits.allow(user_id):
             return
         previous = self.family_context.set("legacy")
         try:
             with self.families.lock:
-                if "message" in update:
+                if "guest_message" in update:
+                    self.handle_guest_message(update["guest_message"])
+                elif "message" in update:
                     self.handle_message(update["message"])
                 elif "callback_query" in update:
                     self.handle_callback(update["callback_query"])
         finally:
             self.family_context.reset(previous)
+
+    def handle_guest_message(self, message: dict) -> None:
+        """Guest chats are untrusted destinations; drafts stay in the caller's DM."""
+        user = message.get("from", {})
+        user_id = user.get("id")
+        query_id = message.get("guest_query_id")
+        if type(user_id) is not int or user.get("is_bot") or not query_id:
+            return
+        registered = self.bind_user(user_id)
+        english = language.get() == "en"
+        username = self.telegram.call("getMe")["username"]
+        def answer(text):
+            self.telegram.call("answerGuestQuery", guest_query_id=query_id, result={
+                "type": "article", "id": "shopping", "title": "Shopping list",
+                "input_message_content": {"message_text": text},
+                "reply_markup": {"inline_keyboard": [[{
+                    "text": "Open bot" if english else "Відкрити бота",
+                    "url": f"https://t.me/{username}",
+                }]]},
+            })
+        if not registered:
+            answer("Open the bot and create or join a list first." if english else
+                   "Спочатку відкрийте бота та створіть список або приєднайтеся до нього.")
+            return
+        voice = message.get("voice") or message.get("reply_to_message", {}).get("voice")
+        raw = re.sub(r"@" + re.escape(username) + r"\b", "", message.get("text") or "", flags=re.IGNORECASE).strip()
+        for prefix in ("додай ", "додати ", "add "):
+            if raw.lower().startswith(prefix):
+                raw = raw[len(prefix):].strip()
+                break
+        if not voice and (not raw or len(raw) > 4000):
+            answer("Mention me with your items, or reply to a voice message with my @username." if english else
+                   "Згадайте мене разом зі списком товарів або відповідайте на голосове моїм @username.")
+            return
+        answer("I’ll send a draft to your private chat with the bot. Confirm it there." if english else
+               "Надішлю чернетку в особистий чат із ботом. Підтвердьте її там.")
+        self.analytics.record("guest_voice" if voice else "guest_text", user)
+        if voice:
+            self.queue_voice(user_id, voice["file_id"])
+        else:
+            self.make_draft(user_id, raw)
 
     def handle_message(self, message: dict) -> None:
         chat = message.get("chat", {})
@@ -1171,7 +1214,7 @@ class ShoppingBot:
             try:
                 updates = self.telegram.call(
                     "getUpdates", offset=offset, timeout=25,
-                    allowed_updates=["message", "callback_query"],
+                    allowed_updates=["message", "callback_query", "guest_message"],
                 )
                 self.last_poll_at = time.monotonic()
                 for update in updates:

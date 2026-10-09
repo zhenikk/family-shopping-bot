@@ -8,7 +8,7 @@ import sqlite3
 import time
 
 LOG=logging.getLogger(__name__)
-KINDS={'bot_start','bot_message','bot_photo','bot_callback','voice_queued','voice_done','voice_error','web_session','web_add','web_buy','web_edit','web_undo','web_family','language','products_added','purchase','bot_error','web_error','poll_error'}
+KINDS={'guest_voice','guest_text','bot_start','bot_message','bot_photo','bot_callback','voice_queued','voice_done','voice_error','web_session','web_add','web_buy','web_edit','web_undo','web_family','language','products_added','purchase','bot_error','web_error','poll_error'}
 
 class Analytics:
     def __init__(self, families):

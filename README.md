@@ -224,3 +224,8 @@ Example: `git log v0.2.0..v0.2.1 --oneline` compares releases. Query `/api/admin
 ### Personal or shared use
 
 After choosing a language, new users choose **Just for me**, **With others**, or open an existing invitation. Both creation paths use an isolated list with all shopping features. A personal list needs no invitations. Sharing later uses the existing invitation flow without copying or losing the list. Existing users keep their list and are not asked to onboard again.
+
+
+### Guest Mode (0.4.0)
+
+Enable **Guest Mode** in the bot settings in BotFather’s Mini App. Existing list members can mention the bot with items in any supported chat, or reply to a voice message with the bot username. Voice replies to the bot are also supported when Telegram delivers them as guest updates. Drafts are sent to the caller’s private bot chat for confirmation; the originating chat receives no product details. Merely saying the bot name in an audio recording does not invoke it. Secret chats are not supported.

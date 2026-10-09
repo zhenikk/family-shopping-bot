@@ -51,6 +51,34 @@ def callback(user_id, data, message_id=50):
 
 
 class ShoppingBotTests(unittest.TestCase):
+    def test_guest_text_creates_private_draft_without_disclosing_items(self):
+        self.bot.handle_update({"guest_message": message(1, "@test_shopping_bot додай молоко, хліб", guest_query_id="g1")})
+        answers = [params for method, params in self.telegram.calls if method == "answerGuestQuery"]
+        self.assertEqual(len(answers), 1)
+        self.assertNotIn("Молоко", str(answers))
+        self.assertFalse(self.store.needs())
+        self.assertTrue(any(method == "sendMessage" and params["chat_id"] == 1 for method, params in self.telegram.calls))
+        with self.store.db() as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM drafts WHERE actor_id=1").fetchone()[0], 1)
+
+    def test_guest_voice_reply_uses_caller_and_existing_queue(self):
+        guest = message(1, "@test_shopping_bot", guest_query_id="g2", reply_to_message=message(2, voice={"file_id":"voice-2"}))
+        with patch.object(self.bot, "queue_voice") as queue:
+            self.bot.handle_update({"guest_message": guest})
+            queue.assert_called_once_with(1, "voice-2")
+
+    def test_guest_direct_voice_reply_is_supported(self):
+        with patch.object(self.bot, "queue_voice") as queue:
+            self.bot.handle_update({"guest_message": message(1, guest_query_id="g3", voice={"file_id":"voice-1"})})
+            queue.assert_called_once_with(1, "voice-1")
+
+    def test_unregistered_guest_does_not_create_family_or_queue_voice(self):
+        with patch.object(self.bot, "queue_voice") as queue:
+            self.bot.handle_update({"guest_message": message(99, guest_query_id="g4", voice={"file_id":"voice"})})
+            queue.assert_not_called()
+        self.assertIsNone(self.bot.families.family(99))
+        self.assertEqual(self.telegram.calls[-1][0], "answerGuestQuery")
+
     def test_help_preserves_pending_invite_and_does_not_create_family(self):
         self.bot.families.pending_start(99, '/start invite_pending')
         self.bot.handle_message(message(99, '/help'))

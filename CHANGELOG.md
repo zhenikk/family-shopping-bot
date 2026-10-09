@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 — 2026-10-09
+
+- Support Telegram Guest Mode text and voice replies using the existing local speech queue.
+- Keep item previews and confirmation in the caller’s private bot chat; guest chats receive only a generic acknowledgement.
+- Require an existing list and preserve rate limits and family isolation.
+
 ## 0.3.0 — 2026-10-09
 
 - Add “Just for me” and “With others” choices to Telegram and Mini App onboarding.
