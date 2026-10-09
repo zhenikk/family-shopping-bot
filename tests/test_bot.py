@@ -51,6 +51,22 @@ def callback(user_id, data, message_id=50):
 
 
 class ShoppingBotTests(unittest.TestCase):
+    def test_category_html_escapes_product_content_on_send_and_edit(self):
+        product = self.store.ensure_product('Тест <b> & товар', 'Без <заміни> & інше')
+        self.store.add_need(product, 1)
+        self.bot.show_list(1)
+        self.bot.show_list(1)
+        self.bot.refresh_views()
+        self.bot.show_item(1, product, 50)
+        rendered = [params for method, params in self.telegram.calls
+                    if method in ('sendMessage', 'editMessageText') and params.get('parse_mode') == 'HTML']
+        self.assertGreaterEqual(len(rendered), 4)
+        for params in rendered:
+            self.assertIn('<b>', params['text'])
+            self.assertIn('&lt;b&gt;', params['text'])
+            self.assertIn('&lt;заміни&gt;', params['text'])
+            self.assertNotIn('Тест <b>', params['text'])
+
     def test_guest_text_creates_private_draft_without_disclosing_items(self):
         self.bot.handle_update({"guest_message": message(1, "@test_shopping_bot додай молоко, хліб", guest_query_id="g1")})
         answers = [params for method, params in self.telegram.calls if method == "answerGuestQuery"]
@@ -797,7 +813,7 @@ class ShoppingBotTests(unittest.TestCase):
         self.store.add_need(potato, 1)
         self.store.add_need(fruit, 2)
         content, _ = self.bot.list_content("Mercadona")
-        self.assertIn("🥬 Овочі та фрукти\n• Картопля", content)
+        self.assertIn("<b>🥬 Овочі та фрукти</b>\n• Картопля", content)
         self.assertIn("• Мандарини", content)
         self.bot.handle_callback(callback(2, f"setcategory:{potato}:other"))
         self.store.ensure_product("картопля")

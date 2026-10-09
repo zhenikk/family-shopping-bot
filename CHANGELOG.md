@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.9 — 2026-10-09
+
+- Bold category names in Telegram shopping lists, drafts and product cards, including shared list refreshes.
+- Escape product names and notes and preserve complete HTML blocks within message limits.
+
 ## 0.5.8 — 2026-10-09
 
 - Add opt-in TypeSafe Jev shadow categorization for names absent from the offline dictionary, without updating user categories.

@@ -179,12 +179,13 @@ class ShoppingBot:
         self.families.route_message(chat_id,result['message_id'],self.family_context.get() if self.families.family(chat_id) else 'none')
         return result
 
-    def panel(self, user_id: int, text: str, markup: dict, message_id: int | None = None) -> int:
+    def panel(self, user_id: int, text: str, markup: dict, message_id: int | None = None, *, parse_mode=None) -> int:
+        formatting = {"parse_mode": parse_mode} if parse_mode else {}
         if message_id is not None:
             self.store.forget_view(user_id, message_id)
             try:
                 self.telegram.call("editMessageText", chat_id=user_id, message_id=message_id,
-                                   text=text, reply_markup=markup)
+                                   text=text, reply_markup=markup, **formatting)
                 self.families.route_message(user_id,message_id,self.family_context.get())
                 return message_id
             except TelegramError as exc:
@@ -193,7 +194,7 @@ class ShoppingBot:
                 if not any(reason in str(exc).lower() for reason in ('message to edit not found', "message can't be edited", 'message_id_invalid')):
                     LOG.warning('Panel edit failed; preserving existing message')
                     return message_id
-        result = self.send(user_id, text, reply_markup=markup)["message_id"]
+        result = self.send(user_id, text, reply_markup=markup, **formatting)["message_id"]
         if message_id is not None:
             self.remove_obsolete_panel(user_id, message_id)
         return result
@@ -572,7 +573,11 @@ class ShoppingBot:
         for index, item in enumerate(items, 1):
             existing=self.store.product_by_name(item['name'])
             active=existing and any(row['id']==existing['id'] for row in self.store.needs())
-            lines.append(f"{index}. {item['name']} · {CATEGORIES[item['category']]}" + (tr('ui_17e79ca873f8') if active else '') + (f"\n   📝 {item['note']}" if item['note'] else ""))
+            block = f"{index}. {html.escape(item['name'])} · <b>{html.escape(CATEGORIES[item['category']])}</b>" + (tr('ui_17e79ca873f8') if active else '') + (f"\n   📝 {html.escape(item['note'])}" if item['note'] else "")
+            if len("\n".join(lines)) + len(block) > 3600:
+                lines.append("…")
+                break
+            lines.append(block)
         controls = []
         if editing:
             lines.append(tr('ui_4908e89b0c6b'))
@@ -582,7 +587,7 @@ class ShoppingBot:
         else:
             lines.append(tr('ui_364563cf6a1f'))
         controls.append([(tr('ui_816689e7ff0a'), f"cancel:{draft_id}")])
-        self.panel(user_id, "\n".join(lines)[:3900], buttons(*controls), panel_id)
+        self.panel(user_id, "\n".join(lines), buttons(*controls), panel_id, parse_mode="HTML")
 
     def show_draft_item(self, user_id, draft_id, key, panel_id):
         items = self.store.draft(user_id, draft_id)
@@ -590,10 +595,10 @@ class ShoppingBot:
         if item is None:
             self.show_draft(user_id, draft_id, panel_id, editing=True)
             return
-        self.panel(user_id, f"✏️ {item['name']}\n{CATEGORIES[item['category']]}{tr('ui_2be7f9402c08')}{item['note'] or '—'}", buttons(
+        self.panel(user_id, f"✏️ {html.escape(item['name'])}\n<b>{html.escape(CATEGORIES[item['category']])}</b>{tr('ui_2be7f9402c08')}{html.escape(item['note'] or '—')}", buttons(
             [(tr('ui_8d2855b10253'), f"dname:{draft_id}:{key}"), (tr('ui_1bc4bea6f13d'), f"dnote:{draft_id}:{key}")],
             [(tr('ui_b6150e14a981'), f"dcats:{draft_id}:{key}"), (tr('ui_2bc919726f86'), f"ddel:{draft_id}:{key}")],
-            [(tr('ui_554dca2bdb83'), f"dedit:{draft_id}")]), panel_id)
+            [(tr('ui_554dca2bdb83'), f"dedit:{draft_id}")]), panel_id, parse_mode="HTML")
 
     def finish_draft_edit(self, user_id, text):
         draft_id, key, panel_id, field = self.pending_draft_edits[user_id]
@@ -762,16 +767,18 @@ class ShoppingBot:
         previous = None
         shown = 0
         for row in rows[:40]:
-            if sum(len(line) + 1 for line in lines) + len(row["note"]) + 150 > 3600:
-                break
-            shown += 1
+            block = []
             if row["category"] != previous:
-                lines.append("\n" + CATEGORIES.get(row["category"], CATEGORIES["other"]))
-                previous = row["category"]
+                block.append("\n<b>" + html.escape(CATEGORIES.get(row["category"], CATEGORIES["other"])) + "</b>")
             suffix = " 📷" if row["photo_file_id"] else ""
-            lines.append(f"• {row['name'][:70]}{suffix}")
+            block.append(f"• {html.escape(row['name'][:70])}{suffix}")
             if row["note"]:
-                lines.append(f"  📝 {row['note']}")
+                block.append(f"  📝 {html.escape(row['note'])}")
+            if len("\n".join(lines + block)) > 3600:
+                break
+            lines.extend(block)
+            shown += 1
+            previous = row["category"]
             controls = [(row["name"][:28], f"item:{row['id']}"), (tr('ui_a573634f69eb'), f"buy:{row['id']}:all")]
             if row["photo_file_id"]:
                 controls.append(("📷", f"photo:{row['id']}"))
@@ -798,7 +805,7 @@ class ShoppingBot:
         if message_id is not None and not bring_to_bottom:
             try:
                 self.telegram.call("editMessageText", chat_id=user_id, message_id=message_id,
-                                   text=content, reply_markup=markup)
+                                   text=content, reply_markup=markup, parse_mode="HTML")
                 self.store.set_view(user_id, store_name, message_id)
                 return
             except TelegramError as exc:
@@ -808,7 +815,7 @@ class ShoppingBot:
                 if not any(reason in str(exc).lower() for reason in ('message to edit not found', "message can't be edited", 'message_id_invalid')):
                     LOG.warning('List panel edit failed; preserving existing message')
                     return
-        result = self.send(user_id, content, reply_markup=markup)
+        result = self.send(user_id, content, reply_markup=markup, parse_mode="HTML")
         if message_id is not None:
             self.remove_obsolete_panel(user_id, message_id)
         self.store.set_view(user_id, store_name, result["message_id"])
@@ -823,7 +830,7 @@ class ShoppingBot:
             content, markup = self.list_content(view["store"])
             try:
                 self.telegram.call("editMessageText", chat_id=view["user_id"],
-                                   message_id=view["message_id"], text=content, reply_markup=markup)
+                                   message_id=view["message_id"], text=content, reply_markup=markup, parse_mode="HTML")
             except TelegramError as exc:
                 if "message is not modified" not in str(exc).lower():
                     LOG.warning("Could not refresh shopping list: %s", exc)
@@ -853,10 +860,10 @@ class ShoppingBot:
             self.send(user_id, tr('ui_8823ca72a6bd'))
             return
         active = any(row["id"] == product_id for row in self.store.needs())
-        text = f"{product['name']}\n{CATEGORIES.get(product['category'], CATEGORIES['other'])}"
+        text = f"{html.escape(product['name'])}\n<b>{html.escape(CATEGORIES.get(product['category'], CATEGORIES['other']))}</b>"
         text += tr('ui_fe6c2bdb348e') if active else tr('ui_76967b28c5e3')
         if product["note"]:
-            text += f"\n\n📝 {product['note']}"
+            text += f"\n\n📝 {html.escape(product['note'])}"
         rows = [[(tr('ui_a573634f69eb'), f"buy:{product_id}:all")] if active else [(tr('ui_21a6c881ff8c'), f"readd:{product_id}")]]
         rows.append([(tr('ui_675da4a00bf6') if product["note"] else tr('ui_d125eb4a052d'), f"note:{product_id}")])
         if product["note"]:
@@ -867,7 +874,7 @@ class ShoppingBot:
             text += tr('ui_2e00db9e6c39')
         rows.append([(tr('ui_61a63f8e97e3'), f"categories:{product_id}")])
         rows.append([(tr('ui_4dfffe931b00'), "list:all"), (tr('ui_1720591356f5'), "catalog:0")])
-        self.panel(user_id, text, buttons(*rows), message_id)
+        self.panel(user_id, text, buttons(*rows), message_id, parse_mode="HTML")
 
     def show_history(self, user_id: int) -> None:
         events = self.store.recent_history()
