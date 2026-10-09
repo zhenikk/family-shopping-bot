@@ -1,3 +1,7 @@
+## 0.5.31
+
+- Register private-chat command suggestions at startup, including shopping, shoppingaudio and shoppingoff, with Ukrainian and English descriptions.
+
 ## 0.5.30
 
 - Replace deprecated Continue in Shortcuts action in experimental audio template with Dismiss Siri and Open App (Shortcuts). Physical device validation still required.

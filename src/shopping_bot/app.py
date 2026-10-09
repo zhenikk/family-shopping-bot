@@ -1387,6 +1387,11 @@ def main() -> None:
             bot.telegram.call("setChatMenuButton", menu_button={"type": "web_app", "text": tr('ui_5dfb415e92a1'), "web_app": {"url": web_url}})
         except TelegramError:
             LOG.warning("Could not configure Mini App menu button")
+    from .commands import register_commands
+    try:
+        register_commands(bot.telegram)
+    except TelegramError:
+        LOG.warning('Could not configure Telegram command suggestions')
     bot.run()
 
 
