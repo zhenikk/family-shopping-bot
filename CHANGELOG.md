@@ -1,3 +1,7 @@
+## 0.5.23
+
+- Consolidate Shopping setup into a single document message with caption and inline controls. Confirmation edits its caption; key creation replaces the old attachment.
+
 ## 0.5.22
 
 - Configure Shopping in Telegram: explicit key creation, protected shortcut attachment with Copy key button, secret-free template.

@@ -133,11 +133,13 @@ class ShoppingBotTests(unittest.TestCase):
     def test_shopping_command_opens_authenticated_setup_without_key(self):
         with patch.dict('os.environ', {'SHOPPING_WEB_URL':'https://shopping.taranets.dev'}):
             self.bot.handle_message(message(1, '/shopping'))
-        result = next(params for method, params in self.telegram.calls if method == 'sendMessage' and 'inline_keyboard' in (params.get('reply_markup') or {}))
-        self.assertEqual(self.telegram.calls[-1][0], 'sendDocument')
-        self.assertNotIn('Bearer', result['text'])
+        documents = [params for method, params in self.telegram.calls if method == 'sendDocument']
+        self.assertEqual(len(documents), 1)
+        result = documents[0]
+        self.assertNotIn('Bearer', result['caption'])
         self.assertEqual(result['reply_markup']['inline_keyboard'][0][0]['callback_data'], 'shopping:key')
-        self.assertEqual(result['reply_markup']['inline_keyboard'][1][0]['callback_data'], 'shopping:download')
+        setup_texts = [params for method, params in self.telegram.calls if method == 'sendMessage' and 'Shopping' in params.get('text', '')]
+        self.assertEqual(setup_texts, [])
 
     def test_shopping_key_copy_button_with_secret_free_file(self):
         from shopping_bot.shortcuts import Shortcuts
@@ -157,7 +159,7 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertTrue(documents[0]['document'].is_file())
         self.assertEqual(documents[0]['chat_id'], 1)
         methods = [method for method, params in self.telegram.calls]
-        self.assertIn('sendMessage', methods[:methods.index('sendDocument')])
+        self.assertNotIn('sendMessage', methods[:methods.index('sendDocument')])
 
     def test_quantity_parsing(self):
         for raw, expected in [

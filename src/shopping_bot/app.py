@@ -474,9 +474,7 @@ class ShoppingBot:
             if not url.startswith('https://'):
                 self.send(user_id, tr('Shopping потребує HTTPS.'))
                 return
-            self.send(user_id, tr('Shopping: натисніть «Налаштувати», підтвердьте створення ключа. Бот надішле файл із кнопкою копіювання ключа. Вставте ключ під час імпорту в Команди.'),
-                      reply_markup={'inline_keyboard': [[{'text': tr('⚙️ Налаштувати Shopping iOS Shortcut'), 'callback_data': 'shopping:key'}], [{'text': tr('⬇️ Завантажити Shopping iOS Shortcut'), 'callback_data': 'shopping:download'}]]})
-            self.send_shopping_shortcut(user_id, instructions=False)
+            self.send_shopping_shortcut(user_id)
             return
         if text in ("/family", tr('ui_33ed8513acbd')):
             self.clear_pending(user_id)
@@ -639,14 +637,12 @@ class ShoppingBot:
         self.show_draft_item(user_id, draft_id, key, panel_id)
 
     def send_shopping_shortcut(self, user_id, *, instructions=True, key=None):
-        if instructions:
-            self.panel(user_id, ('Open the file below in Shortcuts. Paste the Authorization value copied from setup, then run Shopping once manually.' if language.get() == 'en' else 'Відкрий файл нижче в Командах. Встав значення Authorization, скопійоване в налаштуваннях, і запусти Shopping один раз вручну.'), None)
         path = Path(__file__).with_name('web') / 'Shopping.shortcut'
-        extra = {}
+        extra = {'reply_markup': buttons([('Set up Shopping' if language.get() == 'en' else 'Налаштувати Shopping', 'shopping:key')])}
         if key:
             extra = {'protect_content': True, 'reply_markup': {'inline_keyboard': [[{'text': 'Copy key' if language.get() == 'en' else 'Скопіювати ключ', 'copy_text': {'text': 'Bearer ' + key}}]]}}
         result = self.telegram.call('sendDocument', chat_id=user_id, document=path,
-                                    caption=('1. Copy key below. 2. Open this file in Shortcuts and paste it when prompted. The key lasts 30 days; /shoppingoff revokes it.' if language.get() == 'en' else '1. Натисни «Скопіювати ключ». 2. Відкрий цей файл у Командах і встав ключ під час імпорту. Ключ діє 30 днів; /shoppingoff відкликає його.') if key else tr('Shopping iOS Shortcut: відкрийте файл у Командах. Під час імпорту вставте персональне значення Authorization з налаштувань. Не поширюйте копію з ключем.'), **extra)
+                                    caption=('1. Copy key below. 2. Open this file in Shortcuts and paste it when prompted. The key lasts 30 days; /shoppingoff revokes it.' if language.get() == 'en' else '1. Натисни «Скопіювати ключ». 2. Відкрий цей файл у Командах і встав ключ під час імпорту. Ключ діє 30 днів; /shoppingoff відкликає його.') if key else ('Tap Set up Shopping to create a key, then copy it and open this file in Shortcuts. Already configured? Open the file directly.' if language.get() == 'en' else 'Натисни «Налаштувати Shopping», створи й скопіюй ключ, потім відкрий цей файл у Командах. Якщо ключ уже є — відкрий файл одразу.'), **extra)
         previous = self.families.ui_panel(user_id, 'shopping-document')
         self.families.save_ui_panel(user_id, 'shopping-document', result['message_id'], True, 'template')
         if previous:
@@ -1163,12 +1159,18 @@ class ShoppingBot:
                 self.send_shopping_shortcut(user_id)
                 answer = tr("Файл надіслано в чат.")
             elif data == 'shopping:key':
-                self.panel(user_id, ('Create a key in this private Telegram chat? It will be stored in the copy button. The previous key will stop working.' if language.get() == 'en' else 'Створити ключ у цьому особистому чаті Telegram? Він зберігатиметься в кнопці копіювання. Попередній ключ перестане працювати.'), buttons([('Create key' if language.get() == 'en' else 'Створити ключ', 'shopping:key-confirm')]), panel_id)
+                caption = 'Create a key in this private Telegram chat? It will be stored in the copy button. The previous key will stop working.' if language.get() == 'en' else 'Створити ключ у цьому особистому чаті Telegram? Він зберігатиметься в кнопці копіювання. Попередній ключ перестане працювати.'
+                markup = buttons([('Create key' if language.get() == 'en' else 'Створити ключ', 'shopping:key-confirm')])
+                if message.get('document'):
+                    self.telegram.call('editMessageCaption', chat_id=user_id, message_id=panel_id, caption=caption, reply_markup=markup)
+                else:
+                    self.panel(user_id, caption, markup, panel_id)
             elif data == 'shopping:key-confirm':
                 from .shortcuts import Shortcuts
                 key = Shortcuts(self.families).issue(user_id)
                 self.send_shopping_shortcut(user_id, instructions=False, key=key)
-                self.panel(user_id, 'Key created.' if language.get() == 'en' else 'Ключ створено. Скопіюй його кнопкою під файлом.', None, panel_id)
+                if not message.get('document'):
+                    self.remove_obsolete_panel(user_id, panel_id)
             elif action == "add":
                 self.panel(user_id, tr('ui_aea2f162e25b'),
                            buttons([(tr('ui_4dfffe931b00'), "list:all")]), panel_id)
