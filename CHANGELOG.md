@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2 — 2026-10-09
+
+- Keep one local Whisper worker and expose bounded queue wait/workflow latency metrics to the owner dashboard in Ukrainian and English.
+- Track active/waiting/rejected jobs without storing voice content; metrics reset on restart.
+
 ## 0.5.1 — 2026-10-09
 
 - Filter conversational shopping introductions, politeness and trailing urgency before creating draft items.

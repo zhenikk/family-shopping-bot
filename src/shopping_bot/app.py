@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .voice_metrics import VoiceMetrics
 from .support import Support
 from .version import release, configure_logging
 from .limits import RateLimiter, VoiceAdmission
@@ -76,6 +77,7 @@ class ShoppingBot:
         self.notification_lock = threading.Lock()
         self.update_limits = RateLimiter(30, 1)
         self.voice_admission = VoiceAdmission()
+        self.voice_metrics = VoiceMetrics()
         self.voice_limits = RateLimiter(6, 1 / 60)
         self.photo_limits = RateLimiter(5, 1 / 300)
         self.voice_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="local-voice")
@@ -595,8 +597,10 @@ class ShoppingBot:
 
     def queue_voice(self,user_id,file_id,note_product_id=None):
         if not self.voice_limits.allow(user_id) or not self.voice_admission.acquire(user_id):
+            self.voice_metrics.reject()
             self.send(user_id, 'Voice queue is busy. Try again in a minute.' if language.get() == 'en' else 'Голосова черга зайнята. Спробуй за хвилину.')
             return
+        metric_token=self.voice_metrics.enqueue()
         started=threading.Event()
         finished=threading.Event()
         guard=threading.Lock()
@@ -623,16 +627,23 @@ class ShoppingBot:
         timer.daemon=True
 
         def worker():
+            metric_started=self.voice_metrics.start(metric_token)
+            metric_failed=False
             started.set()
             try:
                 self.process_voice(user_id,file_id,note_product_id,on_transcribed=ready)
+            except Exception:
+                metric_failed=True
+                raise
             finally:
+                self.voice_metrics.finish(metric_started,metric_failed)
                 ready()
                 self.voice_admission.release(user_id)
 
         try:
             self.voice_pool.submit(worker_context.run,worker)
         except Exception:
+            self.voice_metrics.cancel(metric_token)
             ready()
             self.voice_admission.release(user_id)
             raise
