@@ -6,6 +6,7 @@ from pathlib import Path
 parser = argparse.ArgumentParser()
 parser.add_argument('--language', choices=('uk', 'en'), default='uk')
 parser.add_argument('--output', type=Path)
+parser.add_argument('--mode', choices=('text', 'audio'), default='text')
 args = parser.parse_args()
 dictation_languages = {'uk': 'uk-UA', 'en': 'en-US'}
 
@@ -33,6 +34,17 @@ workflow = {
   action('nothing'),
  ]}
 # Discard the API response so Siri does not display technical JSON.
+if args.mode == 'audio':
+ workflow['WFWorkflowName'] = 'Shopping Audio'
+ actions = workflow['WFWorkflowActions']
+ actions[1] = action('recordaudio', WFRecordingCompression='Normal', WFRecordingStart='Immediately', WFRecordingEnd='On Tap', UUID=AUDIO)
+ actions.insert(1, action('handoff'))
+ request = next(item['WFWorkflowActionParameters'] for item in actions if item['WFWorkflowActionIdentifier'].endswith('.downloadurl'))
+ request['WFURL'] = 'https://shopping.taranets.dev/shortcuts/audio'
+ request['WFHTTPBodyType'] = 'File'
+ request.pop('WFJSONValues')
+ request['WFRequestVariable'] = {'WFSerializationType':'WFTextTokenAttachment','Value':ref(AUDIO, 'Recorded Audio')}
+ request['WFHTTPHeaders']['Value']['WFDictionaryFieldValueItems'].append({'WFItemType':0,'WFKey':token('Content-Type'),'WFValue':token('audio/mp4')})
 if args.language == 'uk':
  workflow['WFWorkflowImportQuestions'][0]['Text'] = 'Вставте персональне значення Authorization (Bearer …), скопійоване в боті. Не поширюйте налаштовану копію.'
 out=args.output or Path('/private/tmp/Shopping-' + args.language + '-unsigned.shortcut');out.write_bytes(plistlib.dumps(workflow,fmt=plistlib.FMT_BINARY))

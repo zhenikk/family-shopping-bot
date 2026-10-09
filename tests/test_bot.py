@@ -153,6 +153,15 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertIsNone(keys.authenticate(old))
         self.assertEqual(keys.authenticate(new), 1)
 
+    def test_experimental_audio_shortcut_command(self):
+        with patch.dict('os.environ', {'SHOPPING_WEB_URL':'https://shopping.taranets.dev'}):
+            self.bot.handle_message(message(1, '/shoppingaudio'))
+        document = next(params for method, params in self.telegram.calls if method == 'sendDocument')
+        self.assertEqual(document['document'].name, 'Shopping-audio.shortcut')
+        self.assertTrue(document['document'].is_file())
+        self.assertIn('30', document['caption'])
+        self.assertTrue(document['reply_markup']['inline_keyboard'][0][0]['copy_text']['text'].startswith('Bearer '))
+
     def test_shopping_key_copy_button_with_secret_free_file(self):
         from shopping_bot.shortcuts import Shortcuts
         self.bot.handle_callback(callback(1, 'shopping:key-confirm'))

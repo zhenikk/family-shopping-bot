@@ -21,3 +21,19 @@ class ShortcutTemplateTests(unittest.TestCase):
                 identifiers = [item['WFWorkflowActionIdentifier'] for item in workflow['WFWorkflowActions']]
                 self.assertNotIn('is.workflow.actions.showresult', identifiers)
                 self.assertEqual(identifiers[-1], 'is.workflow.actions.nothing')
+
+    def test_audio_handoff_and_raw_upload(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'audio.shortcut'
+            subprocess.run([sys.executable, str(root / 'scripts/build-shopping-shortcut.py'), '--mode', 'audio', '--output', str(output)], check=True, capture_output=True)
+            workflow = plistlib.loads(output.read_bytes())
+            actions = workflow['WFWorkflowActions']
+            self.assertEqual(actions[1]['WFWorkflowActionIdentifier'], 'is.workflow.actions.handoff')
+            self.assertEqual(actions[2]['WFWorkflowActionIdentifier'], 'is.workflow.actions.recordaudio')
+            request = actions[3]['WFWorkflowActionParameters']
+            self.assertTrue(request['WFURL'].endswith('/shortcuts/audio'))
+            self.assertEqual(request['WFHTTPBodyType'], 'File')
+            self.assertNotIn('WFJSONValues', request)
+            self.assertEqual(request['WFRequestVariable']['Value']['OutputUUID'], actions[2]['WFWorkflowActionParameters']['UUID'])
+            self.assertEqual(workflow['WFWorkflowImportQuestions'][0]['ActionIndex'], 0)

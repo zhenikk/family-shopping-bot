@@ -463,7 +463,7 @@ class ShoppingBot:
             self.send(user_id,tr('ui_a81997d616d2') if renamed else tr('ui_b4bc5b9b1531'))
             self.show_family(user_id)
             return
-        if text in ('/shopping', '/shoppingoff'):
+        if text in ('/shopping', '/shoppingoff', '/shoppingaudio'):
             from .shortcuts import Shortcuts
             shortcuts = Shortcuts(self.families)
             if text == '/shoppingoff':
@@ -474,7 +474,7 @@ class ShoppingBot:
             if not url.startswith('https://'):
                 self.send(user_id, tr('Shopping потребує HTTPS.'))
                 return
-            self.send_shopping_shortcut(user_id, key=shortcuts.issue(user_id))
+            self.send_shopping_shortcut(user_id, key=shortcuts.issue(user_id), audio=text == '/shoppingaudio')
             return
         if text in ("/family", tr('ui_33ed8513acbd')):
             self.clear_pending(user_id)
@@ -636,15 +636,18 @@ class ShoppingBot:
         self.pending_draft_edits.pop(user_id, None)
         self.show_draft_item(user_id, draft_id, key, panel_id)
 
-    def send_shopping_shortcut(self, user_id, *, instructions=True, key=None):
+    def send_shopping_shortcut(self, user_id, *, instructions=True, key=None, audio=False):
         shortcut_files = {'uk': 'Shopping.shortcut', 'en': 'Shopping-en.shortcut'}
         selected_language = self.families.preference(user_id) or 'uk'
-        path = Path(__file__).with_name('web') / shortcut_files.get(selected_language, shortcut_files['uk'])
+        path = Path(__file__).with_name('web') / ('Shopping-audio.shortcut' if audio else shortcut_files.get(selected_language, shortcut_files['uk']))
         extra = {'reply_markup': buttons([('Set up Shopping' if language.get() == 'en' else 'Налаштувати Shopping', 'shopping:key')])}
         if key:
             extra = {'protect_content': True, 'reply_markup': {'inline_keyboard': [[{'text': 'Copy key' if language.get() == 'en' else 'Скопіювати ключ', 'copy_text': {'text': 'Bearer ' + key}}]]}}
+        if audio:
+            extra['caption'] = ('TEST: Copy key, import Shopping Audio. Siri runs Shopping Audio → Shortcuts opens → record, tap to stop (max 30 sec). Recognition uses your bot language. New key replaces the previous one. /shoppingoff revokes access.' if language.get() == 'en' else 'ТЕСТ: скопіюй ключ, імпортуй Shopping Audio. Siri запускає Shopping Audio → відкриваються Команди → говори й натисни стоп (до 30 с). Мова розпізнавання — як у боті. Новий ключ замінює попередній. /shoppingoff вимикає доступ.')
+        custom_caption = extra.pop('caption', None)
         result = self.telegram.call('sendDocument', chat_id=user_id, document=path,
-                                    caption=('1. Copy key below. 2. Open this file in Shortcuts and paste it when prompted. New key created; the previous key is revoked. Valid for 30 days. /shoppingoff revokes access.' if language.get() == 'en' else '1. Натисни «Скопіювати ключ». 2. Відкрий цей файл у Командах і встав ключ під час імпорту. Новий ключ створено, попередній відкликано. Діє 30 днів. /shoppingoff вимикає доступ.') if key else ('Tap Set up Shopping to create a key, then copy it and open this file in Shortcuts. Already configured? Open the file directly.' if language.get() == 'en' else 'Натисни «Налаштувати Shopping», створи й скопіюй ключ, потім відкрий цей файл у Командах. Якщо ключ уже є — відкрий файл одразу.'), **extra)
+                                    caption=custom_caption or (('1. Copy key below. 2. Open this file in Shortcuts and paste it when prompted. New key created; the previous key is revoked. Valid for 30 days. /shoppingoff revokes access.' if language.get() == 'en' else '1. Натисни «Скопіювати ключ». 2. Відкрий цей файл у Командах і встав ключ під час імпорту. Новий ключ створено, попередній відкликано. Діє 30 днів. /shoppingoff вимикає доступ.') if key else ('Tap Set up Shopping to create a key, then copy it and open this file in Shortcuts. Already configured? Open the file directly.' if language.get() == 'en' else 'Натисни «Налаштувати Shopping», створи й скопіюй ключ, потім відкрий цей файл у Командах. Якщо ключ уже є — відкрий файл одразу.')), **extra)
         previous = self.families.ui_panel(user_id, 'shopping-document')
         self.families.save_ui_panel(user_id, 'shopping-document', result['message_id'], True, 'template')
         if previous:

@@ -48,3 +48,9 @@ HTTP tests cover key rotation/revocation/expiry, migration, invalid uploads, aut
 DNS: explicit `shopping` A record at Vercel points to 185.217.124.92. The existing Caddy gateway routes this hostname to `family-shopping-bot-bot-1:8080` over the external `family-shopping-bot_default` Docker network. Gateway configuration/compose originals are backed up as `.before-shopping` on the VPS. Keep the external network attachment on gateway recreations. Other hostname routes are preserved.
 
 This is a bounded beta integration, not a completed whole-product security audit or a distributed DDoS defence. Do not describe the service-wide Shopping request quota as a monetary ceiling for every AI provider.
+
+## Experimental audio handoff (0.5.29)
+
+Use `/shoppingaudio` to receive a separate signed `Shopping Audio` shortcut with a Copy key button. This rotates the previous key, just like `/shopping`. The template first continues in the Shortcuts app, records normal-quality audio until tapped, then POSTs the raw recording to `/shortcuts/audio`. Limit: 30 seconds / 2 MB. Recognition uses the current bot interface language through the existing Whisper pipeline. No Apple Dictate Text action is used. Text templates remain available through `/shopping`.
+
+Device acceptance check: import with the copied key, run manually and grant permissions, then on an unlocked iPhone say the shortcut name using Siri’s configured language. Verify Shortcuts opens, the recording timer advances, stopping sends audio, and Telegram receives a Ukrainian draft. Siri launch, microphone handoff and locked-screen behavior are experimental until verified on an actual iPhone.

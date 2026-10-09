@@ -1,3 +1,7 @@
+## 0.5.29
+
+- Add experimental /shoppingaudio template: hand off from Siri to Shortcuts, record audio and upload to existing language-aware Whisper pipeline. Keep text templates unchanged.
+
 ## 0.5.28
 
 - Remove technical JSON result popup from Shopping shortcuts; discard response output after sending.
