@@ -1,3 +1,7 @@
+## 0.5.26
+
+- /shopping immediately creates a scoped key and sends one shortcut attachment with Copy key button, without setup or confirmation steps. Caption explains rotation.
+
 ## 0.5.25
 
 - Select signed Ukrainian or English dictation shortcut from the user’s saved bot interface language. Localize the Ukrainian import prompt.

@@ -137,9 +137,21 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual(len(documents), 1)
         result = documents[0]
         self.assertNotIn('Bearer', result['caption'])
-        self.assertEqual(result['reply_markup']['inline_keyboard'][0][0]['callback_data'], 'shopping:key')
+        self.assertTrue(result['reply_markup']['inline_keyboard'][0][0]['copy_text']['text'].startswith('Bearer '))
+        self.assertTrue(result['protect_content'])
         setup_texts = [params for method, params in self.telegram.calls if method == 'sendMessage' and 'Shopping' in params.get('text', '')]
         self.assertEqual(setup_texts, [])
+
+    def test_shopping_command_immediately_rotates_key(self):
+        from shopping_bot.shortcuts import Shortcuts
+        keys = Shortcuts(self.bot.families)
+        old = keys.issue(1)
+        with patch.dict('os.environ', {'SHOPPING_WEB_URL':'https://shopping.taranets.dev'}):
+            self.bot.handle_message(message(1, '/shopping'))
+        document = next(params for method, params in self.telegram.calls if method == 'sendDocument')
+        new = document['reply_markup']['inline_keyboard'][0][0]['copy_text']['text'][7:]
+        self.assertIsNone(keys.authenticate(old))
+        self.assertEqual(keys.authenticate(new), 1)
 
     def test_shopping_key_copy_button_with_secret_free_file(self):
         from shopping_bot.shortcuts import Shortcuts

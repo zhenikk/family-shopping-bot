@@ -474,7 +474,7 @@ class ShoppingBot:
             if not url.startswith('https://'):
                 self.send(user_id, tr('Shopping потребує HTTPS.'))
                 return
-            self.send_shopping_shortcut(user_id)
+            self.send_shopping_shortcut(user_id, key=shortcuts.issue(user_id))
             return
         if text in ("/family", tr('ui_33ed8513acbd')):
             self.clear_pending(user_id)
@@ -644,7 +644,7 @@ class ShoppingBot:
         if key:
             extra = {'protect_content': True, 'reply_markup': {'inline_keyboard': [[{'text': 'Copy key' if language.get() == 'en' else 'Скопіювати ключ', 'copy_text': {'text': 'Bearer ' + key}}]]}}
         result = self.telegram.call('sendDocument', chat_id=user_id, document=path,
-                                    caption=('1. Copy key below. 2. Open this file in Shortcuts and paste it when prompted. The key lasts 30 days; /shoppingoff revokes it.' if language.get() == 'en' else '1. Натисни «Скопіювати ключ». 2. Відкрий цей файл у Командах і встав ключ під час імпорту. Ключ діє 30 днів; /shoppingoff відкликає його.') if key else ('Tap Set up Shopping to create a key, then copy it and open this file in Shortcuts. Already configured? Open the file directly.' if language.get() == 'en' else 'Натисни «Налаштувати Shopping», створи й скопіюй ключ, потім відкрий цей файл у Командах. Якщо ключ уже є — відкрий файл одразу.'), **extra)
+                                    caption=('1. Copy key below. 2. Open this file in Shortcuts and paste it when prompted. New key created; the previous key is revoked. Valid for 30 days. /shoppingoff revokes access.' if language.get() == 'en' else '1. Натисни «Скопіювати ключ». 2. Відкрий цей файл у Командах і встав ключ під час імпорту. Новий ключ створено, попередній відкликано. Діє 30 днів. /shoppingoff вимикає доступ.') if key else ('Tap Set up Shopping to create a key, then copy it and open this file in Shortcuts. Already configured? Open the file directly.' if language.get() == 'en' else 'Натисни «Налаштувати Shopping», створи й скопіюй ключ, потім відкрий цей файл у Командах. Якщо ключ уже є — відкрий файл одразу.'), **extra)
         previous = self.families.ui_panel(user_id, 'shopping-document')
         self.families.save_ui_panel(user_id, 'shopping-document', result['message_id'], True, 'template')
         if previous:
