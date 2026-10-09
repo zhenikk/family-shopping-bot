@@ -145,6 +145,8 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual(documents[0]['document'].name, 'Shopping.shortcut')
         self.assertTrue(documents[0]['document'].is_file())
         self.assertEqual(documents[0]['chat_id'], 1)
+        methods = [method for method, params in self.telegram.calls]
+        self.assertIn('sendMessage', methods[:methods.index('sendDocument')])
 
     def test_quantity_parsing(self):
         for raw, expected in [

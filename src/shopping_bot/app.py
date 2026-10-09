@@ -638,6 +638,7 @@ class ShoppingBot:
         self.show_draft_item(user_id, draft_id, key, panel_id)
 
     def send_shopping_shortcut(self, user_id):
+        self.panel(user_id, ('Open the file below in Shortcuts. Paste the Authorization value copied from setup, then run Shopping once manually.' if language.get() == 'en' else 'Відкрий файл нижче в Командах. Встав значення Authorization, скопійоване в налаштуваннях, і запусти Shopping один раз вручну.'), None)
         path = Path(__file__).with_name('web') / 'Shopping.shortcut'
         result = self.telegram.call('sendDocument', chat_id=user_id, document=path,
                                     caption=tr('Shopping iOS Shortcut: відкрийте файл у Командах. Під час імпорту вставте персональне значення Authorization з налаштувань. Не поширюйте копію з ключем.'))

@@ -1,3 +1,7 @@
+## 0.5.18
+
+- Copy Shopping credentials and receive the shortcut attachment in Telegram. Remove Mini App download control; show installation instructions before the attachment.
+
 ## 0.5.17
 
 - Shopping iOS shortcut now dictates text and sends it to a validated, authenticated text endpoint for bot confirmation.

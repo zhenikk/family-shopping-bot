@@ -21,12 +21,12 @@ $('install').textContent = text('Встановіть шаблон без сек
 $('create').textContent = text('Створити / замінити ключ', 'Create / rotate key');
 $('revoke').textContent = text('Відкликати доступ', 'Revoke access');
 $('reveal').textContent = text('Показати ключ', 'Show key');
-$('copy').textContent = text('Скопіювати Authorization', 'Copy Authorization');
+$('copy').textContent = text('Скопіювати ключ і отримати файл у боті', 'Copy key and receive file in bot');
 $('private').textContent = text('Показуємо один раз. Поле очиститься за 90 секунд. Ключ діє 30 днів і лише для поточного списку.', 'Shown once. This field clears after 90 seconds. The key lasts 30 days and is bound to your current list.');
 $('manual-title').textContent = text('Ручне налаштування', 'Manual setup');
 $('manual').textContent = text('Dictate Text: українська, зупинка після паузи. Get Contents of URL: POST, заголовок Authorization, тіло JSON, поле text → Dictated Text. Спочатку запустіть кнопкою і надайте дозволи.', 'Dictate Text: stop after pause. Get Contents of URL: POST, Authorization header, JSON body, text → Dictated Text. Run manually first to grant permissions.');
-$('limits').textContent = text('Бета: 10 спроб на день, аудіо до 30 секунд і 2 MB. Загальна квота сервісу — 100 спроб на день. Невдалі завантаження теж можуть витрачати квоту. /shoppingoff вимикає доступ.', 'Beta: 10 attempts/day, up to 30 seconds and 2 MB. Service-wide quota: 100 attempts/day. Failed uploads may also consume quota. /shoppingoff revokes access.');
-$('endpoint').value = location.origin + '/shortcuts/audio';
+$('limits').textContent = text('Бета: 10 спроб на день, текст до 4000 символів. Загальна квота сервісу — 100 спроб на день. Невдалі завантаження теж можуть витрачати квоту. /shoppingoff вимикає доступ.', 'Beta: 10 attempts/day, text up to 4000 characters. Service-wide quota: 100 attempts/day. Failed uploads may also consume quota. /shoppingoff revokes access.');
+$('endpoint').value = location.origin + '/shortcuts/text';
 $('create').onclick = async () => {
  if (!confirm(text('Замінити ключ? Попередній перестане працювати.', 'Rotate key? The previous key will stop working.'))) return;
  $('create').disabled = true; $('create').textContent = text('Створюємо ключ…', 'Creating key…'); $('error').textContent = '';
@@ -41,8 +41,16 @@ $('revoke').onclick = async () => {
 };
 $('reveal').onclick = () => { $('key').type = $('key').type === 'password' ? 'text' : 'password'; };
 $('copy').onclick = async () => {
- try { await navigator.clipboard.writeText($('key').value); $('copy').textContent = text('✓ Скопійовано', '✓ Copied'); $('error').textContent = text('Скопійовано. Вставте у Shopping; не поширюйте.', 'Copied. Paste into Shopping; do not share.'); }
- catch { $('key').type = 'text'; $('key').select(); $('error').textContent = text('Скопіюйте виділений текст вручну.', 'Copy the selected text manually.'); }
+ $('copy').disabled = true;
+ try {
+  await navigator.clipboard.writeText($('key').value);
+  $('copy').textContent = text('✓ Ключ скопійовано', '✓ Key copied');
+  await api('/api/shopping/download', {confirm:true});
+  $('error').textContent = text('Ключ скопійовано, файл надіслано в бот. Поверніться до чату й відкрийте вкладення.', 'Key copied and file sent to bot. Return to chat and open the attachment.');
+ } catch(error) {
+  $('key').type = 'text'; $('key').select();
+  $('error').textContent = text('Якщо копіювання заблоковано, скопіюйте ключ вручну. Файл можна отримати кнопкою в боті.', 'If copying is blocked, copy the key manually. Receive the file using the button in the bot.');
+ } finally { $('copy').disabled = false; }
 };
 addEventListener('pagehide', clearKey);
 tg?.ready(); tg?.expand();
@@ -52,12 +60,6 @@ $('back').textContent = text('← Повернутися до бота', '← Ba
 function backToBot() { clearKey(); if (tg?.initData) tg.close(); else location.href = '/'; }
 $('back').onclick = backToBot;
 tg?.BackButton?.show(); tg?.BackButton?.onClick(backToBot);
-$('download').onclick = async () => {
- $('download').disabled = true; $('download').textContent = text('Надсилаємо файл…', 'Sending file…');
- try { await api('/api/shopping/download', {confirm:true}); $('download').textContent = text('✓ Файл у чаті бота', '✓ File sent to bot chat'); $('error').textContent = text('Поверніться до бота кнопкою вище й відкрийте вкладення Shopping.shortcut.', 'Return to the bot with the button above and open the Shopping.shortcut attachment.'); tg?.HapticFeedback?.notificationOccurred('success'); }
- catch(error) { $('error').textContent = error.message; $('download').textContent = text('Повторити надсилання файлу', 'Retry sending file'); }
- finally { $('download').disabled = false; }
-};
 for (const button of document.querySelectorAll('button')) {
  button.addEventListener('pointerdown', () => tg?.HapticFeedback?.impactOccurred('light'));
 }
