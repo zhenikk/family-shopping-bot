@@ -12,7 +12,7 @@ class ShortcutTemplateTests(unittest.TestCase):
         for locale, expected in [('uk', 'uk-UA'), ('en', 'en-US')]:
             with self.subTest(locale=locale), tempfile.TemporaryDirectory() as temp:
                 output = Path(temp) / 'Shopping.shortcut'
-                subprocess.run([sys.executable, str(root / 'scripts/build-shopping-shortcut.py'), '--language', locale, '--output', str(output)], check=True, capture_output=True)
+                subprocess.run([sys.executable, str(root / 'scripts/build-shopping-shortcut.py'), '--mode', 'text', '--language', locale, '--output', str(output)], check=True, capture_output=True)
                 workflow = plistlib.loads(output.read_bytes())
                 action = next(item for item in workflow['WFWorkflowActions'] if item['WFWorkflowActionIdentifier'].endswith('.dictatetext'))
                 self.assertEqual(action['WFWorkflowActionParameters'].get('WFSpeechLanguage'), expected)

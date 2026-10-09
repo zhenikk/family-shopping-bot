@@ -1,3 +1,7 @@
+## 0.5.37
+
+- Unify public shortcut as Shopping with audio recording and Whisper. /shoppingaudio is a legacy alias, removed from suggestions. Ukrainian/English templates differ only in setup language; recognition follows bot preference.
+
 ## 0.5.36
 
 - Log only shortcut endpoint and response status to diagnose silent delivery failures; no credentials, payload, query string or user identifiers.

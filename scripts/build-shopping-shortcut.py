@@ -6,7 +6,7 @@ from pathlib import Path
 parser = argparse.ArgumentParser()
 parser.add_argument('--language', choices=('uk', 'en'), default='uk')
 parser.add_argument('--output', type=Path)
-parser.add_argument('--mode', choices=('text', 'audio'), default='text')
+parser.add_argument('--mode', choices=('text', 'audio'), default='audio')
 args = parser.parse_args()
 dictation_languages = {'uk': 'uk-UA', 'en': 'en-US'}
 
@@ -35,7 +35,7 @@ workflow = {
  ]}
 # Discard the API response so Siri does not display technical JSON.
 if args.mode == 'audio':
- workflow['WFWorkflowName'] = 'Shopping Audio'
+ workflow['WFWorkflowName'] = 'Shopping'
  actions = workflow['WFWorkflowActions']
  actions[1] = action('recordaudio', WFRecordingCompression='Normal', WFRecordingStart='Immediately', WFRecordingEnd='On Tap', UUID=AUDIO)
  actions[1:1] = [action('url', WFURLActionURL='shortcuts://', UUID='44444444-4444-4444-8444-444444444444'), action('openurl', WFInput={'WFSerializationType':'WFTextTokenAttachment','Value':ref('44444444-4444-4444-8444-444444444444', 'URL')})]

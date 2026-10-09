@@ -157,7 +157,7 @@ class ShoppingBotTests(unittest.TestCase):
         with patch.dict('os.environ', {'SHOPPING_WEB_URL':'https://shopping.taranets.dev'}):
             self.bot.handle_message(message(1, '/shoppingaudio'))
         document = next(params for method, params in self.telegram.calls if method == 'sendDocument')
-        self.assertEqual(document['document'].name, 'Shopping-audio.shortcut')
+        self.assertEqual(document['document'].name, 'Shopping.shortcut')
         self.assertTrue(document['document'].is_file())
         self.assertIn('60', document['caption'])
         self.assertTrue(document['reply_markup']['inline_keyboard'][0][0]['copy_text']['text'].startswith('Bearer '))

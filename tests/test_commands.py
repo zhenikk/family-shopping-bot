@@ -12,5 +12,6 @@ class CommandsTests(unittest.TestCase):
             self.assertEqual(method, 'setMyCommands')
             self.assertEqual(params['scope'], {'type': 'all_private_chats'})
             commands = {item['command'] for item in params['commands']}
-            self.assertTrue({'shopping', 'shoppingaudio', 'shoppingoff'} <= commands)
+            self.assertTrue({'shopping', 'shoppingoff'} <= commands)
+            self.assertNotIn('shoppingaudio', commands)
             self.assertTrue(all(' ' not in name for name in commands))

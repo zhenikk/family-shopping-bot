@@ -1,3 +1,7 @@
+## Current public shortcut (0.5.37)
+
+`/shopping` creates the single Shopping audio-recording shortcut with a Copy key button. Import and replace the old Shopping shortcut, paste the newest Authorization value, then run Shopping. `/shoppingaudio` is only a legacy alias and is absent from command suggestions. Each invocation rotates the sole user key. Duration limit: 60 seconds, upload limit: 2 MB. Server recognition uses the bot language. Siri microphone behavior still needs physical-device validation.
+
 ## Updated template (0.5.17)
 
 Shopping now uses Dictate Text (Ukrainian) and POST JSON to `/shortcuts/text`. Download the new template using `/shopping`, replace the old shortcut, and enter your personal Authorization value. Audio uploads remain supported for older shortcuts. Siri execution still requires verification on a physical iPhone.
