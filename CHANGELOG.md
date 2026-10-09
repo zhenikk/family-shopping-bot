@@ -1,3 +1,7 @@
+## 0.5.21
+
+- Send the Shopping shortcut attachment immediately after /shopping instructions, without an extra download step.
+
 ## 0.5.20
 
 - Remove all shortcut delivery actions from Mini App. Download only using Telegram bot attachment button; setup only manages credentials.

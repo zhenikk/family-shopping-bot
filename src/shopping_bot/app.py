@@ -476,6 +476,7 @@ class ShoppingBot:
                 return
             self.send(user_id, tr('Shopping: створіть і скопіюйте ключ у налаштуваннях, потім завантажте шаблон і вставте ключ під час імпорту. Спочатку запустіть кнопкою, потім спробуйте Siri, Shopping.'),
                       reply_markup={'inline_keyboard': [[{'text': tr('⚙️ Налаштувати Shopping iOS Shortcut'), 'web_app': {'url': url + '/shopping-setup' + ('?lang=en' if language.get() == 'en' else '')}}], [{'text': tr('⬇️ Завантажити Shopping iOS Shortcut'), 'callback_data': 'shopping:download'}]]})
+            self.send_shopping_shortcut(user_id, instructions=False)
             return
         if text in ("/family", tr('ui_33ed8513acbd')):
             self.clear_pending(user_id)
@@ -637,8 +638,9 @@ class ShoppingBot:
         self.pending_draft_edits.pop(user_id, None)
         self.show_draft_item(user_id, draft_id, key, panel_id)
 
-    def send_shopping_shortcut(self, user_id):
-        self.panel(user_id, ('Open the file below in Shortcuts. Paste the Authorization value copied from setup, then run Shopping once manually.' if language.get() == 'en' else 'Відкрий файл нижче в Командах. Встав значення Authorization, скопійоване в налаштуваннях, і запусти Shopping один раз вручну.'), None)
+    def send_shopping_shortcut(self, user_id, *, instructions=True):
+        if instructions:
+            self.panel(user_id, ('Open the file below in Shortcuts. Paste the Authorization value copied from setup, then run Shopping once manually.' if language.get() == 'en' else 'Відкрий файл нижче в Командах. Встав значення Authorization, скопійоване в налаштуваннях, і запусти Shopping один раз вручну.'), None)
         path = Path(__file__).with_name('web') / 'Shopping.shortcut'
         result = self.telegram.call('sendDocument', chat_id=user_id, document=path,
                                     caption=tr('Shopping iOS Shortcut: відкрийте файл у Командах. Під час імпорту вставте персональне значення Authorization з налаштувань. Не поширюйте копію з ключем.'))

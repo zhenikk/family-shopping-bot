@@ -133,7 +133,8 @@ class ShoppingBotTests(unittest.TestCase):
     def test_shopping_command_opens_authenticated_setup_without_key(self):
         with patch.dict('os.environ', {'SHOPPING_WEB_URL':'https://shopping.taranets.dev'}):
             self.bot.handle_message(message(1, '/shopping'))
-        result = self.telegram.calls[-1][1]
+        result = next(params for method, params in self.telegram.calls if method == 'sendMessage' and 'inline_keyboard' in (params.get('reply_markup') or {}))
+        self.assertEqual(self.telegram.calls[-1][0], 'sendDocument')
         self.assertNotIn('Bearer', result['text'])
         self.assertEqual(result['reply_markup']['inline_keyboard'][0][0]['web_app']['url'], 'https://shopping.taranets.dev/shopping-setup')
         self.assertEqual(result['reply_markup']['inline_keyboard'][1][0]['callback_data'], 'shopping:download')
