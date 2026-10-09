@@ -61,6 +61,59 @@ class MiniAppTests(unittest.TestCase):
         conn.close()
         return status, body
 
+    def shortcut_request(self, key, audio=b'fake-audio', headers=None):
+        conn = http.client.HTTPConnection('127.0.0.1', self.server.server_port, timeout=5)
+        values = {'Authorization':'Bearer ' + key, 'Content-Type':'audio/mp4'}
+        values.update(headers or {})
+        conn.request('POST', '/shortcuts/audio', body=audio, headers=values)
+        response = conn.getresponse()
+        result = response.status, response.read()
+        conn.close()
+        return result
+
+    def test_shopping_upload_key_rotation_revoke_and_bounds(self):
+        from shopping_bot.shortcuts import Shortcuts
+        keys = Shortcuts(self.bot.families)
+        first = keys.issue(1)
+        second = keys.issue(1)
+        self.assertIsNone(keys.authenticate(first))
+        self.assertEqual(keys.authenticate(second), 1)
+        self.assertEqual(self.shortcut_request(first)[0], 401)
+        self.assertEqual(self.shortcut_request(second, b'')[0], 413)
+        with patch.object(self.bot, 'queue_voice', return_value=True) as queue:
+            self.assertEqual(self.shortcut_request(second)[0], 202)
+            args, kwargs = queue.call_args
+            self.assertEqual(args[0], 1)
+            path = Path(kwargs['uploaded_path'])
+            self.assertEqual(path.read_bytes(), b'fake-audio')
+            path.unlink()
+        keys.revoke(1)
+        self.assertEqual(self.shortcut_request(second)[0], 401)
+        self.assertIsNone(keys.authenticate('x' * 1000))
+
+    def test_shopping_upload_uses_voice_pipeline_and_cleans_audio(self):
+        from shopping_bot.shortcuts import Shortcuts
+        key = Shortcuts(self.bot.families).issue(1)
+        finished = threading.Event()
+        original = self.bot.make_draft
+        def draft(*args, **kwargs):
+            original(*args, **kwargs)
+            finished.set()
+        with patch('shopping_bot.app.transcribe', return_value='дві пачки масла'), patch('shopping_bot.app.extract_products', return_value=None), patch.object(self.bot, 'make_draft', side_effect=draft):
+            self.assertEqual(self.shortcut_request(key)[0], 202)
+            self.assertTrue(finished.wait(3))
+        self.assertFalse(self.store.needs())
+        with self.store.db() as db:
+            row = db.execute('SELECT id FROM drafts WHERE actor_id=1').fetchone()
+        self.assertEqual(self.store.draft(1, row[0])[0]['note'], '2 пачки')
+
+    def test_shopping_key_expiry(self):
+        from shopping_bot.shortcuts import Shortcuts
+        keys = Shortcuts(self.bot.families)
+        with patch('shopping_bot.shortcuts.time.time', return_value=0):
+            key = keys.issue(1)
+        self.assertIsNone(keys.authenticate(key))
+
     def test_personal_list_creation_isolated_and_invalid_mode_rejected(self):
         self.assertEqual(self.request('/api/family/create', {'mode':'invalid'}, user=55)[0], 400)
         self.assertIsNone(self.bot.families.family(55))

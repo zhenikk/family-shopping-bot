@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.12 — 2026-10-09
+
+- Add Shopping Apple Shortcuts raw-audio uploads with per-user hashed, expiring and revocable credentials (/shopping, /shoppingoff).
+- Reuse the bounded voice pipeline and Telegram draft confirmation, with upload limits and temporary file cleanup.
+- Add upload authentication/lifecycle tests and Ukrainian/English iPhone setup instructions.
+
+
 ## 0.5.11 — 2026-10-09
 
 - Preserve dietary product variants before name deduplication in extraction, text parsing and draft creation; regular and lactose-free milk remain separate.

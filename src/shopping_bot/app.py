@@ -463,6 +463,22 @@ class ShoppingBot:
             self.send(user_id,tr('ui_a81997d616d2') if renamed else tr('ui_b4bc5b9b1531'))
             self.show_family(user_id)
             return
+        if text in ('/shopping', '/shoppingoff'):
+            from .shortcuts import Shortcuts
+            shortcuts = Shortcuts(self.families)
+            if text == '/shoppingoff':
+                shortcuts.revoke(user_id)
+                self.send(user_id, tr('Shopping вимкнено. Персональний ключ відкликано.'))
+                return
+            url = os.getenv('SHOPPING_WEB_URL', '').rstrip('/')
+            if not url.startswith('https://'):
+                self.send(user_id, tr('Shopping потребує HTTPS.'))
+                return
+            key = shortcuts.issue(user_id)
+            self.send(user_id, tr('Налаштування Shopping:') + '\n\nURL: ' + url + '/shortcuts/audio' +
+                      '\nAuthorization: Bearer ' + key + '\n\n' + tr('Ключ персональний, діє 90 днів. Не поширюйте його. /shopping створює новий ключ, /shoppingoff відкликає доступ.') +
+                      '\n\n' + tr('На iPhone: Команди → + → назва Shopping → Записати аудіо (почати одразу, завершити дотиком) → Отримати вміст URL. Метод POST, заголовок Authorization як вище, тіло запиту Файл → Записане аудіо. Відповідь збережеться чернеткою в цьому чаті.'))
+            return
         if text in ("/family", tr('ui_33ed8513acbd')):
             self.clear_pending(user_id)
             self.pending_notes.pop(user_id, None)
@@ -623,11 +639,11 @@ class ShoppingBot:
         self.pending_draft_edits.pop(user_id, None)
         self.show_draft_item(user_id, draft_id, key, panel_id)
 
-    def queue_voice(self,user_id,file_id,note_product_id=None,*,message_id=None):
+    def queue_voice(self,user_id,file_id,note_product_id=None,*,message_id=None,uploaded_path=None):
         if not self.voice_limits.allow(user_id) or not self.voice_admission.acquire(user_id):
             self.voice_metrics.reject()
             self.send(user_id, 'Voice queue is busy. Try again in a minute.' if language.get() == 'en' else 'Голосова черга зайнята. Спробуй за хвилину.')
-            return
+            return False
         metric_token=self.voice_metrics.enqueue()
         started=threading.Event()
         finished=threading.Event()
@@ -659,7 +675,8 @@ class ShoppingBot:
             metric_failed=False
             started.set()
             try:
-                self.process_voice(user_id,file_id,note_product_id,on_transcribed=ready,message_id=message_id)
+                extra = {"uploaded_path": uploaded_path} if uploaded_path else {}
+                self.process_voice(user_id,file_id,note_product_id,on_transcribed=ready,message_id=message_id,**extra)
             except Exception:
                 metric_failed=True
                 raise
@@ -667,6 +684,8 @@ class ShoppingBot:
                 self.voice_metrics.finish(metric_started,metric_failed)
                 ready()
                 self.voice_admission.release(user_id)
+                if uploaded_path:
+                    Path(uploaded_path).unlink(missing_ok=True)
 
         try:
             self.voice_pool.submit(worker_context.run,worker)
@@ -682,7 +701,9 @@ class ShoppingBot:
             ready()
             LOG.warning('Could not start delayed voice status timer')
 
-    def process_voice(self, user_id: int, file_id: str, note_product_id: int | None = None, *, on_transcribed=None,message_id=None) -> None:
+        return True
+
+    def process_voice(self, user_id: int, file_id: str, note_product_id: int | None = None, *, on_transcribed=None,message_id=None,uploaded_path=None) -> None:
         started=time.monotonic()
         successful=False
         selected_language=language.get()
@@ -695,7 +716,14 @@ class ShoppingBot:
         language.set(selected_language)
         try:
             vocabulary = [row["name"] for row in self.store.catalog(limit=12)] if note_product_id is None else []
-            transcript = transcribe(self.telegram, file_id, self.whisper_cli, self.whisper_model, language_code=language.get(), vocabulary=vocabulary, shopping_context=note_product_id is None, benchmark=lambda row:self.analytics.record_speech_benchmark(user_id,dict(row,message_id=message_id)))
+            source = self.telegram
+            if uploaded_path:
+                class Upload:
+                    def download(self, file_id, destination):
+                        import shutil
+                        shutil.copyfile(uploaded_path, destination)
+                source = Upload()
+            transcript = transcribe(source, file_id, self.whisper_cli, self.whisper_model, language_code=language.get(), vocabulary=vocabulary, shopping_context=note_product_id is None, benchmark=lambda row:self.analytics.record_speech_benchmark(user_id,dict(row,message_id=message_id)))
             if on_transcribed:
                 on_transcribed()
             with self.families.lock:

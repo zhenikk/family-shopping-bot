@@ -500,5 +500,10 @@
   "✏️ Виправити": "✏️ Edit",
   "Залишити як є": "Keep unchanged",
   "✅ Підтвердити": "✅ Confirm",
-  "Список змінився. Перевірте зміни й підтвердіть ще раз.": "The list changed. Review and confirm again."
+  "Список змінився. Перевірте зміни й підтвердіть ще раз.": "The list changed. Review and confirm again.",
+  "Shopping вимкнено. Персональний ключ відкликано.": "Shopping disabled. Personal key revoked.",
+  "Shopping потребує HTTPS.": "Shopping requires HTTPS.",
+  "Налаштування Shopping:": "Shopping setup:",
+  "Ключ персональний, діє 90 днів. Не поширюйте його. /shopping створює новий ключ, /shoppingoff відкликає доступ.": "Your key is private and valid for 90 days. Do not share it. /shopping rotates the key; /shoppingoff revokes access.",
+  "На iPhone: Команди → + → назва Shopping → Записати аудіо (почати одразу, завершити дотиком) → Отримати вміст URL. Метод POST, заголовок Authorization як вище, тіло запиту Файл → Записане аудіо. Відповідь збережеться чернеткою в цьому чаті.": "On iPhone: Shortcuts → + → name Shopping → Record Audio (start immediately, finish on tap) → Get Contents of URL. Method POST, Authorization header as above, Request Body File → Recorded Audio. The result arrives as a draft in this chat."
 }

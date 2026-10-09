@@ -2,6 +2,10 @@
 from __future__ import annotations
 from .i18n import tr, language
 
+import tempfile
+import os
+from .shortcuts import Shortcuts
+
 import hashlib
 import hmac
 import json
@@ -53,6 +57,8 @@ def validate_init_data(raw: str, token: str, now: float | None = None) -> int:
 
 
 def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
+    shortcuts = Shortcuts(bot.families)
+    shortcut_limits = RateLimiter(3, 1 / 30)
     reads = RateLimiter(100, 2)
     writes = RateLimiter(30, 0.5)
 
@@ -247,6 +253,9 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
             # Read sockets before taking the membership lock; write after releasing it.
             try:
                 path = urlsplit(self.path).path
+                if path == '/shortcuts/audio' and method == 'POST':
+                    self.shortcut_upload()
+                    return
                 if path.startswith('/api/'):
                     user_id = self.authenticated_user()
                     limiter = writes if method == 'POST' else reads
@@ -278,6 +287,39 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 if getattr(self, 'sync_reserved', False):
                     self.server.sync_slots.release()
                 self.close_connection = True
+
+        def shortcut_upload(self):
+            auth = self.headers.get('Authorization', '')
+            user_id = shortcuts.authenticate(auth[7:] if auth.startswith('Bearer ') else '')
+            if not user_id:
+                self.respond(401, {'error': 'Invalid or expired Shopping key'})
+                return
+            if not shortcut_limits.allow(user_id):
+                self.respond(429, {'error': 'Try again in a minute'})
+                return
+            if self.headers.get('Transfer-Encoding'):
+                raise ValueError('Content-Length required')
+            length = int(self.headers.get('Content-Length', '0'))
+            if not 1 <= length <= 8 * 1024 * 1024:
+                self.respond(413, {'error': 'Audio must be between 1 byte and 8 MB'})
+                return
+            data = self.rfile.read(length)
+            if len(data) != length:
+                raise ValueError('Incomplete audio')
+            fd, filename = tempfile.mkstemp(prefix='shopping-shortcut-', suffix='.audio')
+            handed_off = False
+            try:
+                with os.fdopen(fd, 'wb') as output:
+                    output.write(data)
+                with bot.families.lock:
+                    if not bot.bind_user(user_id):
+                        raise AccessError('Account required')
+                    language.set(bot.families.preference(user_id) or 'uk')
+                    handed_off = bot.queue_voice(user_id, 'shortcut', uploaded_path=filename)
+                self.respond(202 if handed_off else 429, {'status': 'queued' if handed_off else 'busy'})
+            finally:
+                if not handed_off:
+                    Path(filename).unlink(missing_ok=True)
 
         def do_GET(self):
             self.dispatch('GET')
