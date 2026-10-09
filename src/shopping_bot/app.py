@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .extraction import extract_products
 from .voice_metrics import VoiceMetrics
 from .support import Support
 from .version import release, configure_logging
@@ -538,13 +539,18 @@ class ShoppingBot:
         else:
             self.make_draft(user_id, text)
 
-    def make_draft(self, user_id: int, raw: str) -> None:
-        items = self.store.resolved_items(raw)
+    def make_draft(self, user_id: int, raw: str, *, extracted=None) -> None:
+        items = self.store.resolved_items(raw) if extracted is None else extracted
         if not items:
             self.send(user_id, tr('ui_ed4dbaec7704'))
             return
         draft_items = []
+        seen_names=set()
         for name, note in items:
+            name=self.store.resolve_name(name)
+            if name.casefold() in seen_names:
+                continue
+            seen_names.add(name.casefold())
             existing = self.store.product_by_name(name)
             draft_items.append({"key": uuid.uuid4().hex[:8], "name": name,
                                 "note": (tr('ui_b0c5ef5f2ea3') + note if note in STORES else note) or (existing["note"] if existing else ""),
@@ -692,7 +698,12 @@ class ShoppingBot:
                     self.refresh_views()
                     return
                 self.send(user_id, f"{tr('ui_94b5a7bd2400')}{transcript}")
-                self.make_draft(user_id, transcript)
+                extracted=None
+                try:
+                    extracted=extract_products(transcript)
+                except Exception:
+                    LOG.warning("Product extraction unavailable; using local rules")
+                self.make_draft(user_id, transcript, extracted=extracted)
         except (SpeechError, TelegramError) as exc:
             if on_transcribed:
                 on_transcribed()

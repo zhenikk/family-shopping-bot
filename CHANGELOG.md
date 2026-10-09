@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3 — 2026-10-09
+
+- Fix generated English admin translations that broke the locale consistency CI gate.
+- Add opt-in text-only DeepSeek extraction for voice shopping drafts with bounded JSON validation, timeout and local-rule fallback. Voice notes remain local.
+
 ## 0.5.2 — 2026-10-09
 
 - Keep one local Whisper worker and expose bounded queue wait/workflow latency metrics to the owner dashboard in Ukrainian and English.

@@ -474,5 +474,11 @@
   "Дім і сад": "Home & garden",
   "Для авто": "Car supplies",
   "📋 Скопіювати назву": "📋 Copy name",
-  "Скопіюйте назву кнопкою нижче, вставте в поле повідомлення та відредагуйте.": "Copy the name below, paste it into the message field, and edit it."
+  "Скопіюйте назву кнопкою нижче, вставте в поле повідомлення та відредагуйте.": "Copy the name below, paste it into the message field, and edit it.",
+  "Черга голосових": "Voice queue",
+  "У роботі": "Active",
+  "Очікування p95": "Wait p95",
+  "Обробка p95": "Processing p95",
+  "Секунди · останні 512 завдань після перезапуску": "Seconds · last 512 jobs since restart",
+  "Секунди · повний цикл голосового": "Seconds · full voice workflow"
 }
