@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from .quantities import quantity_note
 from .categories import CATEGORIES, infer_category
 from .product_names import canonical_name, product_key, suggested_name
 
@@ -76,6 +77,7 @@ def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str,
         if trip_store:
             trip_note = "Store: " + trip_store if re.search(r"[a-z]", part, flags=re.I) else "Купити в " + trip_store
             store = "; ".join(value for value in (store, trip_note) if value)
+        part, store = quantity_note(part, store)
         part = canonical_name(part)
         normalized = key_for(part)
         if normalized not in seen:

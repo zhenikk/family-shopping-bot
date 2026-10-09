@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 
 from .categories import CATEGORIES, infer_category, food_dictionary, normalize
 from .speech import SpeechError, transcribe
+from .quantities import quantity_note, merge_note
 from .store import STORES, Store, parse_items
 from .telegram import Telegram, TelegramError
 from .families import Families
@@ -549,14 +550,16 @@ class ShoppingBot:
         draft_items = []
         seen_names=set()
         for name, note in items:
+            name, note = quantity_note(name, note)
             name=self.store.resolve_name(name)
             if name.casefold() in seen_names:
                 continue
             seen_names.add(name.casefold())
             existing = self.store.product_by_name(name)
             draft_items.append({"key": uuid.uuid4().hex[:8], "name": name,
-                                "note": (tr('ui_b0c5ef5f2ea3') + note if note in STORES else note) or (existing["note"] if existing else ""),
-                                "category": existing["category"] if existing else infer_category(name)})
+                                "note": merge_note(tr('ui_b0c5ef5f2ea3') + note if note in STORES else note, existing["note"] if existing else ""),
+                                "category": existing["category"] if existing else infer_category(name),
+                                "original_note": existing["note"] if existing else None})
         self.pending_draft_edits.pop(user_id, None)
         draft_id = self.store.save_draft(user_id, draft_items)
         self.show_draft(user_id, draft_id)
@@ -574,16 +577,25 @@ class ShoppingBot:
             existing=self.store.product_by_name(item['name'])
             active=existing and any(row['id']==existing['id'] for row in self.store.needs())
             block = f"{index}. {html.escape(item['name'])} · <b>{html.escape(CATEGORIES[item['category']])}</b>" + (tr('ui_17e79ca873f8') if active else '') + (f"\n   📝 {html.escape(item['note'])}" if item['note'] else "")
+            if active:
+                block += "\n   " + tr('Зараз: ') + html.escape(existing['note'] or '—')
+                block += "\n   " + tr('Пропонується: ') + html.escape(item['note'] or '—')
             if len("\n".join(lines)) + len(block) > 3600:
                 lines.append("…")
                 break
             lines.append(block)
         controls = []
+        active_ids = {row['id'] for row in self.store.needs()}
+        for item in items:
+            existing = self.store.product_by_name(item['name'])
+            if existing and existing['id'] in active_ids:
+                controls.append([(tr('✏️ Виправити') + ' · ' + item['name'][:20], f"ditem:{draft_id}:{item['key']}"),
+                                 (tr('Залишити як є'), f"dkeep:{draft_id}:{item['key']}")])
         if editing:
             lines.append(tr('ui_4908e89b0c6b'))
             controls += [[(item["name"][:35], f"ditem:{draft_id}:{item['key']}")] for item in items]
         if items:
-            controls.append([(tr('ui_b2db6721d657'), f"confirm:{draft_id}"), (tr('ui_646edfb78b75'), f"dedit:{draft_id}")])
+            controls.append([(tr('✅ Підтвердити') if any(self.store.product_by_name(item['name']) for item in items) else tr('ui_b2db6721d657'), f"confirm:{draft_id}"), (tr('ui_646edfb78b75'), f"dedit:{draft_id}")])
         else:
             lines.append(tr('ui_364563cf6a1f'))
         controls.append([(tr('ui_816689e7ff0a'), f"cancel:{draft_id}")])
@@ -1110,6 +1122,9 @@ class ShoppingBot:
                 self.show_list(user_id, message_id=message.get("message_id"))
             elif action == "dedit" and len(parts) == 2:
                 self.show_draft(user_id, int(parts[1]), panel_id, editing=True)
+            elif action == "dkeep" and len(parts) == 3:
+                self.store.change_draft(user_id, int(parts[1]), parts[2], remove=True)
+                self.show_draft(user_id, int(parts[1]), panel_id)
             elif action == "ditem" and len(parts) == 3:
                 self.show_draft_item(user_id, int(parts[1]), parts[2], panel_id)
             elif action in {"dname", "dnote", "dcats", "ddel", "dcat"} and len(parts) in {3, 4}:
@@ -1140,7 +1155,20 @@ class ShoppingBot:
                     self.store.change_draft(user_id, draft_id, key, {"category": parts[3]})
                     self.show_draft_item(user_id, draft_id, key, panel_id)
             elif action == "confirm" and len(parts) == 2:
-                items = self.store.take_draft(user_id, int(parts[1]))
+                draft_id = int(parts[1])
+                pending = self.store.draft(user_id, draft_id)
+                changed = False
+                for item in pending or []:
+                    existing = self.store.product_by_name(item['name'])
+                    current_note = existing['note'] if existing else None
+                    if 'original_note' in item and current_note != item['original_note']:
+                        self.store.change_draft(user_id, draft_id, item['key'], {'original_note': current_note})
+                        changed = True
+                if changed:
+                    self.show_draft(user_id, draft_id, panel_id)
+                    answer = tr('Список змінився. Перевірте зміни й підтвердіть ще раз.')
+                    return
+                items = self.store.take_draft(user_id, draft_id)
                 if items is None:
                     answer = tr('ui_7db7dd991015')
                 else:

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.10 — 2026-10-09
+
+- Extract Ukrainian/English quantity prefixes into editable product notes and retain existing descriptive notes when replacing an amount.
+- Show current/proposed notes for active duplicates with edit and keep controls; apply only on confirmation. Ask to review again if another user changed the note.
+
+
 ## 0.5.9 — 2026-10-09
 
 - Bold category names in Telegram shopping lists, drafts and product cards, including shared list refreshes.

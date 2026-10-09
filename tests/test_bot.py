@@ -51,6 +51,51 @@ def callback(user_id, data, message_id=50):
 
 
 class ShoppingBotTests(unittest.TestCase):
+    def test_quantity_draft_preserves_notes_and_keep_leaves_existing_unchanged(self):
+        product = self.store.ensure_product('масло', '1 пачка; без лактози')
+        self.store.add_need(product, 1)
+        self.bot.make_draft(1, 'дві пачки масла')
+        with self.store.db() as db:
+            draft_id = db.execute('SELECT id FROM drafts WHERE actor_id=1').fetchone()[0]
+        item = self.store.draft(1, draft_id)[0]
+        self.assertEqual(item['name'], 'Масло')
+        self.assertEqual(item['note'], '2 пачки; без лактози')
+        self.assertEqual(self.store.product(product)['note'], '1 пачка; без лактози')
+        self.assertIn('Зараз: ', self.telegram.calls[-1][1]['text'])
+        self.bot.handle_callback(callback(1, f"dkeep:{draft_id}:{item['key']}"))
+        self.bot.handle_callback(callback(1, f"confirm:{draft_id}"))
+        self.assertEqual(self.store.product(product)['note'], '1 пачка; без лактози')
+        self.bot.make_draft(1, 'дві пачки масла')
+        with self.store.db() as db:
+            draft_id = db.execute('SELECT id FROM drafts WHERE actor_id=1').fetchone()[0]
+        self.bot.handle_callback(callback(1, f"confirm:{draft_id}"))
+        self.assertEqual(self.store.product(product)['note'], '2 пачки; без лактози')
+        self.assertEqual(len(self.store.needs()), 1)
+
+    def test_quantity_confirmation_rechecks_changed_notes(self):
+        product = self.store.ensure_product('масло', '1 пачка')
+        self.store.add_need(product, 1)
+        self.bot.make_draft(1, 'дві пачки масла')
+        with self.store.db() as db:
+            draft_id = db.execute('SELECT id FROM drafts WHERE actor_id=1').fetchone()[0]
+        self.store.set_note(product, '3 пачки')
+        self.bot.handle_callback(callback(1, f'confirm:{draft_id}'))
+        self.assertEqual(self.store.product(product)['note'], '3 пачки')
+        self.assertIsNotNone(self.store.draft(1, draft_id))
+        self.bot.handle_callback(callback(1, f'confirm:{draft_id}'))
+        self.assertEqual(self.store.product(product)['note'], '2 пачки')
+
+    def test_quantity_parsing(self):
+        for raw, expected in [
+            ('купи дві буханки хліба', [('Хліб', '2 буханки')]),
+            ('чотири банани', [('Банани', '4 шт.')]),
+            ('літр молока', [('Молоко', '1 л')]),
+            ('two packs butter', [('Butter', '2 packs')]),
+            ('молоко', [('Молоко', None)]),
+            ('7 up', [('7 up', None)]),
+        ]:
+            self.assertEqual(parse_items(raw), expected)
+
     def test_category_html_escapes_product_content_on_send_and_edit(self):
         product = self.store.ensure_product('Тест <b> & товар', 'Без <заміни> & інше')
         self.store.add_need(product, 1)

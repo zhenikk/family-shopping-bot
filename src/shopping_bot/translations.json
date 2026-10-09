@@ -494,5 +494,11 @@
   "Час / користувач / чернетка": "Time / user / draft",
   "Поточна категорія": "Current category",
   "Впевненість": "Confidence",
-  "Час / токени / USD": "Time / tokens / USD"
+  "Час / токени / USD": "Time / tokens / USD",
+  "Зараз: ": "Current: ",
+  "Пропонується: ": "Proposed: ",
+  "✏️ Виправити": "✏️ Edit",
+  "Залишити як є": "Keep unchanged",
+  "✅ Підтвердити": "✅ Confirm",
+  "Список змінився. Перевірте зміни й підтвердіть ще раз.": "The list changed. Review and confirm again."
 }
