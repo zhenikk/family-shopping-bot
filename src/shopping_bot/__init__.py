@@ -1,3 +1,3 @@
 """Family shopping bot."""
 
-__version__ = "0.5.27"
+__version__ = "0.5.28"

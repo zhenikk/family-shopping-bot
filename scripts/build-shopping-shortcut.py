@@ -30,10 +30,9 @@ workflow = {
    WFHTTPHeaders={'WFSerializationType':'WFDictionaryFieldValue','Value':{'WFDictionaryFieldValueItems':[
     {'WFItemType':0,'WFKey':token('Authorization'),'WFValue':{'WFSerializationType':'WFTextTokenString','Value':{'string':'\ufffc','attachmentsByRange':{'{0, 1}':ref(AUTH,'Text')}}}}
    ]}}),
-  action('showresult',Text='\ufffc',WFInput={'WFSerializationType':'WFTextTokenAttachment','Value':ref(HTTP,'Contents of URL')}),
+  action('nothing'),
  ]}
-# HTTP result is shown verbatim: never claim "queued" on an error response.
-workflow['WFWorkflowActions'][-1] = action('showresult', Text={'WFSerializationType':'WFTextTokenString','Value':{'string':'\ufffc','attachmentsByRange':{'{0, 1}':ref(HTTP,'Contents of URL')}}})
+# Discard the API response so Siri does not display technical JSON.
 if args.language == 'uk':
  workflow['WFWorkflowImportQuestions'][0]['Text'] = 'Вставте персональне значення Authorization (Bearer …), скопійоване в боті. Не поширюйте налаштовану копію.'
 out=args.output or Path('/private/tmp/Shopping-' + args.language + '-unsigned.shortcut');out.write_bytes(plistlib.dumps(workflow,fmt=plistlib.FMT_BINARY))

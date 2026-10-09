@@ -1,3 +1,7 @@
+## 0.5.28
+
+- Remove technical JSON result popup from Shopping shortcuts; discard response output after sending.
+
 ## 0.5.27
 
 - Fix Dictate Text language parameter: use WFSpeechLanguage instead of ignored WFDictateTextLanguage. Rebuild and sign both language templates; add generator regression test.

@@ -17,3 +17,7 @@ class ShortcutTemplateTests(unittest.TestCase):
                 action = next(item for item in workflow['WFWorkflowActions'] if item['WFWorkflowActionIdentifier'].endswith('.dictatetext'))
                 self.assertEqual(action['WFWorkflowActionParameters'].get('WFSpeechLanguage'), expected)
                 self.assertNotIn('WFDictateTextLanguage', action['WFWorkflowActionParameters'])
+
+                identifiers = [item['WFWorkflowActionIdentifier'] for item in workflow['WFWorkflowActions']]
+                self.assertNotIn('is.workflow.actions.showresult', identifiers)
+                self.assertEqual(identifiers[-1], 'is.workflow.actions.nothing')
