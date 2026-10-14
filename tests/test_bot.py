@@ -51,6 +51,51 @@ def callback(user_id, data, message_id=50):
 
 
 class ShoppingBotTests(unittest.TestCase):
+    def test_purchase_command_requires_confirmation_and_is_single_use(self):
+        product = self.store.ensure_product('молоко')
+        self.store.add_need(product, 1)
+        self.bot.make_draft(1, 'Я вже купив молоко і все')
+        with self.store.db() as db:
+            draft_id = db.execute('SELECT id FROM drafts WHERE actor_id=1').fetchone()[0]
+        self.assertEqual(len(self.store.needs()), 1)
+        self.bot.handle_callback(callback(2, f'pconfirm:{draft_id}'))
+        self.assertEqual(len(self.store.needs()), 1)
+        self.bot.handle_callback(callback(1, f'confirm:{draft_id}'))
+        self.assertEqual(len(self.store.needs()), 1)
+        self.bot.handle_callback(callback(1, f'pconfirm:{draft_id}'))
+        self.assertEqual(len(self.store.needs()), 0)
+        self.bot.handle_callback(callback(1, f'pconfirm:{draft_id}'))
+        self.assertEqual(len(self.store.needs()), 0)
+
+    def test_purchase_unknown_and_negation_never_add(self):
+        self.bot.make_draft(1, 'куплено барбарис')
+        self.bot.make_draft(1, 'не купив молоко')
+        self.assertEqual(len(self.store.needs()), 0)
+        self.assertIsNone(self.store.product_by_name('барбарис'))
+
+    def test_purchase_skip_and_concurrent_purchase(self):
+        for name in ('молоко', 'яйця'):
+            self.store.add_need(self.store.ensure_product(name), 1)
+        self.bot.make_draft(1, 'купив молоко, яйця')
+        with self.store.db() as db:
+            draft_id = db.execute('SELECT id FROM drafts WHERE actor_id=1').fetchone()[0]
+        items = self.store.draft(1, draft_id)
+        self.bot.handle_callback(callback(1, f"pskip:{draft_id}:{items[0]['key']}"))
+        self.store.purchase(items[1]['product_id'], 2, '')
+        self.bot.handle_callback(callback(1, f'pconfirm:{draft_id}'))
+        self.assertEqual(len(self.store.needs()), 1)
+
+    def test_announcement_owner_preview_cancel_and_no_automatic_send(self):
+        from shopping_bot import announcements
+        self.bot.admin_ids = {1}
+        announcements.preview(self.bot, 2, 'Unauthorized')
+        announcements.preview(self.bot, 1, 'New release')
+        with self.bot.families.db() as db:
+            token = db.execute('SELECT token FROM announcements').fetchone()[0]
+        announcements.approve(self.bot, 2, 'send', token)
+        announcements.approve(self.bot, 1, 'cancel', token)
+        self.assertFalse(any(params.get('text') == 'New release' for _, params in self.telegram.calls))
+
     def test_quantity_draft_preserves_notes_and_keep_leaves_existing_unchanged(self):
         product = self.store.ensure_product('масло', '1 пачка; без лактози')
         self.store.add_need(product, 1)
@@ -382,6 +427,73 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual(self.bot.families.details(55)['name'], 'My shopping')
         self.bot.handle_callback(callback(57, 'family:shared'))
         self.assertEqual(len(self.bot.families.members(self.bot.families.family(57))), 1)
+
+    def sends(self):
+        return [params for method, params in self.telegram.calls if method == 'sendMessage']
+
+    def edits(self, message_id):
+        return [params for method, params in self.telegram.calls if method == 'editMessageText' and params['message_id'] == message_id]
+
+    def test_new_user_reaches_empty_list_in_two_messages_editing_one_panel(self):
+        self.telegram.calls.clear()
+        self.bot.handle_message(message(60, '/start'))
+        self.assertEqual(len(self.sends()), 1)
+        prompt = self.telegram.next_message_id
+        self.bot.handle_callback(callback(60, 'language:uk', message_id=prompt))
+        self.assertEqual(len(self.sends()), 1, 'Language choice must edit the prompt, not send a new message')
+        self.assertIn('family:solo', str(self.edits(prompt)[-1]['reply_markup']))
+        self.bot.handle_callback(callback(60, 'family:solo', message_id=prompt))
+        family = self.bot.families.family(60)
+        self.assertIsNotNone(family)
+        self.assertIn('Список покупок', self.edits(prompt)[-1]['text'])
+        self.assertEqual(len(self.sends()), 2)
+        self.assertIn('keyboard', self.sends()[-1]['reply_markup'], 'Second message carries the reply menu')
+        self.assertFalse(any('web_app' in str(params) for params in self.sends()))
+        self.assertEqual(self.bot.families.message_family(60, prompt), family, 'Edited panel must not be treated as stale')
+        self.assertIn(prompt, [view['message_id'] for view in self.bot.families.resources(family)[0].views()])
+
+    def test_first_text_before_choice_becomes_draft_after_choice(self):
+        self.telegram.calls.clear()
+        self.bot.handle_message(message(61, '/start'))
+        prompt = self.telegram.next_message_id
+        self.bot.handle_callback(callback(61, 'language:uk', message_id=prompt))
+        self.bot.handle_message(message(61, 'молоко, яйця'))
+        self.assertIsNone(self.bot.families.family(61))
+        choice = self.sends()[-1]
+        self.assertIn('family:solo', str(choice['reply_markup']))
+        self.assertIn('збережено', choice['text'].lower())
+        self.assertTrue(any(method == 'deleteMessage' and params['message_id'] == prompt for method, params in self.telegram.calls))
+        self.bot.handle_callback(callback(61, 'family:solo', message_id=self.telegram.next_message_id))
+        draft = self.sends()[-1]
+        self.assertIn('Додати до списку?', draft['text'])
+        self.assertIn('Молоко', draft['text'])
+        deleted = sum(1 for method, _ in self.telegram.calls if method == 'deleteMessage')
+        self.assertLessEqual(len(self.sends()) - deleted, 3, 'At most three visible bot messages before the first draft')
+
+    def test_first_voice_before_choice_is_queued_after_choice(self):
+        self.bot.handle_message(message(62, '/start'))
+        prompt = self.telegram.next_message_id
+        self.bot.handle_callback(callback(62, 'language:uk', message_id=prompt))
+        with patch.object(self.bot, 'queue_voice') as queue:
+            self.bot.handle_message(message(62, voice={'file_id': 'first-voice'}))
+            queue.assert_not_called()
+            self.assertIsNone(self.bot.families.family(62))
+            self.bot.handle_callback(callback(62, 'family:shared', message_id=self.telegram.next_message_id))
+            queue.assert_called_once()
+            self.assertEqual(queue.call_args[0][:2], (62, 'first-voice'))
+        self.assertIsNotNone(self.bot.families.family(62))
+
+    def test_empty_list_copy_depends_on_member_count_and_offers_invite(self):
+        self.bot.handle_callback(callback(63, 'family:solo'))
+        self.bot.bind_user(63)
+        text, markup = self.bot.list_content()
+        self.assertNotIn('для вас обох', text)
+        self.assertIn('Поки порожній', text)
+        self.assertIn('family:invite', str(markup))
+        self.bot.bind_user(1)
+        text, markup = self.bot.list_content()
+        self.assertIn('для всіх учасників', text)
+        self.assertNotIn('family:invite', str(markup))
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

@@ -1,6 +1,8 @@
 from __future__ import annotations
 from .jev import submit as submit_jev
 from .extraction import extract_products
+from .purchase_intent import purchase_targets
+from . import announcements
 from .voice_metrics import VoiceMetrics
 from .support import Support
 from .version import release, configure_logging
@@ -99,8 +101,16 @@ class ShoppingBot:
         self.family_context.set(family or "legacy")
         return family is not None
 
-    def show_usage_choice(self, user_id):
-        self.send(user_id, tr('Як плануєте користуватися списком? Для себе або разом з іншими — обидва варіанти повноцінні. Запросити когось можна пізніше.'), reply_markup=buttons([(tr('🙋 Для себе'), 'family:solo')], [(tr('👥 Разом з іншими'), 'family:shared')], [(tr('У мене є запрошення'), 'family:joinhelp')]))
+    def show_usage_choice(self, user_id, message_id=None, saved=False):
+        """One onboarding panel: edited in place from a callback, re-sent at the bottom after a new message."""
+        text = tr('Як плануєте користуватися списком? Для себе або разом з іншими — обидва варіанти повноцінні. Запросити когось можна пізніше.')
+        if saved:
+            text += '\n\n' + tr('Ваше повідомлення збережено: додам товари одразу після вибору.')
+        markup = buttons([(tr('🙋 Для себе'), 'family:solo')], [(tr('👥 Разом з іншими'), 'family:shared')], [(tr('У мене є запрошення'), 'family:joinhelp')])
+        previous = self.families.ui_panel(user_id, 'onboarding')
+        if previous and previous['message_id'] != message_id:
+            self.remove_obsolete_panel(user_id, previous['message_id'])
+        self.families.save_ui_panel(user_id, 'onboarding', self.panel(user_id, text, markup, message_id), False, '')
 
     def start_list(self, user_id, name, mode):
         _, status = self.families.enroll(user_id, name, mode=mode)
@@ -108,11 +118,23 @@ class ShoppingBot:
         if status == 'already':
             self.show_list(user_id, bring_to_bottom=True)
             return
-        text = 'Ваш особистий список готовий. Додавайте товари текстом або голосом. Запрошувати когось не потрібно; за бажанням це можна зробити пізніше.' if mode == 'solo' else 'Список готовий — вже можна додавати товари. Щоб користуватися разом, запросіть інших у розділі «Сім’я». Це можна зробити пізніше.'
-        self.send(user_id, tr(text), reply_markup=self.menu())
-        if mode == 'shared':
-            self.show_family(user_id)
-        self.show_list(user_id)
+        anchor = self.families.ui_panel(user_id, 'onboarding')
+        saved = self.families.pending_start(user_id)
+        has_app = self.configure_menu_button(user_id)
+        if anchor:
+            # The onboarding panel becomes the live list; re-route it to the new family so its buttons are not stale.
+            self.families.route_message(user_id, anchor['message_id'], self.family_context.get())
+            self.show_list(user_id, message_id=anchor['message_id'])
+        else:
+            self.show_list(user_id)
+        hint = tr('Список готовий. Надішліть товари текстом або голосом: «молоко, яйця, хліб».')
+        if has_app:
+            hint += tr(' Застосунок — кнопка «Покупки» біля поля вводу.')
+        self.send(user_id, hint, reply_markup=self.menu())
+        if saved.startswith('voice:'):
+            self.queue_voice(user_id, saved[len('voice:'):])
+        elif saved and not saved.startswith('/'):
+            self.make_draft(user_id, saved)
 
     def show_invite(self, user_id):
         username=self.telegram.call('getMe')['username']
@@ -284,13 +306,19 @@ class ShoppingBot:
             "resize_keyboard": True, "is_persistent": False, "one_time_keyboard": True,
         }
 
+    def configure_menu_button(self, user_id: int) -> bool:
+        url = os.getenv("SHOPPING_WEB_URL", "")
+        if not url.startswith("https://"):
+            return False
+        try:
+            self.telegram.call('setChatMenuButton',chat_id=user_id,menu_button={'type':'web_app','text':'Shopping' if language.get()=='en' else 'Покупки','web_app':{'url':url}})
+        except TelegramError:
+            LOG.warning('Could not update personal app menu')
+        return True
+
     def show_web_app(self, user_id: int) -> None:
         url = os.getenv("SHOPPING_WEB_URL", "")
-        if url.startswith("https://"):
-            try:
-                self.telegram.call('setChatMenuButton',chat_id=user_id,menu_button={'type':'web_app','text':'Shopping' if language.get()=='en' else 'Покупки','web_app':{'url':url}})
-            except TelegramError:
-                LOG.warning('Could not update personal app menu')
+        if self.configure_menu_button(user_id):
             # Inline/menu launches carry authenticated initData; reply-keyboard
             # web_app launches do not (Telegram's documented launch semantics).
             self.send(user_id, tr('ui_02e3f68d1e6a'), reply_markup={
@@ -370,6 +398,9 @@ class ShoppingBot:
         user_id = int(user["id"])
         text = (message.get("text") or "").strip()
         registered = self.bind_user(user_id)
+        if text.split(' ', 1)[0] == '/announce':
+            announcements.preview(self, user_id, text.partition(' ')[2].strip())
+            return
         if text.split('@', 1)[0] == '/version':
             identity = release()
             self.send(user_id, f"Version: {identity['version']}\nGit: {identity['commit']}")
@@ -449,8 +480,11 @@ class ShoppingBot:
             self.send(user_id, tr('ui_06ea442c02cb'), reply_markup=self.menu())
             return
         if not registered:
-            self.show_usage_choice(user_id)
-            self.show_web_app(user_id)
+            # Keep the newcomer's first items; they become a draft right after the choice.
+            saved = 'voice:' + message['voice']['file_id'] if message.get('voice') else text if text and not text.startswith('/') else ''
+            if saved:
+                self.families.pending_start(user_id, saved)
+            self.show_usage_choice(user_id, saved=bool(saved))
             return
         if user_id in self.pending_family_names and text and not text.startswith('/'):
             try:
@@ -555,6 +589,25 @@ class ShoppingBot:
             self.make_draft(user_id, text)
 
     def make_draft(self, user_id: int, raw: str, *, extracted=None) -> None:
+        targets = purchase_targets(raw)
+        if targets is not None:
+            active = {row['id'] for row in self.store.needs()}
+            items, missing = [], []
+            for name, _ in self.store.resolved_items(targets):
+                product = self.store.product_by_name(name)
+                if product and product['id'] in active:
+                    if not any(item['product_id'] == product['id'] for item in items):
+                        items.append({'key': uuid.uuid4().hex[:8], 'name': product['name'], 'note': '', 'category': product['category'], 'operation': 'purchase', 'product_id': product['id']})
+                else:
+                    missing.append(name)
+            if items:
+                draft_id = self.store.save_draft(user_id, items)
+                self.show_purchase_draft(user_id, draft_id)
+            else:
+                self.send(user_id, self.purchase_label('Не знайшов цих товарів в активному списку.', 'No matching items in your shopping list.'))
+            if missing:
+                self.send(user_id, self.purchase_label('Не знайдено: ', 'Not found: ') + ', '.join(missing))
+            return
         items = self.store.resolved_items(raw) if extracted is None else extracted
         if not items:
             self.send(user_id, tr('ui_ed4dbaec7704'))
@@ -579,6 +632,19 @@ class ShoppingBot:
         for item in draft_items:
             if normalize(item['name']) not in food_dictionary():
                 submit_jev(self.analytics,user_id,draft_id,item)
+
+    def purchase_label(self, uk, en):
+        return en if language.get() == 'en' else uk
+
+    def show_purchase_draft(self, user_id, draft_id, panel_id=None):
+        items = self.store.draft(user_id, draft_id) or []
+        lines = [self.purchase_label('Відмітити як куплене?', 'Mark as bought?')]
+        lines += [html.escape(item['name']) for item in items]
+        rows = [[('✕ ' + item['name'][:35], f"pskip:{draft_id}:{item['key']}")] for item in items]
+        if items:
+            rows.append([(self.purchase_label('✅ Куплено', '✅ Bought'), f'pconfirm:{draft_id}')])
+        rows.append([(self.purchase_label('Скасувати', 'Cancel'), f'cancel:{draft_id}')])
+        self.panel(user_id, '\n'.join(lines), buttons(*rows), panel_id, parse_mode='HTML')
 
     def show_draft(self, user_id: int, draft_id: int, panel_id=None, editing=False) -> None:
         items = self.store.draft(user_id, draft_id)
@@ -765,7 +831,7 @@ class ShoppingBot:
                 self.send(user_id, f"{tr('ui_94b5a7bd2400')}{transcript}")
                 extracted=None
                 try:
-                    extracted=extract_products(transcript)
+                    extracted=extract_products(transcript) if purchase_targets(transcript) is None else None
                 except Exception:
                     LOG.warning("Product extraction unavailable; using local rules")
                 self.make_draft(user_id, transcript, extracted=extracted)
@@ -838,8 +904,11 @@ class ShoppingBot:
             controls = [(row["name"] + suffix, f"item:{row['id']}")]
             keyboard.append(controls)
         if not rows:
-            lines.append(tr('ui_2ae6a665289d'))
+            alone = len(self.families.members(self.family_context.get())) == 1
+            lines.append(tr('Поки порожній. Надішліть товари текстом або голосом.') if alone else tr('Порожній для всіх учасників. Додайте товари текстом чи голосом.'))
             keyboard.append([(tr('ui_3d14fa5a5b38'), "add")])
+            if alone:
+                keyboard.append([('👥 ' + tr('ui_aa604e9d68b3'), 'family:invite')])
         if len(rows) > shown:
             lines.append(f"{tr('ui_b21c9aac6065')}{shown}{tr('ui_e2b3417bc1de')}{len(rows)}{tr('ui_dd922ebd0935')}")
         keyboard.append([(tr('ui_e303bf93e660'), "list:all"), (tr('ui_1720591356f5'), "catalog:0")])
@@ -1068,6 +1137,12 @@ class ShoppingBot:
             return
         self.analytics.record("bot_callback",user)
         callback_id = query.get("id")
+        if query.get('data', '').startswith('announce:'):
+            parts = query['data'].split(':')
+            if len(parts) == 3 and parts[1] in ('send', 'cancel'):
+                announcements.approve(self, user_id, parts[1], parts[2])
+            self.telegram.call('answerCallbackQuery', callback_query_id=callback_id)
+            return
         if query.get('data', '').startswith('help:'):
             self.bind_user(user_id)
             parts = query['data'].split(':')
@@ -1105,8 +1180,15 @@ class ShoppingBot:
             self.telegram.call('answerCallbackQuery',callback_query_id=callback_id)
             start=self.families.pending_start(user_id)
             self.clear_pending(user_id)
-            self.send(user_id,'Language: English' if chosen=='en' else 'Мова: українська',reply_markup=self.menu())
-            self.handle_message({'from':user,'chat':message['chat'],'text':start or '/start'})
+            if self.families.family(user_id):
+                self.send(user_id,'Language: English' if chosen=='en' else 'Мова: українська',reply_markup=self.menu())
+            if self.families.family(user_id) or start.startswith('/start invite_'):
+                self.handle_message({'from':user,'chat':message['chat'],'text':start or '/start'})
+                return
+            saved = bool(start and not start.startswith('/'))
+            if saved:
+                self.families.pending_start(user_id, start)
+            self.show_usage_choice(user_id, message.get('message_id'), saved=saved)
             return
 
         registered = self.bind_user(user_id)
@@ -1117,7 +1199,7 @@ class ShoppingBot:
         if query.get('data') in ('family:create', 'family:solo', 'family:shared'):
             self.telegram.call('answerCallbackQuery', callback_query_id=callback_id)
             if query['data'] == 'family:create':
-                self.show_usage_choice(user_id)
+                self.show_usage_choice(user_id, message.get('message_id'))
             else:
                 self.start_list(user_id, user.get('first_name') or tr('ui_9e0a513bdc07'), query['data'].split(':')[1])
             return
@@ -1209,9 +1291,39 @@ class ShoppingBot:
                 elif action == "dcat" and len(parts) == 4:
                     self.store.change_draft(user_id, draft_id, key, {"category": parts[3]})
                     self.show_draft_item(user_id, draft_id, key, panel_id)
+            elif action == 'pskip' and len(parts) == 3:
+                draft_id = int(parts[1])
+                pending = self.store.draft(user_id, draft_id) or []
+                if pending and all(item.get('operation') == 'purchase' for item in pending):
+                    self.store.change_draft(user_id, draft_id, parts[2], remove=True)
+                    self.show_purchase_draft(user_id, draft_id, panel_id)
+            elif action == 'pconfirm' and len(parts) == 2:
+                draft_id = int(parts[1])
+                pending = self.store.draft(user_id, draft_id)
+                if not pending or not all(item.get('operation') == 'purchase' for item in pending):
+                    return
+                items = self.store.take_draft(user_id, draft_id) or []
+                rows, names, batches = [], [], set()
+                for item in items:
+                    bought, batch_id, event_id = self.store.purchase(item['product_id'], user_id, '')
+                    if bought:
+                        names.append(item['name'])
+                        batches.add(batch_id)
+                        self.analytics.record('purchase', {'id': user_id})
+                        rows.append([(self.purchase_label('↩ Повернути: ', '↩ Undo: ') + item['name'][:30], f'undo:{event_id}:{batch_id}')])
+                self.panel(user_id, self.purchase_label('Куплено: ', 'Bought: ') + (', '.join(names) or '0'), buttons(*rows), panel_id)
+                self.refresh_views()
+                for batch_id in batches:
+                    try:
+                        self.notify_partner(batch_id)
+                    except TelegramError:
+                        LOG.warning('Purchase notification failed')
             elif action == "confirm" and len(parts) == 2:
                 draft_id = int(parts[1])
                 pending = self.store.draft(user_id, draft_id)
+                if any(item.get('operation') == 'purchase' for item in pending or []):
+                    self.show_purchase_draft(user_id, draft_id, panel_id)
+                    return
                 changed = False
                 for item in pending or []:
                     existing = self.store.product_by_name(item['name'])

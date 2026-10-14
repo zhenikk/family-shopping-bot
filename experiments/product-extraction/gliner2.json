@@ -1,0 +1,910 @@
+{
+  "engine": "gliner2",
+  "load_seconds": 9.090296458918601,
+  "peak_rss_mib": 3023.234375,
+  "rows": [
+    {
+      "id": "uk01",
+      "text": "Молоко, яйця, хліб",
+      "items": [
+        [
+          "Молоко",
+          "dairy"
+        ],
+        [
+          "яйця",
+          "dairy"
+        ],
+        [
+          "хліб",
+          "bakery"
+        ]
+      ],
+      "predicted": [
+        "Молоко",
+        "хліб",
+        "яйця"
+      ],
+      "categories": [
+        "dairy",
+        "bakery",
+        "dairy"
+      ],
+      "seconds": 0.05763766635209322,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 3,
+      "strict_correct": true
+    },
+    {
+      "id": "uk02",
+      "text": "Женя, як підеш в Меркадону, купи будь ласка буряк і білу квасолю в маленькій упаковці. Мені вони дуже треба. Дякую.",
+      "items": [
+        [
+          "буряк",
+          "produce"
+        ],
+        [
+          "білу квасолю",
+          "pantry"
+        ]
+      ],
+      "predicted": [
+        "буряк",
+        "білу квасолю"
+      ],
+      "categories": [
+        "produce",
+        "other"
+      ],
+      "seconds": 0.04963879194110632,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 1,
+      "strict_correct": true
+    },
+    {
+      "id": "uk03",
+      "text": "Будь ласка, візьми банани та авокадо.",
+      "items": [
+        [
+          "банани",
+          "produce"
+        ],
+        [
+          "авокадо",
+          "produce"
+        ]
+      ],
+      "predicted": [
+        "банани",
+        "авокадо"
+      ],
+      "categories": [
+        "produce",
+        "produce"
+      ],
+      "seconds": 0.03658970911055803,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 2,
+      "strict_correct": true
+    },
+    {
+      "id": "uk04",
+      "text": "Потрібні гречка, рис і макарони.",
+      "items": [
+        [
+          "гречка",
+          "pantry"
+        ],
+        [
+          "рис",
+          "pantry"
+        ],
+        [
+          "макарони",
+          "pantry"
+        ]
+      ],
+      "predicted": [
+        "гречка",
+        "макарони",
+        "рис"
+      ],
+      "categories": [
+        "pantry",
+        "pantry",
+        "pantry"
+      ],
+      "seconds": 0.03541395766660571,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 3,
+      "strict_correct": true
+    },
+    {
+      "id": "uk05",
+      "text": "Купи оливкову олію і соєвий соус.",
+      "items": [
+        [
+          "оливкову олію",
+          "spices"
+        ],
+        [
+          "соєвий соус",
+          "spices"
+        ]
+      ],
+      "predicted": [
+        "оливкову олію",
+        "соєвий соус"
+      ],
+      "categories": [
+        "other",
+        "spices"
+      ],
+      "seconds": 0.03607991710305214,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 1,
+      "strict_correct": true
+    },
+    {
+      "id": "uk06",
+      "text": "Заморожена броколі, картопля фрі та морозиво",
+      "items": [
+        [
+          "Заморожена броколі",
+          "frozen"
+        ],
+        [
+          "картопля фрі",
+          "frozen"
+        ],
+        [
+          "морозиво",
+          "frozen"
+        ]
+      ],
+      "predicted": [
+        "морозиво",
+        "Заморожена броколі",
+        "картопля фрі"
+      ],
+      "categories": [
+        "frozen",
+        "frozen",
+        "frozen"
+      ],
+      "seconds": 0.03714629169553518,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 3,
+      "strict_correct": true
+    },
+    {
+      "id": "uk07",
+      "text": "Нам треба зубна паста, шампунь і пластир.",
+      "items": [
+        [
+          "зубна паста",
+          "care"
+        ],
+        [
+          "шампунь",
+          "care"
+        ],
+        [
+          "пластир",
+          "care"
+        ]
+      ],
+      "predicted": [
+        "зубна паста",
+        "шампунь",
+        "пластир"
+      ],
+      "categories": [
+        "care",
+        "care",
+        "care"
+      ],
+      "seconds": 0.036783792078495026,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 3,
+      "strict_correct": true
+    },
+    {
+      "id": "uk08",
+      "text": "Додай кондиціонер для білизни і пральний порошок.",
+      "items": [
+        [
+          "кондиціонер для білизни",
+          "cleaning"
+        ],
+        [
+          "пральний порошок",
+          "cleaning"
+        ]
+      ],
+      "predicted": [
+        "пральний порошок",
+        "кондиціонер для білизни"
+      ],
+      "categories": [
+        "cleaning",
+        "cleaning"
+      ],
+      "seconds": 0.036439374554902315,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 2,
+      "strict_correct": true
+    },
+    {
+      "id": "uk09",
+      "text": "Корм для кота, наповнювач і повідець",
+      "items": [
+        [
+          "Корм для кота",
+          "pets"
+        ],
+        [
+          "наповнювач",
+          "pets"
+        ],
+        [
+          "повідець",
+          "pets"
+        ]
+      ],
+      "predicted": [
+        "Корм для кота",
+        "наповнювач",
+        "повідець"
+      ],
+      "categories": [
+        "pets",
+        "pets",
+        "pets"
+      ],
+      "seconds": 0.03599516674876213,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 3,
+      "strict_correct": true
+    },
+    {
+      "id": "uk10",
+      "text": "Омивач, моторна олива та автошампунь",
+      "items": [
+        [
+          "Омивач",
+          "auto"
+        ],
+        [
+          "моторна олива",
+          "auto"
+        ],
+        [
+          "автошампунь",
+          "auto"
+        ]
+      ],
+      "predicted": [
+        "автошампунь",
+        "Омивач",
+        "моторна олива"
+      ],
+      "categories": [
+        "auto",
+        "auto",
+        "auto"
+      ],
+      "seconds": 0.03654420841485262,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 3,
+      "strict_correct": true
+    },
+    {
+      "id": "uk11",
+      "text": "Для дому візьми батарейки й лампочку.",
+      "items": [
+        [
+          "батарейки",
+          "home"
+        ],
+        [
+          "лампочку",
+          "home"
+        ]
+      ],
+      "predicted": [
+        "лампочку",
+        "батарейки"
+      ],
+      "categories": [
+        "other",
+        "home"
+      ],
+      "seconds": 0.03519049985334277,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 1,
+      "strict_correct": true
+    },
+    {
+      "id": "uk12",
+      "text": "Шоколад, горішки, печиво, кава і вода",
+      "items": [
+        [
+          "Шоколад",
+          "snacks"
+        ],
+        [
+          "горішки",
+          "snacks"
+        ],
+        [
+          "печиво",
+          "snacks"
+        ],
+        [
+          "кава",
+          "drinks"
+        ],
+        [
+          "вода",
+          "drinks"
+        ]
+      ],
+      "predicted": [
+        "Шоколад",
+        "печиво",
+        "кава",
+        "горішки",
+        "вода"
+      ],
+      "categories": [
+        "snacks",
+        "snacks",
+        "drinks",
+        "snacks",
+        "drinks"
+      ],
+      "seconds": 0.04003554070368409,
+      "tp": 5,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 5,
+      "strict_correct": true
+    },
+    {
+      "id": "en01",
+      "text": "Milk, eggs and bread",
+      "items": [
+        [
+          "Milk",
+          "dairy"
+        ],
+        [
+          "eggs",
+          "dairy"
+        ],
+        [
+          "bread",
+          "bakery"
+        ]
+      ],
+      "predicted": [
+        "Milk",
+        "bread",
+        "eggs"
+      ],
+      "categories": [
+        "dairy",
+        "bakery",
+        "dairy"
+      ],
+      "seconds": 0.034881750121712685,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 3,
+      "strict_correct": true
+    },
+    {
+      "id": "en02",
+      "text": "Hi Alex, when you go to Lidl please buy tomatoes and cucumbers. Thank you!",
+      "items": [
+        [
+          "tomatoes",
+          "produce"
+        ],
+        [
+          "cucumbers",
+          "produce"
+        ]
+      ],
+      "predicted": [
+        "tomatoes",
+        "cucumbers"
+      ],
+      "categories": [
+        "produce",
+        "produce"
+      ],
+      "seconds": 0.03984170826151967,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 2,
+      "strict_correct": true
+    },
+    {
+      "id": "en03",
+      "text": "Please get chicken breast and salmon.",
+      "items": [
+        [
+          "chicken breast",
+          "meat"
+        ],
+        [
+          "salmon",
+          "meat"
+        ]
+      ],
+      "predicted": [
+        "chicken breast",
+        "salmon"
+      ],
+      "categories": [
+        "meat",
+        "meat"
+      ],
+      "seconds": 0.03885258315131068,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 2,
+      "strict_correct": true
+    },
+    {
+      "id": "en04",
+      "text": "We need rice, pasta and olive oil.",
+      "items": [
+        [
+          "rice",
+          "pantry"
+        ],
+        [
+          "pasta",
+          "pantry"
+        ],
+        [
+          "olive oil",
+          "spices"
+        ]
+      ],
+      "predicted": [
+        "rice",
+        "pasta",
+        "olive oil"
+      ],
+      "categories": [
+        "pantry",
+        "pantry",
+        "spices"
+      ],
+      "seconds": 0.036695750430226326,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 3,
+      "strict_correct": true
+    },
+    {
+      "id": "en05",
+      "text": "Add chocolate, coffee and frozen peas.",
+      "items": [
+        [
+          "chocolate",
+          "snacks"
+        ],
+        [
+          "coffee",
+          "drinks"
+        ],
+        [
+          "frozen peas",
+          "frozen"
+        ]
+      ],
+      "predicted": [
+        "chocolate",
+        "coffee",
+        "frozen peas"
+      ],
+      "categories": [
+        "snacks",
+        "drinks",
+        "frozen"
+      ],
+      "seconds": 0.036189417354762554,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 3,
+      "strict_correct": true
+    },
+    {
+      "id": "en06",
+      "text": "Toothpaste, laundry detergent and dog food",
+      "items": [
+        [
+          "Toothpaste",
+          "care"
+        ],
+        [
+          "laundry detergent",
+          "cleaning"
+        ],
+        [
+          "dog food",
+          "pets"
+        ]
+      ],
+      "predicted": [
+        "Toothpaste",
+        "dog food",
+        "laundry detergent"
+      ],
+      "categories": [
+        "care",
+        "pets",
+        "cleaning"
+      ],
+      "seconds": 0.03817108320072293,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 3,
+      "strict_correct": true
+    },
+    {
+      "id": "en07",
+      "text": "Get engine oil, windshield washer fluid and batteries.",
+      "items": [
+        [
+          "engine oil",
+          "auto"
+        ],
+        [
+          "windshield washer fluid",
+          "auto"
+        ],
+        [
+          "batteries",
+          "home"
+        ]
+      ],
+      "predicted": [
+        "engine oil",
+        "batteries",
+        "windshield washer fluid"
+      ],
+      "categories": [
+        "auto",
+        "home",
+        "auto"
+      ],
+      "seconds": 0.03818929195404053,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 3,
+      "strict_correct": true
+    },
+    {
+      "id": "en08",
+      "text": "I need a USB cable and a notebook.",
+      "items": [
+        [
+          "USB cable",
+          "other"
+        ],
+        [
+          "notebook",
+          "other"
+        ]
+      ],
+      "predicted": [
+        "USB cable",
+        "notebook"
+      ],
+      "categories": [
+        "other",
+        "other"
+      ],
+      "seconds": 0.03765870817005634,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 2,
+      "strict_correct": true
+    },
+    {
+      "id": "mix01",
+      "text": "Купи oat milk і банани.",
+      "items": [
+        [
+          "oat milk",
+          "drinks"
+        ],
+        [
+          "банани",
+          "produce"
+        ]
+      ],
+      "predicted": [
+        "oat milk",
+        "банани"
+      ],
+      "categories": [
+        "dairy",
+        "produce"
+      ],
+      "seconds": 0.03687183419242501,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 1,
+      "strict_correct": true
+    },
+    {
+      "id": "mix02",
+      "text": "Додай Nutella, хліб і Coca-Cola.",
+      "items": [
+        [
+          "Nutella",
+          "snacks"
+        ],
+        [
+          "хліб",
+          "bakery"
+        ],
+        [
+          "Coca-Cola",
+          "drinks"
+        ]
+      ],
+      "predicted": [
+        "Coca-Cola",
+        "Nutella",
+        "хліб"
+      ],
+      "categories": [
+        "other",
+        "other",
+        "bakery"
+      ],
+      "seconds": 0.037637416273355484,
+      "tp": 3,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 1,
+      "strict_correct": true
+    },
+    {
+      "id": "mix03",
+      "text": "Please buy сметану and eggs.",
+      "items": [
+        [
+          "сметану",
+          "dairy"
+        ],
+        [
+          "eggs",
+          "dairy"
+        ]
+      ],
+      "predicted": [
+        "сметану",
+        "eggs"
+      ],
+      "categories": [
+        "other",
+        "dairy"
+      ],
+      "seconds": 0.035176875069737434,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 1,
+      "strict_correct": true
+    },
+    {
+      "id": "mix04",
+      "text": "Візьми Fairy і зубну пасту Colgate.",
+      "items": [
+        [
+          "Fairy",
+          "cleaning"
+        ],
+        [
+          "зубну пасту Colgate",
+          "care"
+        ]
+      ],
+      "predicted": [
+        "Fairy",
+        "зубну пасту Colgate"
+      ],
+      "categories": [
+        "other",
+        "care"
+      ],
+      "seconds": 0.03556449990719557,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 1,
+      "strict_correct": true
+    },
+    {
+      "id": "mix05",
+      "text": "Треба queijo і помідори.",
+      "items": [
+        [
+          "queijo",
+          "dairy"
+        ],
+        [
+          "помідори",
+          "produce"
+        ]
+      ],
+      "predicted": [
+        "queijo",
+        "помідори"
+      ],
+      "categories": [
+        "dairy",
+        "produce"
+      ],
+      "seconds": 0.03507141675800085,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 2,
+      "strict_correct": true
+    },
+    {
+      "id": "hard01",
+      "text": "Молоко не купуй, візьми тільки хліб.",
+      "items": [
+        [
+          "хліб",
+          "bakery"
+        ]
+      ],
+      "predicted": [
+        "хліб",
+        "Молоко"
+      ],
+      "categories": [
+        "bakery",
+        "dairy"
+      ],
+      "seconds": 0.034630333073437214,
+      "tp": 1,
+      "fp": 1,
+      "fn": 0,
+      "category_correct": 1,
+      "strict_correct": false
+    },
+    {
+      "id": "hard02",
+      "text": "Buy milk. Actually, skip milk and get kefir instead.",
+      "items": [
+        [
+          "kefir",
+          "dairy"
+        ]
+      ],
+      "predicted": [
+        "milk",
+        "kefir"
+      ],
+      "categories": [
+        "dairy",
+        "dairy"
+      ],
+      "seconds": 0.03941945778205991,
+      "tp": 1,
+      "fp": 1,
+      "fn": 0,
+      "category_correct": 1,
+      "strict_correct": false
+    },
+    {
+      "id": "hard03",
+      "text": "Я вже купила яйця. Тобі лишилося купити огірки.",
+      "items": [
+        [
+          "огірки",
+          "produce"
+        ]
+      ],
+      "predicted": [
+        "яйця",
+        "огірки"
+      ],
+      "categories": [
+        "dairy",
+        "produce"
+      ],
+      "seconds": 0.05144679173827171,
+      "tp": 1,
+      "fp": 1,
+      "fn": 0,
+      "category_correct": 1,
+      "strict_correct": false
+    },
+    {
+      "id": "hard04",
+      "text": "Женя, як пидеш в Меркадону, купи будь ласка буряк і фасоль біленько в маленькій упаковці. Манівини дуже треба. Дякую.",
+      "items": [
+        [
+          "буряк",
+          "produce"
+        ],
+        [
+          "фасоль біленько",
+          "pantry"
+        ]
+      ],
+      "predicted": [
+        "буряк",
+        "фасоль"
+      ],
+      "categories": [
+        "produce",
+        "pantry"
+      ],
+      "seconds": 0.046347207855433226,
+      "tp": 2,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 2,
+      "strict_correct": false
+    },
+    {
+      "id": "hard05",
+      "text": "Дякую! Нічого не потрібно, усе куплено.",
+      "items": [],
+      "predicted": [],
+      "categories": [],
+      "seconds": 0.03763258317485452,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "category_correct": 0,
+      "strict_correct": true
+    }
+  ]
+}

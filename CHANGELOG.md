@@ -1,3 +1,7 @@
+## 0.5.38
+
+- Onboarding reaches the empty list in two visible bot messages: the language prompt is edited in place into the solo/shared choice and then into the live list; the second message carries the reply menu. A newcomer's first text or voice sent before the choice is kept and becomes the draft right after it. Empty-list copy depends on member count and offers an invite button for one-member lists. The separate language confirmation, family panel and Mini App link are no longer sent during onboarding; the chat menu button still opens the Mini App.
+
 ## 0.5.37
 
 - Unify public shortcut as Shopping with audio recording and Whisper. /shoppingaudio is a legacy alias, removed from suggestions. Ukrainian/English templates differ only in setup language; recognition follows bot preference.
