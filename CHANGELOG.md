@@ -1,3 +1,7 @@
+## 0.5.41
+
+- Shopping in chat: a product with a photo opens as a photo card with the Bought button under the picture, replacing the list panel; buttons on that card fall back to fresh text messages. After Bought the list is edited in place and carries an "Undo: name" row for ten minutes; the separate "Last purchase" message is gone. Partner notifications are compact ("Olya bought 6 items / Milk, grapes, yogurt + 3 more") with the full list folded inside the chat and an Open list button; no more one ✅ per line.
+
 ## 0.5.40
 
 - Consistent names and controls: the bot is "Grocery" in the help guide (its real Telegram name), the catalog is "Catalog" everywhere, and ✅ marks only confirming actions (catalog rows say "· in list"). The reply menu is four buttons (List, Catalog, History, Family); language, help and support moved to the command picker, old keyboards still work. History opens as an editable panel with a route back and is linked from the list. The help page reads help.json (one source with the bot), its illustrations are re-captured with one consistent crop that shows the highlighted control, and the chat mockups match the current onboarding and draft.

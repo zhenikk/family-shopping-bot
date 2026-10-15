@@ -48,6 +48,14 @@ def buttons(*rows: list[tuple[str, str]]) -> dict:
 CATEGORIES = CategoryLabels(CATEGORIES)
 
 
+def count_items(count: int, lang: str) -> str:
+    if lang == 'en':
+        return f"{count} item" + ('' if count == 1 else 's')
+    tail, tens = count % 10, count % 100
+    word = 'товар' if tail == 1 and tens != 11 else 'товари' if 2 <= tail <= 4 and not 12 <= tens <= 14 else 'товарів'
+    return f"{count} {word}"
+
+
 class ShoppingBot:
     def __init__(
         self,
@@ -78,7 +86,7 @@ class ShoppingBot:
         self.note_panels: dict[int, int] = {}
         self.pending_draft_edits: dict[int, tuple] = {}
         self.pending_family_names: set[int] = set()
-        self.purchase_feedback: dict[int, int] = {}
+        self.last_purchase: dict[int, tuple] = {}  # user -> (event_id, batch_id, name, monotonic): undo row in the list for 10 minutes
         self.draft_sources: dict[int, str] = {}  # ponytail: in-memory transcript per draft; lost on restart, header just omits it
         self.notification_lock = threading.Lock()
         self.update_limits = RateLimiter(30, 1)
@@ -215,7 +223,7 @@ class ShoppingBot:
             except TelegramError as exc:
                 if "message is not modified" in str(exc).lower():
                     return message_id
-                if not any(reason in str(exc).lower() for reason in ('message to edit not found', "message can't be edited", 'message_id_invalid')):
+                if not any(reason in str(exc).lower() for reason in ('message to edit not found', "message can't be edited", 'message_id_invalid', 'no text in the message')):
                     LOG.warning('Panel edit failed; preserving existing message')
                     return message_id
         result = self.send(user_id, text, reply_markup=markup, **formatting)["message_id"]
@@ -900,7 +908,7 @@ class ShoppingBot:
             (tr('ui_ce35ddc7dd31') if added else tr('ui_8326f110c62b')))
         self.refresh_views()
 
-    def list_content(self, store_name: str = "") -> tuple[str, dict]:
+    def list_content(self, store_name: str = "", user_id: int | None = None) -> tuple[str, dict]:
         rows = self.store.needs()
         order = list(CATEGORIES)
         rows = sorted(rows, key=lambda row: (order.index(row["category"]) if row["category"] in order else len(order), row["name"].casefold()))
@@ -932,12 +940,15 @@ class ShoppingBot:
         if len(rows) > shown:
             lines.append(f"{tr('ui_b21c9aac6065')}{shown}{tr('ui_e2b3417bc1de')}{len(rows)}{tr('ui_dd922ebd0935')}")
         keyboard.append([(tr('ui_e303bf93e660'), "list:all"), (tr('ui_1720591356f5'), "catalog:0"), (tr('ui_f46f0095cd44'), "history")])
+        last = self.last_purchase.get(user_id) if user_id else None
+        if last and time.monotonic() - last[3] < 600:
+            keyboard.insert(0, [(f"{tr('↩️ Повернути: ')}{last[2][:25]}", f"undo:{last[0]}:{last[1]}")])
         markup = buttons(*keyboard)
         return "\n".join(lines), markup
 
     def show_list(self, user_id: int, store_name: str = "", message_id: int | None = None, *, bring_to_bottom=False) -> None:
         store_name = "all"
-        content, markup = self.list_content()
+        content, markup = self.list_content(user_id=user_id)
         if message_id is None:
             existing = next((view for view in self.store.views() if view['user_id'] == user_id and view['store'] == store_name), None)
             if existing:
@@ -952,7 +963,7 @@ class ShoppingBot:
                 if "message is not modified" in str(exc).lower():
                     self.store.set_view(user_id, store_name, message_id)
                     return
-                if not any(reason in str(exc).lower() for reason in ('message to edit not found', "message can't be edited", 'message_id_invalid')):
+                if not any(reason in str(exc).lower() for reason in ('message to edit not found', "message can't be edited", 'message_id_invalid', 'no text in the message')):
                     LOG.warning('List panel edit failed; preserving existing message')
                     return
         result = self.send(user_id, content, reply_markup=markup, parse_mode="HTML")
@@ -967,7 +978,7 @@ class ShoppingBot:
             if self.families.family(view['user_id'])!=self.family_context.get():
                 continue
             language.set(self.families.preference(view["user_id"]) or "uk")
-            content, markup = self.list_content(view["store"])
+            content, markup = self.list_content(view["store"], view["user_id"])
             try:
                 self.telegram.call("editMessageText", chat_id=view["user_id"],
                                    message_id=view["message_id"], text=content, reply_markup=markup, parse_mode="HTML")
@@ -1008,12 +1019,19 @@ class ShoppingBot:
         rows.append([(tr('ui_675da4a00bf6') if product["note"] else tr('ui_d125eb4a052d'), f"note:{product_id}")])
         if product["note"]:
             rows[-1].append((tr('ui_2bc919726f86'), f"clearnote:{product_id}"))
-        if product["photo_file_id"]:
-            rows.append([(tr('ui_fa12e275c8fb'), f"photo:{product_id}")])
-        else:
+        if not product["photo_file_id"]:
             text += tr('ui_2e00db9e6c39')
         rows.append([(tr('ui_61a63f8e97e3'), f"categories:{product_id}")])
         rows.append([(tr('ui_4dfffe931b00'), "list:all"), (tr('ui_1720591356f5'), "catalog:0")])
+        if product["photo_file_id"]:
+            # Telegram cannot turn a text message into a photo, so a card with a photo is a fresh photo message
+            # that replaces the panel; buttons pressed on it fall back to new text messages the same way.
+            result = self.telegram.call("sendPhoto", chat_id=user_id, photo=product["photo_file_id"], caption=text, parse_mode="HTML", reply_markup=buttons(*rows))
+            self.families.route_message(user_id, result["message_id"], self.family_context.get())
+            if message_id is not None:
+                self.store.forget_view(user_id, message_id)
+                self.remove_obsolete_panel(user_id, message_id)
+            return
         self.panel(user_id, text, buttons(*rows), message_id, parse_mode="HTML")
 
     def show_history(self, user_id: int, message_id: int | None = None) -> None:
@@ -1051,24 +1069,27 @@ class ShoppingBot:
         for partner in partners:
             language.set(self.families.preference(partner['user_id']) or 'uk')
             if items:
-                shown = [name[:70] + ("…" if len(name) > 70 else "") for name in items[:40]]
-                text = f"{actor}{tr('ui_1c99972f606a')}" + "\n".join(f"✅ {name}" for name in shown)
-                if len(items) > 40:
-                    text += f"{tr('ui_820f672ef935')}{len(items) - 40}{tr('ui_f07b2d5ca38f')}"
+                # Push preview: one line with the count and a few names; the full list folds inside the chat.
+                english = language.get() == 'en'
+                text = f"{html.escape(actor)}{tr(' купив(ла) ')}{count_items(len(items), 'en' if english else 'uk')}\n{html.escape(', '.join(items[:3]))}"
+                if len(items) > 3:
+                    text += f" + {len(items) - 3} more" if english else f" + ще {len(items) - 3}"
+                    text += "\n<blockquote expandable>" + "\n".join(html.escape(name) for name in items[:60]) + "</blockquote>"
             else:
-                text = f"{actor}{tr('ui_6c75f0a9b94a')}"
+                text = f"{html.escape(actor)}{tr('ui_6c75f0a9b94a')}"
+            markup = buttons([(tr('ui_80f83082d444'), 'list:bottom')])
             notification = self.store.notification(batch_id, partner["user_id"])
             if notification:
                 try:
                     self.telegram.call("editMessageText", chat_id=partner["user_id"],
-                                       message_id=notification, text=text)
+                                       message_id=notification, text=text, parse_mode="HTML", reply_markup=markup)
                     continue
                 except TelegramError as exc:
                     if "message is not modified" in str(exc).lower():
                         continue
                     LOG.warning("Could not edit purchase notification")
             try:
-                result = self.send(partner["user_id"], text)
+                result = self.send(partner["user_id"], text, parse_mode="HTML", reply_markup=markup)
                 self.store.save_notification(batch_id, partner["user_id"], result["message_id"])
                 if len(partners) == 1:
                     self.store.set_batch_notification(batch_id, result["message_id"])
@@ -1255,8 +1276,6 @@ class ShoppingBot:
             if action not in {"dname", "dnote", "photo"}:
                 self.pending_draft_edits.pop(user_id, None)
             panel_id = message.get("message_id")
-            if panel_id == self.purchase_feedback.get(user_id) and action != "undo":
-                self.purchase_feedback.pop(user_id, None)
             if data == "shopping:download":
                 self.send_shopping_shortcut(user_id)
                 answer = tr("Файл надіслано в чат.")
@@ -1276,6 +1295,8 @@ class ShoppingBot:
             elif action == "add":
                 self.panel(user_id, tr('ui_aea2f162e25b'),
                            buttons([(tr('ui_4dfffe931b00'), "list:all")]), panel_id)
+            elif data == "list:bottom":
+                self.show_list(user_id, bring_to_bottom=True)
             elif action == "list" and len(parts) == 2:
                 self.show_list(user_id, message_id=message.get("message_id"))
             elif action == "history" and len(parts) == 1:
@@ -1384,10 +1405,7 @@ class ShoppingBot:
                 if bought:
                     self.analytics.record("purchase",{"id":user_id})
                     answer = f"{tr('ui_b729d2e8c2e3')}{product['name']}"[:180]
-                    self.purchase_feedback[user_id] = self.panel(user_id,
-                        f"{tr('ui_40a72cd566c7')}{product['name']}",
-                        buttons([(tr('ui_d3b948f6dd1d'), f"undo:{event_id}:{batch_id}")]),
-                        self.purchase_feedback.get(user_id))
+                    self.last_purchase[user_id] = (event_id, batch_id, product['name'], time.monotonic())
                     self.show_list(user_id, message_id=panel_id)
                     try:
                         self.notify_partner(batch_id)
@@ -1402,12 +1420,14 @@ class ShoppingBot:
                 if product_id is None:
                     answer = tr('ui_0b40caf51cf2')
                 else:
+                    if self.last_purchase.get(user_id, (None,))[0] == int(parts[1]):
+                        self.last_purchase.pop(user_id, None)
                     try:
                         self.notify_partner(int(parts[2]))
                     except TelegramError as exc:
                         LOG.warning("Undo saved; notification failed: %s", exc)
-                    self.panel(user_id, f"{tr('ui_92c34004480d')}{self.store.product(product_id)['name']}",
-                               buttons([(tr('ui_4dfffe931b00'), "list:all")]), panel_id)
+                    answer = f"{tr('ui_92c34004480d')}{self.store.product(product_id)['name']}"[:180]
+                    self.show_list(user_id, message_id=panel_id)
                     self.refresh_views()
             elif action == "photo" and len(parts) == 2:
                 product = self.store.product(int(parts[1]))

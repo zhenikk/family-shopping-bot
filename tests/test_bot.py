@@ -598,6 +598,70 @@ class ShoppingBotTests(unittest.TestCase):
         _, markup = self.bot.list_content()
         self.assertIn("'callback_data': 'history'", str(markup))
 
+    def test_product_card_with_photo_is_a_photo_message_with_buy_button(self):
+        self.bot.handle_message(message(1, caption="Кава", photo=[{"file_id": "large"}]))
+        coffee = self.store.product_by_name("кава")
+        self.bot.show_list(1)
+        view_id = self.store.views()[0]["message_id"]
+        self.telegram.calls.clear()
+        self.bot.handle_callback(callback(1, f"item:{coffee['id']}", view_id))
+        photos = [p for m, p in self.telegram.calls if m == "sendPhoto"]
+        self.assertEqual(len(photos), 1)
+        self.assertEqual(photos[0]["photo"], "large")
+        self.assertIn("Кава", photos[0]["caption"])
+        self.assertIn(f"buy:{coffee['id']}", str(photos[0]["reply_markup"]))
+        self.assertNotIn("photo:", str(photos[0]["reply_markup"]))
+        self.assertTrue(any(m == "deleteMessage" and p["message_id"] == view_id for m, p in self.telegram.calls))
+        self.assertFalse(any(m == "editMessageText" for m, _ in self.telegram.calls))
+
+    def test_buying_from_a_photo_card_recreates_the_list_as_text(self):
+        from shopping_bot.telegram import TelegramError
+        self.bot.handle_message(message(1, caption="Кава", photo=[{"file_id": "large"}]))
+        coffee = self.store.product_by_name("кава")
+        self.bot.show_item(1, coffee["id"])
+        photo_id = self.telegram.next_message_id
+        original = self.telegram.call
+        def call(method, **params):
+            if method == "editMessageText" and params.get("message_id") == photo_id:
+                raise TelegramError("Bad Request: there is no text in the message to edit")
+            return original(method, **params)
+        with patch.object(self.telegram, "call", side_effect=call):
+            self.bot.handle_callback(callback(1, f"buy:{coffee['id']}:all", photo_id))
+        self.assertEqual(self.store.needs(), [])
+        self.assertIn("Список покупок", [p for p in self.sends() if p["chat_id"] == 1][-1]["text"])
+        self.assertTrue(any(m == "deleteMessage" and p["message_id"] == photo_id for m, p in self.telegram.calls))
+
+    def test_partner_notification_is_compact_with_full_list_folded(self):
+        self.bot.families.set_language(2, 'uk')
+        for name in ("молоко", "виноград", "йогурт", "сир", "хліб"):
+            self.store.add_need(self.store.ensure_product(name), 1)
+        batch = None
+        for row in self.store.needs():
+            _, batch, _ = self.store.purchase(row["id"], 1, "")
+        self.bot.bind_user(1)
+        self.telegram.calls.clear()
+        self.bot.notify_partner(batch)
+        sent = [p for m, p in self.telegram.calls if m == "sendMessage" and p["chat_id"] == 2]
+        self.assertEqual(len(sent), 1)
+        text = sent[0]["text"]
+        self.assertIn("купила 5 товарів", text) if "купила" in text else self.assertIn("купив(ла) 5 товарів", text)
+        self.assertIn("+ ще 2", text)
+        self.assertIn("<blockquote expandable>", text)
+        self.assertIn("Хліб", text)
+        self.assertNotIn("✅", text)
+        self.assertEqual(sent[0]["parse_mode"], "HTML")
+        self.assertIn("list:bottom", str(sent[0]["reply_markup"]))
+
+    def test_notification_plural_forms(self):
+        from shopping_bot.app import count_items
+        self.assertEqual(count_items(1, "uk"), "1 товар")
+        self.assertEqual(count_items(3, "uk"), "3 товари")
+        self.assertEqual(count_items(5, "uk"), "5 товарів")
+        self.assertEqual(count_items(21, "uk"), "21 товар")
+        self.assertEqual(count_items(12, "uk"), "12 товарів")
+        self.assertEqual(count_items(1, "en"), "1 item")
+        self.assertEqual(count_items(2, "en"), "2 items")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
@@ -1090,7 +1154,7 @@ class ShoppingBotTests(unittest.TestCase):
         self.bot.bind_user(1);self.telegram.calls.clear()
         self.bot.notify_partner(batch)
         sent=[params for method,params in self.telegram.calls if method=='sendMessage' and params['chat_id']==2]
-        self.assertIn(' bought:',sent[-1]['text'])
+        self.assertIn(' bought 1 item',sent[-1]['text'])
         self.assertIn('Молоко',sent[-1]['text'])
         self.assertEqual(self.bot.families.preference(1),'uk')
 
@@ -1253,19 +1317,25 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertNotIn(1, self.bot.pending_notes)
         self.assertEqual(self.store.product(product_id)["note"], "")
 
-    def test_purchase_feedback_is_one_message_and_draft_is_retired(self):
+    def test_purchase_undo_lives_in_the_list_without_a_feedback_message(self):
         self.bot.make_draft(1, "молоко, яйця")
-        with self.store.db() as db:
-            draft_id = db.execute("SELECT id FROM drafts").fetchone()[0]
+        draft_id = self.draft_id_for(1)
         self.bot.handle_callback(callback(1, f"confirm:{draft_id}", 80))
         retired = [p for m, p in self.telegram.calls if m == "editMessageText" and p["message_id"] == 80]
         self.assertNotIn("confirm:", str(retired[-1]["reply_markup"]))
-        for row in self.store.needs():
-            self.bot.handle_callback(callback(1, f"buy:{row['id']}:all", 80))
-        notices = [p for m, p in self.telegram.calls if m == "sendMessage" and p["chat_id"] == 1 and "Остання покупка" in p["text"]]
-        self.assertEqual(len(notices), 1)
-        feedback_id = self.bot.purchase_feedback[1]
-        self.assertTrue(any(m == "editMessageText" and p["message_id"] == feedback_id for m, p in self.telegram.calls))
+        self.telegram.calls.clear()
+        milk = self.store.product_by_name("молоко")
+        self.bot.handle_callback(callback(1, f"buy:{milk['id']}:all", 80))
+        self.assertFalse(any("Остання покупка" in p.get("text", "") for _, p in self.telegram.calls))
+        panel = self.last_panel()
+        self.assertIn("Список покупок", panel["text"])
+        first_row = panel["reply_markup"]["inline_keyboard"][0][0]
+        self.assertTrue(first_row["callback_data"].startswith("undo:"))
+        self.assertIn("олоко", first_row["text"])
+        self.bot.handle_callback(callback(1, first_row["callback_data"], 80))
+        self.assertIn(milk["id"], [row["id"] for row in self.store.needs()])
+        self.assertNotIn("undo:", str(self.last_panel()["reply_markup"]))
+        self.assertEqual(len([p for p in self.sends() if p["chat_id"] == 1]), 0, "Buy and undo edit the list in place")
 
     def test_chat_list_has_full_width_product_and_no_mini_app_button(self):
         name = 'Молоко без лактози у великій упаковці'
