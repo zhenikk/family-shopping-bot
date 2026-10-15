@@ -13,6 +13,7 @@ import logging
 import time
 import socket
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -256,6 +257,15 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 raise ValueError("Invalid request")
             return data
 
+        def raw_image(self):
+            """Package photo from the Mini App card: raw image bytes, read before the lock, 5 MB like the bot."""
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > 5_000_000:
+                raise ValueError("Invalid request size")
+            if not self.headers.get("Content-Type", "").startswith("image/"):
+                raise ValueError("Image expected")
+            return self.rfile.read(length)
+
         def dispatch(self, method):
             # Read sockets before taking the membership lock; write after releasing it.
             try:
@@ -276,7 +286,7 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                         self.respond(429, {'error': 'Too many requests. Try again shortly.'})
                         return
                 if method == 'POST':
-                    self.parsed_body = self.body()
+                    self.parsed_body = self.raw_image() if path.startswith('/api/photo/') else self.body()
                     if path in ('/api/add', '/api/undo', '/api/buy', '/api/readd', '/api/edit'):
                         if not self.server.sync_slots.acquire(blocking=False):
                             self.respond(429, {'error': 'Server is busy. Try again shortly.'})
@@ -516,6 +526,21 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 path = urlsplit(self.path).path
                 data = self.body()
                 notification_batch = None
+                if path.startswith("/api/photo/"):
+                    product_id = int(path.rsplit("/", 1)[1])
+                    if not bot.store.product(product_id):
+                        self.respond(404, {"error": tr('ui_8823ca72a6bd')})
+                        return
+                    if not bot.photo_limits.allow(user_id):
+                        self.respond(429, {"error": tr('Забагато фото. Спробуйте пізніше.')})
+                        return
+                    destination = bot.media_dir / f"{uuid.uuid4().hex}.jpg"
+                    destination.write_bytes(data)
+                    bot.store.set_photo(product_id, "", str(destination))
+                    bot.analytics.record("web_photo", self.user_profile)
+                    sync_changes()
+                    self.respond(200, {"photo": True})
+                    return
                 if path == "/api/draft":
                     items = bot.store.resolved_items(str(data.get("text", "")))
                     if not items:

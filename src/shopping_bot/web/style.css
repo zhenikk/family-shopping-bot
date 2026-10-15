@@ -83,16 +83,22 @@ header{margin-bottom:16px}h1{font-size:32px;letter-spacing:-1.2px}.headline{marg
 .product-check svg{opacity:0}
 .empty-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
 @media(max-width:360px){h1{font-size:30px}.thumb{width:52px;height:60px}}
-#family{margin:0 0 14px;min-height:40px;padding:8px 14px;font-size:13px}
 
 .family-controls{display:grid;gap:12px;margin-top:18px}.family-controls h3{font-size:15px;margin:16px 0 0}.family-controls label{margin-top:8px}dialog input{display:block;width:100%;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:16px;margin:8px 0 12px}.family-confirm{line-height:1.7;font-size:15px}.danger{color:#c74334}.family-controls .history-row{padding:10px 0}.family-controls .text-button{padding-top:8px}#family-join-form{margin-top:16px}#family-accept-transfer,#family-accept{margin-top:12px}
 
-.language-picker{display:inline-flex;align-items:center;gap:8px;margin:0 12px 12px 0}.language-picker select{padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:inherit;font:inherit}
 
-.language-picker{vertical-align:middle;margin:0 8px 12px 0;font-size:14px}
-.language-picker select{width:148px;max-width:148px;min-height:44px;margin:0;padding:9px 30px 9px 12px;font-size:14px;border-radius:12px}
-#family{vertical-align:middle;min-height:44px;margin-bottom:12px}
-.language-picker~button.secondary{min-height:44px;padding:9px 12px;font-size:13px;vertical-align:middle;margin-bottom:12px}
-@media(max-width:380px){.language-picker{gap:5px;margin-right:4px}.language-picker select{max-width:155px;padding-right:20px}.language-picker~button.secondary{padding-left:10px;padding-right:10px}}
 
 .usage-choices{display:grid;gap:12px;width:min(100%,360px);margin:24px auto 0}.usage-choices button{min-height:48px}
+
+/* Compact header: title with count, members chip and refresh on one line; everything secondary lives in the "More" tab. */
+header{margin-bottom:12px}.headline{margin-top:0;align-items:center}h1{display:flex;align-items:baseline;gap:8px}
+.count{font-family:Manrope,sans-serif;font-size:15px;font-weight:650;color:var(--muted);letter-spacing:0;border:1px solid var(--line);border-radius:10px;padding:2px 8px;background:var(--surface)}
+.header-actions{display:flex;align-items:center;gap:8px}
+.chip{min-height:40px;padding:8px 12px;border-radius:14px;background:var(--soft);color:var(--accent);font-size:13px;font-weight:650;white-space:nowrap}.chip.selected{background:var(--accent);color:#fff}
+#connection{display:block;font-size:12px;color:var(--danger);margin-top:6px}
+.more-list{display:grid}.more-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line);background:none;text-align:left;font-size:16px;font-weight:600;min-height:56px}.more-row:last-child{border-bottom:0}.more-row>span:first-of-type{flex:1}.more-row .chev{color:var(--muted);font-size:22px;font-weight:400}.more-row select{margin:0;padding:8px 28px 8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:inherit;font:inherit;font-size:14px;max-width:150px}
+.more-note{text-align:center;margin-top:18px}.language-choice select{min-height:44px;padding:9px 30px 9px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:inherit;font:inherit}
+details.manage{margin-top:4px}details.manage summary{list-style:none;cursor:pointer;min-height:48px;display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-radius:16px;background:var(--bg);font-weight:700;font-size:15px}details.manage summary::-webkit-details-marker{display:none}details.manage summary::after{content:'›';font-size:22px;color:var(--muted);transition:transform .16s}details.manage[open] summary::after{transform:rotate(90deg)}details.manage>*:not(summary){margin-top:12px}
+.photo-upload{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:20px;cursor:pointer}.photo-upload.busy{opacity:.6;pointer-events:none}
+.roles{display:flex;gap:8px;margin:4px 0 16px}.help-step{padding:14px 0;border-bottom:1px solid var(--line)}.help-step:last-child{border-bottom:0}.help-step .kicker{font-size:11px;font-weight:750;letter-spacing:.8px;color:var(--accent)}.help-step h3{font-family:Onest,Manrope,sans-serif;font-size:18px;margin:4px 0 6px;letter-spacing:-.4px}.help-step p{margin:0 0 6px;font-size:14px;line-height:1.6}
+body.dark .chip.selected{color:#171125}

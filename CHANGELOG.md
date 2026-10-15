@@ -1,3 +1,7 @@
+## 0.5.42
+
+- Mini App: compact header (title with count, members chip, refresh) so the first product sits in the top third of the screen; language, help and members moved to a new "More" tab. Help opens inside the app as a sheet fed by help.json with Telegram Back support. The family sheet shows members and Invite first, with rename, role transfer, joining another list, leave and delete folded under "Manage". The product card can take a package photo straight from the phone camera or gallery: the image is shrunk to a ≤1280 px JPEG and uploaded to a new POST /api/photo endpoint (5 MB limit, same quota as the bot); the chat card then uploads that file once and reuses Telegram's file id. Unused message and translation entries removed.
+
 ## 0.5.41
 
 - Shopping in chat: a product with a photo opens as a photo card with the Bought button under the picture, replacing the list panel; buttons on that card fall back to fresh text messages. After Bought the list is edited in place and carries an "Undo: name" row for ten minutes; the separate "Last purchase" message is gone. Partner notifications are compact ("Olya bought 6 items / Milk, grapes, yogurt + 3 more") with the full list folded inside the chat and an Open list button; no more one ✅ per line.

@@ -18,11 +18,13 @@ function renderFamily(){
  if(!data.family_id){$('family-members').innerHTML='<p class="hint">Choose how to start: on your own or with others. Invitations are optional.</p><button id="family-solo" class="primary full">🙋 Just for me</button><button id="family-shared" class="secondary full">👥 With others</button>'+joinForm();$('family-solo').onclick=()=>familyAction('/api/family/create',{mode:'solo'});$('family-shared').onclick=()=>familyAction('/api/family/create',{mode:'shared'});wireJoin();return;}
  const owner=data.owner_id===data.self_id;
  $('family-members').innerHTML=(data.members.length===1?'<p class="hint">This is your list — use it on your own. You can invite others later if you wish; invitations are optional.</p>':'')+data.members.map(member=>`<div class="history-row"><strong>${escape(member.name)}</strong><small>${member.self?'You · ':''}${member.owner?'Founder':'Member'}</small></div>`).join('')+
- '<div class="family-controls"><button id="family-invite" class="primary full">Invite a member</button><div id="family-new-link"></div>'+joinForm()+
- `<form id="family-name-form"><label>List name<input id="family-name" value="${escape(data.name)}" maxlength="60" required></label><button class="secondary full" type="submit">Save name</button></form>`+
+ '<div class="family-controls"><button id="family-invite" class="primary full">Invite a member</button><div id="family-new-link"></div>'+
  (data.invites.length?'<h3>Awaiting acceptance</h3>'+data.invites.map(invite=>`<div class="history-row"><small>${escape(new Date(invite.created_at).toLocaleString('en-GB'))}</small><button class="text-button" data-revoke="${escape(invite.token)}">Revoke invitation</button></div>`).join(''):'')+
+ '<details class="manage"><summary>Manage</summary>'+
+ `<form id="family-name-form"><label>List name<input id="family-name" value="${escape(data.name)}" maxlength="60" required></label><button class="secondary full" type="submit">Save name</button></form>`+
  (owner&&data.members.length>1?`<label>Transfer founder role<select id="family-owner">${data.members.filter(m=>!m.self).map(m=>`<option value="${m.id}">${escape(m.name)}</option>`).join('')}</select></label><button id="family-owner-transfer" class="secondary full">Transfer role</button>`:'')+
- '<button id="family-leave" class="secondary full">Leave family</button>'+(owner?'<button id="family-delete" class="text-button danger">Delete family</button>':'')+'</div>';
+ joinForm()+
+ '<button id="family-leave" class="secondary full">Leave family</button>'+(owner?'<button id="family-delete" class="text-button danger">Delete family</button>':'')+'</details></div>';
  wireJoin();
  $('family-name-form').onsubmit=event=>{event.preventDefault();familyAction('/api/family/rename',{name:$('family-name').value});};
  $('family-invite').onclick=async()=>{try{if(demo){toast('Invitations are unavailable in the demo.');return;}const result=await api('/api/family/invite',{});$('family-new-link').innerHTML=`<label>Single-use link<input id="family-link" readonly value="${escape(result.url)}"></label><button id="family-copy" class="secondary full">Copy</button><button id="family-new-revoke" class="text-button">Revoke invitation</button><p class="hint">Valid until used or revoked. One person can join.</p>`;$('family-new-revoke').onclick=()=>familyAction('/api/family/revoke',{token:result.token});$('family-copy').onclick=async()=>{try{await navigator.clipboard.writeText(result.url);toast('Link copied');}catch{$('family-link').select();toast('Link selected — copy it.');}};}catch(error){toast(error.message);}};
@@ -72,25 +74,26 @@ async function api(path, body){
 }
 async function load(quiet=false){
   if(loading){reloadNeeded=true;return;} loading=true; const startedRevision=revision;
-  try{const next=demo?structuredClone(demoData):await api('/api/state');if(startedRevision!==revision){reloadNeeded=true;return;}if(state.family_id&&next.family_id!==state.family_id){closeDialogs();operations.clear();pending.clear();photos.clear();selected=null;lastEvent=null;revision++;toast('Family switched');}if(next.language&&next.language!==currentLanguage){location.replace(languageURL(next.language));return;}const nextSignature=JSON.stringify(next);for(const [id,op] of operations){const product=next.products.find(p=>p.id===id);if(product)product.active=op.phase==='hidden'?op.action==='readd':op.previousActive;}state=next;if(nextSignature!==signature){signature=nextSignature;render();} $('connection').textContent=demo?'● Design preview':'● Your list';}
-  catch(error){$('connection').textContent='○ Offline';if(!signature){$('subtitle').textContent='Your data is protected';$('content').innerHTML=`<div class="empty"><div class="symbol">↗</div><h2>Open in Telegram</h2><p>${escape(error.message)}</p><button class="primary" id="retry">Try again</button></div>`;$('retry').onclick=()=>load();}else if(!quiet)toast(error.message);}
+  try{const next=demo?structuredClone(demoData):await api('/api/state');if(startedRevision!==revision){reloadNeeded=true;return;}if(state.family_id&&next.family_id!==state.family_id){closeDialogs();operations.clear();pending.clear();photos.clear();selected=null;lastEvent=null;revision++;toast('Family switched');}if(next.language&&next.language!==currentLanguage){location.replace(languageURL(next.language));return;}const nextSignature=JSON.stringify(next);for(const [id,op] of operations){const product=next.products.find(p=>p.id===id);if(product)product.active=op.phase==='hidden'?op.action==='readd':op.previousActive;}state=next;if(nextSignature!==signature){signature=nextSignature;render();} $('connection').hidden=true;}
+  catch(error){$('connection').textContent='○ Offline';$('connection').hidden=false;if(!signature){$('content').innerHTML=`<div class="empty"><div class="symbol">↗</div><h2>Open in Telegram</h2><p>${escape(error.message)}</p><button class="primary" id="retry">Try again</button></div>`;$('retry').onclick=()=>load();}else if(!quiet)toast(error.message);}
   finally{loading=false;if(reloadNeeded){reloadNeeded=false;queueMicrotask(()=>load(true));}}
 }
 function visible(){const term=$('search').value.trim().toLocaleLowerCase('en');return state.products.filter(p=>(tab==='catalog'||p.active)&&(!filter||p.category===filter)&&(!term||(p.name+' '+p.note).toLocaleLowerCase('en').includes(term)));}
 function row(p){const emoji=(state.categories[p.category]||'📦').split(' ')[0];const buying=operations.get(p.id)?.action==='buy';return `<article class="product-row ${buying?'is-buying':''}" data-product="${p.id}"><button class="product-open" data-open="${p.id}" aria-label="Open ${escape(p.name)}"><span class="thumb">${p.photo?`<img data-photo="${p.id}" alt="Packaging ${escape(p.name)}">`:escape(emoji)}</span><span class="product-copy"><strong>${escape(p.name)}</strong>${p.note?`<small>${escape(p.note)}</small>`:''}</span></button>${tab==='catalog'&&p.active?'<span class="in-list">On the list</span>':`<button class="product-check ${tab==='catalog'?'add-again':''}" data-action="${p.id}" aria-label="${tab==='catalog'?'Add to list':'Bought'}: ${escape(p.name)}" ${pending.has(p.id)?'disabled':''} aria-pressed="${buying}">${tab==='catalog'?'＋':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17 19 7"/></svg>'}</button>`}</article>`;}
 function render(){
-  if(state.onboarding){$('title').textContent='Your shopping';$('subtitle').textContent='On your own or with others';document.querySelector('.tools').hidden=true;$('filters').hidden=true;$('content').innerHTML='<div class="empty"><h2>How will you use your list?</h2><p>On your own or with others. Start on your own and invite someone later if you wish.</p><div class="usage-choices"><button id="onboarding-solo" class="primary">🙋 Just for me</button><button id="onboarding-shared" class="secondary">👥 With others</button><button id="onboarding-family" class="text-button">I have an invitation</button></div></div>';$('onboarding-family').onclick=()=>openFamily();$('onboarding-solo').onclick=()=>familyAction('/api/family/create',{mode:'solo'});$('onboarding-shared').onclick=()=>familyAction('/api/family/create',{mode:'shared'});return;}
+  if(state.onboarding){$('title').textContent='Your shopping';$('count').hidden=true;document.querySelector('.tools').hidden=true;$('filters').hidden=true;$('content').innerHTML='<div class="empty"><h2>How will you use your list?</h2><p>On your own or with others. Start on your own and invite someone later if you wish.</p><div class="usage-choices"><button id="onboarding-solo" class="primary">🙋 Just for me</button><button id="onboarding-shared" class="secondary">👥 With others</button><button id="onboarding-family" class="text-button">I have an invitation</button></div></div>';$('onboarding-family').onclick=()=>openFamily();$('onboarding-solo').onclick=()=>familyAction('/api/family/create',{mode:'solo'});$('onboarding-shared').onclick=()=>familyAction('/api/family/create',{mode:'shared'});return;}
 
   photoObserver.disconnect();
   const previousRects = new Map([...document.querySelectorAll('[data-product]')].map(node=>[node.dataset.product,node.getBoundingClientRect()]));
-  $('title').textContent={shopping:'Shopping',catalog:'Catalog',history:'History'}[tab];
+  $('title').textContent={shopping:'Shopping',catalog:'Catalog',history:'History',more:'More'}[tab];
   const count=state.products.filter(p=>p.active).length;
   const members=state.family_member_count||(demo?2:1);
-  $('family').textContent=members===1?'👤 My list':`👥 Members · ${members}`;
-  $('subtitle').textContent=tab==='shopping'?(members===1?`${count} at списку · personal list`:`${count} at списку · members: ${members}`):tab==='catalog'?`${state.products.length} saved · photos and notes are kept`:'Who bought what and when';
+  $('family').textContent=members===1?'👤 My list':`👥 ${members}`;
+  $('count').textContent=tab==='shopping'?count:state.products.length;$('count').hidden=!(tab==='shopping'||tab==='catalog');
   document.querySelectorAll('nav button').forEach(b=>b.dataset.tab===tab?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));
-  document.querySelector('.tools').hidden=tab==='history';
-  $('filters').hidden=tab==='history';
+  document.querySelector('.tools').hidden=tab==='history'||tab==='more';
+  $('filters').hidden=tab==='history'||tab==='more';
+  if(tab==='more'){renderMore();return;}
   if(tab==='history'){
     const verbs={added:'added',bought:'bought',restored:'restored to the list'};
     $('content').innerHTML=state.history.length?'<section class="group"><div class="products">'+state.history.map(e=>`<div class="history-row"><strong>${escape(e.product_name)}</strong><div>${escape(e.actor_name)} ${escape(verbs[e.action]||e.action)}${e.undone?' · undone':''}</div><small>${escape(new Date(e.happened_at).toLocaleString('en-GB',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Lisbon'}))}</small></div>`).join('')+'</div></section>':'<div class="empty"><div class="symbol">◷</div><h2>Your history starts here</h2><p>Your additions and purchases will appear here.</p></div>';
@@ -120,7 +123,21 @@ async function loadPhoto(img){try{img.src=await photoURL(Number(img.dataset.phot
 function hydratePhotos(){document.querySelectorAll('[data-photo]').forEach(img=>{if(!img.src)photoObserver.observe(img);});}
 function closeDialogs(){document.querySelectorAll('dialog[open]').forEach(d=>d.close());tg?.BackButton?.hide();}
 function showDialog(id){closeDialogs();$(id).showModal();tg?.BackButton?.show();}
-function openProduct(id){selected=state.products.find(p=>p.id===id);if(!selected)return;$('product-name').textContent=selected.name;$('product-status').textContent=selected.active?'On the shopping list':'Saved for future purchases';$('note').value=selected.note;$('category').innerHTML=Object.entries(state.categories).map(([key,label])=>`<option value="${key}">${escape(label)}</option>`).join('');$('category').value=selected.category;$('product-action').textContent=selected.active?'Bought':'Back to list';$('product-photo').innerHTML=selected.photo?`<img class="detail-photo" data-photo="${selected.id}" alt="Packaging ${escape(selected.name)}">`:'';$('photo-hint').hidden=selected.photo;showDialog('product-dialog');hydratePhotos();}
+function openProduct(id){selected=state.products.find(p=>p.id===id);if(!selected)return;$('product-name').textContent=selected.name;$('product-status').textContent=selected.active?'On the shopping list':'Saved for future purchases';$('note').value=selected.note;$('category').innerHTML=Object.entries(state.categories).map(([key,label])=>`<option value="${key}">${escape(label)}</option>`).join('');$('category').value=selected.category;$('product-action').textContent=selected.active?'Bought':'Back to list';$('product-photo').innerHTML=selected.photo?`<img class="detail-photo" data-photo="${selected.id}" alt="Packaging ${escape(selected.name)}">`:'';$('photo-label').textContent=selected.photo?'Replace photo':'Add a package photo';$('photo-file').value='';showDialog('product-dialog');hydratePhotos();}
+async function shrinkPhoto(file){
+  // Phones send 3–12 MB HEIC/JPEG; re-encode to a ≤1280px JPEG so the upload fits the 5 MB limit and every client can show it.
+  const bitmap=await createImageBitmap(file);const scale=Math.min(1,1280/Math.max(bitmap.width,bitmap.height));
+  const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
+  canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);
+  return new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.85));
+}
+$('photo-file').onchange=async()=>{const file=$('photo-file').files[0];if(!file||!selected)return;$('photo-upload').classList.add('busy');$('photo-label').textContent='Saving the photo…';
+  try{if(demo){toast('Photos are not saved in the demo.');return;}const blob=await shrinkPhoto(file);
+    const response=await fetch('/api/photo/'+selected.id,{method:'POST',headers:{Authorization:'tma '+(tg?.initData||''),'Content-Type':'image/jpeg',...(state.family_id?{'X-Shopping-Family':state.family_id}:{})},body:blob});
+    const result=await response.json();if(!response.ok)throw new Error(result.error||'Could not upload the photo');
+    photos.delete(selected.id);selected.photo=true;const product=state.products.find(p=>p.id===selected.id);if(product)product.photo=true;
+    $('product-photo').innerHTML=`<img class="detail-photo" data-photo="${selected.id}" alt="Packaging ${escape(selected.name)}">`;hydratePhotos();toast('Photo saved');
+  }catch(error){toast(error.message);}finally{$('photo-upload').classList.remove('busy');$('photo-label').textContent=selected.photo?'Replace photo':'Add a package photo';$('photo-file').value='';}};
 function openAdd(){draftText=null;$('items').value='';$('draft').hidden=true;$('add-submit').textContent='Review list';showDialog('add-dialog');}
 async function purchaseMotion(id, op){
   if(!reducedMotion.matches){
@@ -179,9 +196,29 @@ document.querySelectorAll('.close').forEach(button=>button.onclick=closeDialogs)
 document.querySelectorAll('dialog').forEach(dialog=>{dialog.addEventListener('close',()=>{if(!document.querySelector('dialog[open]'))tg?.BackButton?.hide();});dialog.onclick=event=>{if(event.target===dialog){const box=dialog.getBoundingClientRect();if(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom)closeDialogs();}};});
 $('voice').onclick=()=>{if(tg?.initData)tg.close();else toast('Send a voice message in your private chat with the bot.');};
 const currentLanguage=new URLSearchParams(location.search).get('lang')==='en'?'en':'uk';
-$('help-guide').onclick=()=>location.assign('/help?lang='+currentLanguage);
-$('language').value=currentLanguage;
+let isAdmin=false,helpContent=null,helpRole='c';
 function languageURL(value){const url=new URL(location.href);url.searchParams.set('lang',value);return url.href;}
-$('language').onchange=async()=>{const select=$('language');select.disabled=true;try{if(!demo)await api('/api/language',{language:select.value});location.replace(languageURL(select.value));}catch(error){select.value=currentLanguage;toast(error.message);select.disabled=false;}};
-async function initializeLanguage(){if(demo){$('demo-banner').hidden=false;return load();}try{const preferences=await api('/api/preferences');if(preferences.admin){const link=document.createElement('button');link.textContent='📊 Admin';link.className='secondary';link.onclick=()=>location.assign('/admin?lang='+currentLanguage);$('family').after(link);}if(preferences.language&&preferences.language!==currentLanguage){location.replace(languageURL(preferences.language));return;}if(!preferences.language){$('language').value='';$('subtitle').textContent='Оберіть мову / Choose your language';$('content').innerHTML='<div class="empty"><h2>Оберіть мову / Choose your language</h2><p>Choose Ukrainian or English in the 🌐 menu</p></div>';return;}await api('/api/session',{});await load();}catch{await load();}}
+function languageSelect(value){return `<select id="language" aria-label="Language / Language"><option value="" disabled ${value?'':'selected'}>Оберіть мову / Choose language</option><option value="uk" ${value==='uk'?'selected':''}>Українська</option><option value="en" ${value==='en'?'selected':''}>English</option></select>`;}
+function wireLanguage(){const select=$('language');if(!select)return;select.onchange=async()=>{select.disabled=true;try{if(!demo)await api('/api/language',{language:select.value});location.replace(languageURL(select.value));}catch(error){select.value=currentLanguage;toast(error.message);select.disabled=false;}};}
+function renderMore(){
+  $('content').innerHTML='<section class="group"><div class="products more-list">'+
+    `<label class="more-row">🌐 <span>Language</span>${languageSelect(currentLanguage)}</label>`+
+    '<button class="more-row" id="more-help" type="button">📖 <span>Help</span><span class="chev">›</span></button>'+
+    '<button class="more-row" id="more-family" type="button">👥 <span>Members</span><span class="chev">›</span></button>'+
+    (isAdmin?'<button class="more-row" id="more-admin" type="button">📊 <span>Admin</span><span class="chev">›</span></button>':'')+
+    '</div></section><p class="hint more-note">Grocery · chat help: /help · problem: /support</p>';
+  wireLanguage();$('more-help').onclick=openHelp;$('more-family').onclick=()=>openFamily();if($('more-admin'))$('more-admin').onclick=()=>location.assign('/admin?lang='+currentLanguage);
+}
+async function openHelp(){
+  showDialog('help-dialog');
+  try{helpContent=helpContent||await (await fetch('/help.json',{cache:'no-store'})).json();}catch{$('help-steps').textContent='The guide could not load. Open /help in the chat.';return;}
+  renderHelp();
+}
+function renderHelp(){
+  const h=helpContent[currentLanguage];$('help-creator').textContent=h.creator;$('help-invited').textContent=h.invited;
+  $('help-creator').classList.toggle('selected',helpRole==='c');$('help-invited').classList.toggle('selected',helpRole==='j');
+  $('help-steps').innerHTML=h.steps[helpRole].map((step,i)=>`<section class="help-step"><div class="kicker">${i+1} / 6</div><h3>${escape(step.title)}</h3><p>${escape(step.body)}</p><p class="hint">💡 ${escape(step.tip)}</p></section>`).join('');
+}
+$('help-creator').onclick=()=>{helpRole='c';renderHelp();};$('help-invited').onclick=()=>{helpRole='j';renderHelp();};
+async function initializeLanguage(){if(demo){$('demo-banner').hidden=false;return load();}try{const preferences=await api('/api/preferences');isAdmin=!!preferences.admin;if(preferences.language&&preferences.language!==currentLanguage){location.replace(languageURL(preferences.language));return;}if(!preferences.language){document.querySelector('.tools').hidden=true;$('filters').hidden=true;$('content').innerHTML='<div class="empty"><h2>Оберіть мову / Choose your language</h2><p class="language-choice">'+languageSelect('')+'</p></div>';wireLanguage();return;}await api('/api/session',{});await load();}catch{await load();}}
 initializeLanguage();setInterval(()=>{if(!document.hidden&&signature)load(true);},5000);

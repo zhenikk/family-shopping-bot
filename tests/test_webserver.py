@@ -224,6 +224,45 @@ class MiniAppTests(unittest.TestCase):
         self.assertIn('release', json.loads(body))
         self.assertEqual(len(json.loads(body)['releases']), 2)
 
+    def upload(self, product_id, data, user=1, content_type='image/jpeg', auth=True):
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=10)
+        headers = {"Content-Type": content_type}
+        if auth:
+            headers["Authorization"] = "tma " + signed_data(user)
+        family = self.bot.families.family(user)
+        if family:
+            headers['X-Shopping-Family'] = family
+        conn.request("POST", f"/api/photo/{product_id}", body=data, headers=headers)
+        response = conn.getresponse()
+        body = response.read()
+        conn.close()
+        return response.status, body
+
+    def test_photo_upload_from_mini_app_saves_file_and_marks_product(self):
+        product = self.store.ensure_product('Кава')
+        self.store.add_need(product, 1)
+        status, body = self.upload(product, b'\xff\xd8\xff' + b'x' * 100)
+        self.assertEqual((status, json.loads(body)), (200, {'photo': True}))
+        row = self.store.product(product)
+        self.assertTrue(Path(row['photo_path']).is_file())
+        self.assertEqual(row['photo_file_id'], '')
+        status, body = self.request('/api/state')
+        self.assertTrue(next(p for p in json.loads(body)['products'] if p['id'] == product)['photo'])
+        self.assertEqual(self.request(f'/api/photo/{product}')[0], 200)
+        # Oversized uploads are refused from the declared length, before the body is read.
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=10)
+        conn.putrequest("POST", f"/api/photo/{product}")
+        conn.putheader("Authorization", "tma " + signed_data(1))
+        conn.putheader("X-Shopping-Family", self.bot.families.family(1))
+        conn.putheader("Content-Type", "image/jpeg")
+        conn.putheader("Content-Length", "5000001")
+        conn.endheaders()
+        self.assertEqual(conn.getresponse().status, 400)
+        conn.close()
+        self.assertEqual(self.upload(product, b'plain text', content_type='text/plain')[0], 400)
+        self.assertEqual(self.upload(product, b'\xff\xd8' * 10, auth=False)[0], 401)
+        self.assertEqual(self.upload(999, b'\xff\xd8' * 10)[0], 404)
+
     def test_public_help_assets_and_private_path_rejection(self):
         for path in ('/help?lang=en', '/help.js', '/help.css', '/help/en-j-2.png'):
             status, body = self.request(path, auth=False)

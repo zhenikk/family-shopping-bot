@@ -920,7 +920,7 @@ class ShoppingBot:
             block = []
             if row["category"] != previous:
                 block.append("\n<b>" + html.escape(CATEGORIES.get(row["category"], CATEGORIES["other"])) + "</b>")
-            suffix = " 📷" if row["photo_file_id"] else ""
+            suffix = " 📷" if row["photo_file_id"] or row["photo_path"] else ""
             block.append(f"• {html.escape(row['name'])}{suffix}")
             if row["note"]:
                 block.append(f"  📝 {html.escape(row['note'])}")
@@ -1019,14 +1019,19 @@ class ShoppingBot:
         rows.append([(tr('ui_675da4a00bf6') if product["note"] else tr('ui_d125eb4a052d'), f"note:{product_id}")])
         if product["note"]:
             rows[-1].append((tr('ui_2bc919726f86'), f"clearnote:{product_id}"))
-        if not product["photo_file_id"]:
+        has_photo = bool(product["photo_file_id"] or product["photo_path"])
+        if not has_photo:
             text += tr('ui_2e00db9e6c39')
         rows.append([(tr('ui_61a63f8e97e3'), f"categories:{product_id}")])
         rows.append([(tr('ui_4dfffe931b00'), "list:all"), (tr('ui_1720591356f5'), "catalog:0")])
-        if product["photo_file_id"]:
+        if has_photo:
             # Telegram cannot turn a text message into a photo, so a card with a photo is a fresh photo message
             # that replaces the panel; buttons pressed on it fall back to new text messages the same way.
-            result = self.telegram.call("sendPhoto", chat_id=user_id, photo=product["photo_file_id"], caption=text, parse_mode="HTML", reply_markup=buttons(*rows))
+            # A photo uploaded from the Mini App has only a local path: upload it once, then reuse Telegram's file_id.
+            photo = product["photo_file_id"] or Path(product["photo_path"])
+            result = self.telegram.call("sendPhoto", chat_id=user_id, photo=photo, caption=text, parse_mode="HTML", reply_markup=buttons(*rows))
+            if not product["photo_file_id"] and isinstance(result, dict) and result.get("photo"):
+                self.store.set_photo(product_id, result["photo"][-1]["file_id"], product["photo_path"])
             self.families.route_message(user_id, result["message_id"], self.family_context.get())
             if message_id is not None:
                 self.store.forget_view(user_id, message_id)

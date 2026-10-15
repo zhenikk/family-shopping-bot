@@ -662,6 +662,24 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual(count_items(1, "en"), "1 item")
         self.assertEqual(count_items(2, "en"), "2 items")
 
+    def test_card_with_path_only_photo_uploads_file_and_caches_file_id(self):
+        product = self.store.ensure_product('Кава')
+        self.store.add_need(product, 1)
+        path = self.bot.media_dir / 'web-upload.jpg'
+        path.write_bytes(b'\xff\xd8\xff')
+        self.store.set_photo(product, '', str(path))
+        text, _ = self.bot.list_content()
+        self.assertIn('📷', text, 'A web-uploaded photo counts as a photo in the chat list')
+        original = self.telegram.call
+        def call(method, **params):
+            result = original(method, **params)
+            return {'message_id': result['message_id'], 'photo': [{'file_id': 'cached-id'}]} if method == 'sendPhoto' else result
+        with patch.object(self.telegram, 'call', side_effect=call):
+            self.bot.show_item(1, product)
+        photos = [p for m, p in self.telegram.calls if m == 'sendPhoto']
+        self.assertEqual(photos[-1]['photo'], path)
+        self.assertEqual(self.store.product(product)['photo_file_id'], 'cached-id')
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
