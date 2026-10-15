@@ -8,6 +8,8 @@ COMMANDS = [
     ('shopping', 'Шорткат iOS: запис покупок голосом', 'iOS shortcut: voice shopping'),
     ('shoppingoff', 'Відкликати ключ шортката', 'Revoke shortcut key'),
     ('help', 'Як користуватися ботом', 'How to use the bot'),
+    ('language', 'Мова інтерфейсу', 'Interface language'),
+    ('support', 'Повідомити про проблему', 'Report a problem'),
 ]
 
 

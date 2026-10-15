@@ -229,6 +229,9 @@ class MiniAppTests(unittest.TestCase):
             status, body = self.request(path, auth=False)
             self.assertEqual(status, 200)
             self.assertTrue(body)
+        status, body = self.request('/help.json', auth=False)
+        self.assertEqual(status, 200)
+        self.assertIn('uk', json.loads(body))
         status, _ = self.request('/help/../../help.json', auth=False)
         self.assertNotEqual(status, 200)
 

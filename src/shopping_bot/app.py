@@ -306,9 +306,8 @@ class ShoppingBot:
 
     def menu(self) -> dict:
         return {
-            "keyboard": [[{"text": tr('ui_45b58c75117f')}, {"text": tr('ui_1720591356f5')}],
-                         [{"text": tr('ui_33ed8513acbd')}, {"text": "📖 How to use" if language.get()=="en" else "📖 Як користуватися"}],
-                         [{"text": "🌐 Language" if language.get()=="en" else "🌐 Мова"}, {"text": tr("🐞 Повідомити про проблему")}]],
+            "keyboard": [[{"text": tr('ui_428fc2d45eba')}, {"text": tr('ui_1720591356f5')}],
+                         [{"text": tr('ui_f46f0095cd44')}, {"text": tr('ui_33ed8513acbd')}]],
             "input_field_placeholder": tr('ui_366933c83ece'),
             "resize_keyboard": True, "is_persistent": False, "one_time_keyboard": True,
         }
@@ -427,7 +426,8 @@ class ShoppingBot:
             self.support.cancel(user_id)
             self.send(user_id, tr('Звернення скасовано.'), reply_markup=self.menu())
             return
-        menu_actions = {button['text'] for row in self.menu()['keyboard'] for button in row} | {'📋 Список у чаті', '📋 List in chat'}
+        # Old keyboards keep working: returning users may still have the six-button menu.
+        menu_actions = {button['text'] for row in self.menu()['keyboard'] for button in row} | {'📋 Список у чаті', '📋 List in chat', '📖 Як користуватися', '📖 How to use', '🌐 Мова', '🌐 Language', '🐞 Повідомити про проблему', '🐞 Report a problem'}
         if draft and (text.startswith('/') or text in menu_actions):
             self.support.cancel(user_id)
             draft = None
@@ -931,7 +931,7 @@ class ShoppingBot:
                 keyboard.append([('👥 ' + tr('ui_aa604e9d68b3'), 'family:invite')])
         if len(rows) > shown:
             lines.append(f"{tr('ui_b21c9aac6065')}{shown}{tr('ui_e2b3417bc1de')}{len(rows)}{tr('ui_dd922ebd0935')}")
-        keyboard.append([(tr('ui_e303bf93e660'), "list:all"), (tr('ui_1720591356f5'), "catalog:0")])
+        keyboard.append([(tr('ui_e303bf93e660'), "list:all"), (tr('ui_1720591356f5'), "catalog:0"), (tr('ui_f46f0095cd44'), "history")])
         markup = buttons(*keyboard)
         return "\n".join(lines), markup
 
@@ -981,7 +981,7 @@ class ShoppingBot:
         count = self.store.catalog_count()
         rows = self.store.catalog(offset)
         lines = [f"{tr('ui_c974d4138a36')}{count}{tr('ui_06228fbc4c5c')}{offset // 10 + 1}/{max(1, (count + 9) // 10)}", tr('ui_39f5a80bbeaa')]
-        keyboard = [[(f"{r['name'][:36]}{' ✅' if r['active'] else ''}", f"item:{r['id']}")] for r in rows]
+        keyboard = [[(f"{r['name'][:36]}{tr(' · у списку') if r['active'] else ''}", f"item:{r['id']}")] for r in rows]
         pages = []
         if offset > 0:
             pages.append((tr('ui_0ea5d3b0ea95'), f"catalog:{max(0, offset - 10)}"))
@@ -1016,10 +1016,11 @@ class ShoppingBot:
         rows.append([(tr('ui_4dfffe931b00'), "list:all"), (tr('ui_1720591356f5'), "catalog:0")])
         self.panel(user_id, text, buttons(*rows), message_id, parse_mode="HTML")
 
-    def show_history(self, user_id: int) -> None:
+    def show_history(self, user_id: int, message_id: int | None = None) -> None:
         events = self.store.recent_history()
+        back = buttons([(tr('ui_4dfffe931b00'), "list:all")])
         if not events:
-            self.send(user_id, tr('ui_f6e3f4b9e568'))
+            self.panel(user_id, tr('ui_f6e3f4b9e568'), back, message_id)
             return
         lines = [tr('ui_dd633808533d')]
         verbs = {"added": tr('ui_529befd33c06'), "bought": tr('ui_d49c62c688ba'), "restored": tr('ui_719296f626b8')}
@@ -1030,7 +1031,7 @@ class ShoppingBot:
                 suffix += tr('ui_aafc9ef7302d')
             lines.append(f"{local:%d.%m %H:%M} — {event['actor_name']} {verbs.get(event['action'], event['action'])} "
                          f"{event['product_name']}{suffix}")
-        self.send(user_id, "\n".join(lines))
+        self.panel(user_id, "\n".join(lines), back, message_id)
 
     def notify_partner(self, batch_id: int) -> None:
         # Web requests can arrive concurrently; keep one notification per batch.
@@ -1277,6 +1278,8 @@ class ShoppingBot:
                            buttons([(tr('ui_4dfffe931b00'), "list:all")]), panel_id)
             elif action == "list" and len(parts) == 2:
                 self.show_list(user_id, message_id=message.get("message_id"))
+            elif action == "history" and len(parts) == 1:
+                self.show_history(user_id, panel_id)
             elif action == "dedit" and len(parts) == 2:
                 self.show_draft(user_id, int(parts[1]), panel_id, editing=True)
             elif action == "dkeep" and len(parts) == 3:

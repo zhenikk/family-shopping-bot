@@ -83,7 +83,7 @@ function render(){
 
   photoObserver.disconnect();
   const previousRects = new Map([...document.querySelectorAll('[data-product]')].map(node=>[node.dataset.product,node.getBoundingClientRect()]));
-  $('title').textContent={shopping:'Покупки',catalog:'Наші товари',history:'Історія'}[tab];
+  $('title').textContent={shopping:'Покупки',catalog:'Каталог',history:'Історія'}[tab];
   const count=state.products.filter(p=>p.active).length;
   const members=state.family_member_count||(demo?2:1);
   $('family').textContent=members===1?'👤 Мій список':`👥 Учасники · ${members}`;

@@ -1,3 +1,7 @@
+## 0.5.40
+
+- Consistent names and controls: the bot is "Grocery" in the help guide (its real Telegram name), the catalog is "Catalog" everywhere, and ✅ marks only confirming actions (catalog rows say "· in list"). The reply menu is four buttons (List, Catalog, History, Family); language, help and support moved to the command picker, old keyboards still work. History opens as an editable panel with a route back and is linked from the list. The help page reads help.json (one source with the bot), its illustrations are re-captured with one consistent crop that shows the highlighted control, and the chat mockups match the current onboarding and draft.
+
 ## 0.5.39
 
 - Voice capture is one message: the delayed status notice (if any) is edited into the draft, and the transcript sits inside the draft as an expandable quote instead of a separate "Heard:" message. Every draft item is a button that opens its card; the card can confirm the whole draft, so a correction takes two taps instead of seven. The confirm button always says "Add N", or "Update and add" when an item already in the list would change; "Keep as is" is now "Keep unchanged".

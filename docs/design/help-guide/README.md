@@ -1,3 +1,5 @@
+> Archived 2026-10-15. The live guide is `src/shopping_bot/help.json` (text) + `src/shopping_bot/web/help.js` (mockups); this prototype is kept only as approval history and is not updated.
+
 # Help design — approval draft
 
 Scope: a standalone review prototype; no production files, commands, database or

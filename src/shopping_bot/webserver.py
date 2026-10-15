@@ -391,7 +391,8 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                           "/fonts/onest.woff2": ("fonts/onest.woff2", "font/woff2"),
                           "/fonts/manrope.woff2": ("fonts/manrope.woff2", "font/woff2")}
                 assets.update({'/Shopping.shortcut': ('Shopping.shortcut', 'application/octet-stream'), '/shopping-setup.css': ('shopping-setup.css', 'text/css; charset=utf-8'), '/shopping-setup': ('shopping-setup.html', 'text/html; charset=utf-8'), '/shopping-setup.js': ('shopping-setup.js', 'text/javascript; charset=utf-8')})
-                assets.update({'/help': ('help.html', 'text/html; charset=utf-8'), '/help.css': ('help.css', 'text/css; charset=utf-8'), '/help.js': ('help.js', 'text/javascript; charset=utf-8')})
+                # help.json is the single source of guide text for the bot and the web page.
+                assets.update({'/help': ('help.html', 'text/html; charset=utf-8'), '/help.css': ('help.css', 'text/css; charset=utf-8'), '/help.js': ('help.js', 'text/javascript; charset=utf-8'), '/help.json': ('../help.json', 'application/json; charset=utf-8')})
                 assets.update({f'/help/{lang}-{role}-{step}.png': (f'help/{lang}-{role}-{step}.png', 'image/png') for lang in ('uk', 'en') for role in ('c', 'j') for step in range(6)})
                 if path in assets:
                     filename, mime = assets[path]

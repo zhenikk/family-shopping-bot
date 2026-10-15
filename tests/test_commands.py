@@ -13,5 +13,6 @@ class CommandsTests(unittest.TestCase):
             self.assertEqual(params['scope'], {'type': 'all_private_chats'})
             commands = {item['command'] for item in params['commands']}
             self.assertTrue({'shopping', 'shoppingoff'} <= commands)
+            self.assertTrue({'help', 'language', 'support'} <= commands, 'Language and support left the reply menu; the command picker must offer them')
             self.assertNotIn('shoppingaudio', commands)
             self.assertTrue(all(' ' not in name for name in commands))

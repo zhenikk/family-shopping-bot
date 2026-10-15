@@ -563,6 +563,41 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertIn('✅ Оновити й додати', markup)
         self.assertNotIn('Підтвердити', markup)
 
+    def test_home_menu_is_four_buttons_and_old_labels_still_work(self):
+        rows = [[button['text'] for button in row] for row in self.bot.menu()['keyboard']]
+        self.assertEqual(rows, [['🛒 Список', '📚 Каталог'], ['🕘 Історія', '👥 Сім’я']])
+        self.bot.handle_message(message(1, '📋 Список у чаті'))
+        self.assertIn('list:all', str(self.last_panel()['reply_markup']))
+        with patch.dict('os.environ', {'SHOPPING_WEB_URL': ''}):
+            self.bot.handle_message(message(1, '📖 Як користуватися'))
+        self.assertIn('help:', str(self.last_panel()['reply_markup']))
+        self.bot.handle_message(message(1, '🌐 Мова'))
+        self.assertIn('Choose your language', self.telegram.calls[-1][1]['text'])
+
+    def test_history_is_a_panel_with_a_route_back(self):
+        self.telegram.calls.clear()
+        self.bot.handle_message(message(1, '🕘 Історія'))
+        panel = self.sends()[-1]
+        self.assertIn('list:all', str(panel['reply_markup']))
+        history_id = self.telegram.next_message_id
+        product = self.store.ensure_product('молоко')
+        self.store.add_need(product, 1)
+        self.bot.handle_callback(callback(1, 'history', message_id=history_id))
+        self.assertIn('олоко', self.edits(history_id)[-1]['text'])
+        self.assertEqual(len(self.sends()), 1, 'History reopens in place, not as a new message')
+
+    def test_catalog_marks_active_items_in_words_not_with_a_check(self):
+        product = self.store.ensure_product('молоко')
+        self.store.add_need(product, 1)
+        self.bot.show_catalog(1)
+        markup = str(self.last_panel()['reply_markup'])
+        self.assertIn('· у списку', markup)
+        self.assertNotIn('✅', markup)
+
+    def test_list_footer_offers_history(self):
+        _, markup = self.bot.list_content()
+        self.assertIn("'callback_data': 'history'", str(markup))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
