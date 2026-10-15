@@ -1,3 +1,7 @@
+## 0.5.39
+
+- Voice capture is one message: the delayed status notice (if any) is edited into the draft, and the transcript sits inside the draft as an expandable quote instead of a separate "Heard:" message. Every draft item is a button that opens its card; the card can confirm the whole draft, so a correction takes two taps instead of seven. The confirm button always says "Add N", or "Update and add" when an item already in the list would change; "Keep as is" is now "Keep unchanged".
+
 ## 0.5.38
 
 - Onboarding reaches the empty list in two visible bot messages: the language prompt is edited in place into the solo/shared choice and then into the live list; the second message carries the reply menu. A newcomer's first text or voice sent before the choice is kept and becomes the draft right after it. Empty-list copy depends on member count and offers an invite button for one-member lists. The separate language confirmation, family panel and Mini App link are no longer sent during onboarding; the chat menu button still opens the Mini App.

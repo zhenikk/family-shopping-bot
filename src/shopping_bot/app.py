@@ -79,6 +79,7 @@ class ShoppingBot:
         self.pending_draft_edits: dict[int, tuple] = {}
         self.pending_family_names: set[int] = set()
         self.purchase_feedback: dict[int, int] = {}
+        self.draft_sources: dict[int, str] = {}  # ponytail: in-memory transcript per draft; lost on restart, header just omits it
         self.notification_lock = threading.Lock()
         self.update_limits = RateLimiter(30, 1)
         self.voice_admission = VoiceAdmission()
@@ -221,6 +222,12 @@ class ShoppingBot:
         if message_id is not None:
             self.remove_obsolete_panel(user_id, message_id)
         return result
+
+    def notice(self, user_id: int, text: str, panel_id: int | None = None) -> int:
+        """Plain status text: replaces an earlier status message when one exists."""
+        if panel_id:
+            return self.panel(user_id, text, {'inline_keyboard': []}, panel_id)
+        return self.send(user_id, text)['message_id']
 
     def show_help(self, user_id, chosen=None, role='c', step=0, message=None):
         chosen = chosen or self.families.preference(user_id) or 'uk'
@@ -588,7 +595,7 @@ class ShoppingBot:
         else:
             self.make_draft(user_id, text)
 
-    def make_draft(self, user_id: int, raw: str, *, extracted=None) -> None:
+    def make_draft(self, user_id: int, raw: str, *, extracted=None, source=None, panel_id=None) -> None:
         targets = purchase_targets(raw)
         if targets is not None:
             active = {row['id'] for row in self.store.needs()}
@@ -602,15 +609,15 @@ class ShoppingBot:
                     missing.append(name)
             if items:
                 draft_id = self.store.save_draft(user_id, items)
-                self.show_purchase_draft(user_id, draft_id)
+                self.show_purchase_draft(user_id, draft_id, panel_id)
             else:
-                self.send(user_id, self.purchase_label('Не знайшов цих товарів в активному списку.', 'No matching items in your shopping list.'))
+                self.notice(user_id, self.purchase_label('Не знайшов цих товарів в активному списку.', 'No matching items in your shopping list.'), panel_id)
             if missing:
                 self.send(user_id, self.purchase_label('Не знайдено: ', 'Not found: ') + ', '.join(missing))
             return
         items = self.store.resolved_items(raw) if extracted is None else extracted
         if not items:
-            self.send(user_id, tr('ui_ed4dbaec7704'))
+            self.notice(user_id, tr('ui_ed4dbaec7704'), panel_id)
             return
         draft_items = []
         seen_names=set()
@@ -628,7 +635,9 @@ class ShoppingBot:
                                 "original_note": existing["note"] if existing else None})
         self.pending_draft_edits.pop(user_id, None)
         draft_id = self.store.save_draft(user_id, draft_items)
-        self.show_draft(user_id, draft_id)
+        if source:
+            self.draft_sources[draft_id] = source
+        self.show_draft(user_id, draft_id, panel_id)
         for item in draft_items:
             if normalize(item['name']) not in food_dictionary():
                 submit_jev(self.analytics,user_id,draft_id,item)
@@ -652,6 +661,9 @@ class ShoppingBot:
             self.panel(user_id, tr('ui_ccdb1698f91f'), buttons([(tr('ui_13a3f958c2ad'), "list:all")]), panel_id)
             return
         lines = [f"{tr('ui_85fd92fd6b66')}{len(items)}{tr('ui_1df015513d95')}"]
+        source = self.draft_sources.get(draft_id)
+        if source:
+            lines.append(f"<blockquote expandable>{tr('ui_94b5a7bd2400')}{html.escape(source)}</blockquote>")
         for index, item in enumerate(items, 1):
             existing=self.store.product_by_name(item['name'])
             active=existing and any(row['id']==existing['id'] for row in self.store.needs())
@@ -663,22 +675,27 @@ class ShoppingBot:
                 lines.append("…")
                 break
             lines.append(block)
-        controls = []
+        # Every item is a button: one tap opens its card, no separate edit mode.
         active_ids = {row['id'] for row in self.store.needs()}
+        controls = []
         for item in items:
             existing = self.store.product_by_name(item['name'])
+            row = [(item['name'][:30], f"ditem:{draft_id}:{item['key']}")]
             if existing and existing['id'] in active_ids:
-                controls.append([(tr('✏️ Виправити') + ' · ' + item['name'][:20], f"ditem:{draft_id}:{item['key']}"),
-                                 (tr('Залишити як є'), f"dkeep:{draft_id}:{item['key']}")])
-        if editing:
-            lines.append(tr('ui_4908e89b0c6b'))
-            controls += [[(item["name"][:35], f"ditem:{draft_id}:{item['key']}")] for item in items]
+                row.append((tr('Не змінювати'), f"dkeep:{draft_id}:{item['key']}"))
+            controls.append(row)
         if items:
-            controls.append([(tr('✅ Підтвердити') if any(self.store.product_by_name(item['name']) for item in items) else tr('ui_b2db6721d657'), f"confirm:{draft_id}"), (tr('ui_646edfb78b75'), f"dedit:{draft_id}")])
+            lines.append('\n' + tr('Торкніться товару, щоб виправити.'))
+            controls.append([(self.confirm_label(items), f"confirm:{draft_id}"), (tr('ui_816689e7ff0a'), f"cancel:{draft_id}")])
         else:
             lines.append(tr('ui_364563cf6a1f'))
-        controls.append([(tr('ui_816689e7ff0a'), f"cancel:{draft_id}")])
+            controls.append([(tr('ui_816689e7ff0a'), f"cancel:{draft_id}")])
         self.panel(user_id, "\n".join(lines), buttons(*controls), panel_id, parse_mode="HTML")
+
+    def confirm_label(self, items) -> str:
+        active_ids = {row['id'] for row in self.store.needs()}
+        updating = any((existing := self.store.product_by_name(item['name'])) and existing['id'] in active_ids for item in items)
+        return tr('✅ Оновити й додати') if updating else f"{tr('ui_b2db6721d657')} {len(items)}"
 
     def show_draft_item(self, user_id, draft_id, key, panel_id):
         items = self.store.draft(user_id, draft_id)
@@ -689,7 +706,7 @@ class ShoppingBot:
         self.panel(user_id, f"✏️ {html.escape(item['name'])}\n<b>{html.escape(CATEGORIES[item['category']])}</b>{tr('ui_2be7f9402c08')}{html.escape(item['note'] or '—')}", buttons(
             [(tr('ui_8d2855b10253'), f"dname:{draft_id}:{key}"), (tr('ui_1bc4bea6f13d'), f"dnote:{draft_id}:{key}")],
             [(tr('ui_b6150e14a981'), f"dcats:{draft_id}:{key}"), (tr('ui_2bc919726f86'), f"ddel:{draft_id}:{key}")],
-            [(tr('ui_554dca2bdb83'), f"dedit:{draft_id}")]), panel_id, parse_mode="HTML")
+            [(self.confirm_label(items), f"confirm:{draft_id}"), (tr('ui_554dca2bdb83'), f"dedit:{draft_id}")]), panel_id, parse_mode="HTML")
 
     def finish_draft_edit(self, user_id, text):
         draft_id, key, panel_id, field = self.pending_draft_edits[user_id]
@@ -737,13 +754,15 @@ class ShoppingBot:
                 finished.set()
             timer.cancel()
 
+        status={}
+
         def notice():
             with guard:
                 if finished.is_set() or self.families.family(user_id)!=expected_family:
                     return
                 try:
                     key='ui_8ac40e2be49b' if started.is_set() else 'ui_cb8057ef0a78'
-                    self.send(user_id,tr(key))
+                    status['message_id']=self.send(user_id,tr(key))['message_id']
                 except TelegramError:
                     LOG.warning('Could not send delayed voice status')
 
@@ -756,7 +775,7 @@ class ShoppingBot:
             started.set()
             try:
                 extra = {"uploaded_path": uploaded_path} if uploaded_path else {}
-                self.process_voice(user_id,file_id,note_product_id,on_transcribed=ready,message_id=message_id,**extra)
+                self.process_voice(user_id,file_id,note_product_id,on_transcribed=ready,message_id=message_id,status=status,**extra)
             except Exception:
                 metric_failed=True
                 raise
@@ -783,7 +802,7 @@ class ShoppingBot:
 
         return True
 
-    def process_voice(self, user_id: int, file_id: str, note_product_id: int | None = None, *, on_transcribed=None,message_id=None,uploaded_path=None) -> None:
+    def process_voice(self, user_id: int, file_id: str, note_product_id: int | None = None, *, on_transcribed=None,message_id=None,uploaded_path=None,status=None) -> None:
         started=time.monotonic()
         successful=False
         selected_language=language.get()
@@ -807,12 +826,14 @@ class ShoppingBot:
             transcript = transcribe(source, file_id, self.whisper_cli, self.whisper_model, language_code=language.get(), vocabulary=vocabulary, shopping_context=note_product_id is None, benchmark=lambda row:self.analytics.record_speech_benchmark(user_id,dict(row,message_id=message_id)), **speech_options)
             if on_transcribed:
                 on_transcribed()
+            # After on_transcribed the delayed status notice can no longer be sent, so its id is final.
+            status_id = (status or {}).get('message_id')
             with self.families.lock:
                 if self.families.family(user_id)!=expected_family:
-                    self.send(user_id,tr('ui_207f65cb77d5'))
+                    self.notice(user_id,tr('ui_207f65cb77d5'),status_id)
                     return
                 if not transcript:
-                    self.send(user_id, tr('ui_25719b4e1c5d'))
+                    self.notice(user_id, tr('ui_25719b4e1c5d'), status_id)
                     return
                 successful=True
                 if note_product_id is not None:
@@ -820,30 +841,29 @@ class ShoppingBot:
                     if self.pending_notes.get(user_id) != note_product_id:
                         return
                     if len(transcript) > 200:
-                        self.send(user_id, tr('ui_0ce74f1a0cc2'))
+                        self.notice(user_id, tr('ui_0ce74f1a0cc2'), status_id)
                         return
                     self.store.set_note(note_product_id, transcript)
                     self.pending_notes.pop(user_id, None)
-                    self.send(user_id, f"{tr('ui_f5d190cbc687')}{transcript}")
+                    self.notice(user_id, f"{tr('ui_f5d190cbc687')}{transcript}", status_id)
                     self.show_item(user_id, note_product_id, self.note_panels.pop(user_id, None))
                     self.refresh_views()
                     return
-                self.send(user_id, f"{tr('ui_94b5a7bd2400')}{transcript}")
                 extracted=None
                 try:
                     extracted=extract_products(transcript) if purchase_targets(transcript) is None else None
                 except Exception:
                     LOG.warning("Product extraction unavailable; using local rules")
-                self.make_draft(user_id, transcript, extracted=extracted)
+                self.make_draft(user_id, transcript, extracted=extracted, source=transcript, panel_id=status_id)
         except (SpeechError, TelegramError) as exc:
             if on_transcribed:
                 on_transcribed()
-            self.send(user_id, f"{exc}{tr('ui_61a76168c7db')}")
+            self.notice(user_id, f"{exc}{tr('ui_61a76168c7db')}", (status or {}).get('message_id'))
         except Exception:
             if on_transcribed:
                 on_transcribed()
             LOG.exception("Voice processing failed for user %s", user_id)
-            self.send(user_id, tr('ui_7d5933174b7f'))
+            self.notice(user_id, tr('ui_7d5933174b7f'), (status or {}).get('message_id'))
 
         finally:
             self.analytics.record('voice_done' if successful else 'voice_error',{'id':user_id},status='ok' if successful else 'error',duration_ms=int((time.monotonic()-started)*1000))

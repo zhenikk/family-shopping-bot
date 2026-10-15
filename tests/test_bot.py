@@ -495,6 +495,74 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertIn('для всіх учасників', text)
         self.assertNotIn('family:invite', str(markup))
 
+    def last_panel(self):
+        return next(params for method, params in reversed(self.telegram.calls) if 'reply_markup' in params)
+
+    def draft_id_for(self, user_id):
+        with self.store.db() as db:
+            return db.execute('SELECT id FROM drafts WHERE actor_id=? ORDER BY id DESC', (user_id,)).fetchone()[0]
+
+    def test_voice_draft_is_one_message_carrying_the_transcript(self):
+        self.telegram.calls.clear()
+        with patch('shopping_bot.app.transcribe', return_value='Молоко, яйця'):
+            self.bot.process_voice(1, 'voice-list')
+        self.assertEqual(len(self.sends()), 1, 'Transcript and draft must be one message')
+        draft = self.sends()[0]
+        self.assertIn('<blockquote expandable>', draft['text'])
+        self.assertIn('Почув: Молоко, яйця', draft['text'])
+        self.assertIn('confirm:', str(draft['reply_markup']))
+
+    def test_delayed_voice_status_message_becomes_the_draft(self):
+        timers = []; workers = []
+        class Timer:
+            def __init__(self, delay, callback): self.callback = callback; timers.append(self)
+            def start(self): pass
+            def cancel(self): pass
+        self.telegram.calls.clear()
+        with patch('shopping_bot.app.threading.Timer', Timer), patch.object(self.bot.voice_pool, 'submit', side_effect=lambda fn, *args: workers.append(lambda: fn(*args))):
+            self.bot.handle_message(message(1, voice={'file_id': 'queued'}))
+            timers[-1].callback()
+            status_id = self.telegram.next_message_id
+            self.assertIn('Голосове в черзі', self.sends()[-1]['text'])
+            with patch('shopping_bot.app.transcribe', return_value='хліб'):
+                workers.pop(0)()
+        self.assertEqual(len(self.sends()), 1, 'The draft must edit the status message, not add another')
+        self.assertIn('Хліб', self.edits(status_id)[-1]['text'])
+        self.assertIn('confirm:', str(self.edits(status_id)[-1]['reply_markup']))
+
+    def test_draft_items_are_tappable_and_confirm_label_counts(self):
+        self.bot.make_draft(1, 'Молоко, Хліб')
+        draft_id = self.draft_id_for(1)
+        milk, bread = self.store.draft(1, draft_id)
+        markup = str(self.telegram.calls[-1][1]['reply_markup'])
+        self.assertIn(f"ditem:{draft_id}:{milk['key']}", markup)
+        self.assertIn(f"ditem:{draft_id}:{bread['key']}", markup)
+        self.assertNotIn('dedit:', markup)
+        self.assertIn('✅ Додати 2', markup)
+        self.bot.handle_callback(callback(1, f"ddel:{draft_id}:{bread['key']}"))
+        self.assertIn('✅ Додати 1', str(self.last_panel()['reply_markup']))
+
+    def test_draft_item_card_can_confirm_whole_draft(self):
+        self.bot.make_draft(1, 'Молоко, Хліб')
+        draft_id = self.draft_id_for(1)
+        milk = self.store.draft(1, draft_id)[0]
+        self.bot.handle_callback(callback(1, f"ditem:{draft_id}:{milk['key']}"))
+        markup = str(self.last_panel()['reply_markup'])
+        self.assertIn(f'confirm:{draft_id}', markup)
+        self.assertIn('✅ Додати 2', markup)
+        self.bot.handle_callback(callback(1, f'confirm:{draft_id}'))
+        self.assertEqual(len(self.store.needs()), 2)
+
+    def test_duplicate_row_says_keep_unchanged_and_confirm_says_update(self):
+        product = self.store.ensure_product('масло', '1 пачка')
+        self.store.add_need(product, 1)
+        self.bot.make_draft(1, 'дві пачки масла, хліб')
+        markup = str(self.telegram.calls[-1][1]['reply_markup'])
+        self.assertIn('Не змінювати', markup)
+        self.assertNotIn('Залишити як є', markup)
+        self.assertIn('✅ Оновити й додати', markup)
+        self.assertNotIn('Підтвердити', markup)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
