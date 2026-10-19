@@ -37,7 +37,7 @@ h1{font-family:Onest,sans-serif;font-size:26px;font-weight:750;letter-spacing:-.
 .product-copy small{display:block;color:var(--muted);font-size:13px;line-height:1.35;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .product-check{width:52px;height:52px;flex-shrink:0;display:grid;place-items:center;border-radius:50%}
 .product-check::before{content:'';grid-area:1/1;width:30px;height:30px;border-radius:50%;border:2px solid color-mix(in srgb,var(--text) 24%,transparent);transition:background .15s,border-color .15s}
-.product-check svg{grid-area:1/1;width:18px;height:18px;fill:none;stroke:var(--text);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:.35}
+.product-check svg{grid-area:1/1;position:relative;z-index:1;width:18px;height:18px;fill:none;stroke:var(--text);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:.35}
 .product-check.add-again{font-size:24px;color:var(--accent)}.product-check.add-again::before{border-style:dashed}
 .product-row.is-buying .product-check{opacity:1}.product-row.is-buying .product-check::before{background:var(--accent);border-color:var(--accent)}.product-row.is-buying .product-check svg{stroke:var(--on-accent);opacity:1}
 .product-row.is-buying .product-copy strong{color:var(--muted);text-decoration:line-through}

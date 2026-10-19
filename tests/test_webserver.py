@@ -349,7 +349,7 @@ class MiniAppTests(unittest.TestCase):
         status,body=self.request('/?lang=en',auth=False)
         self.assertEqual(status,200)
         self.assertIn(b'lang="en"',body)
-        self.assertIn(b'Our groceries',body)
+        self.assertIn(b'<title>Shopping</title>',body)
         status,body=self.request('/app.js?lang=en',auth=False)
         self.assertEqual(status,200)
         self.assertIn(b'Add to the list?',body)
