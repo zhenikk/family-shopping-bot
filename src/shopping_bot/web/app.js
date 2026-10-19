@@ -62,11 +62,18 @@ const demoData = {categories:fallbackCategories, products:[
 {id:5,name:'Кондиціонер для білизни',note:'Такий самий, як минулого разу',category:'cleaning',active:true,photo:false},
 {id:6,name:'Кава',note:'Без кофеїну',category:'drinks',active:false,photo:false}],history:[]};
 function theme(){
- document.body.classList.toggle('dark', tg?.colorScheme === 'dark');
+ // Follow the user's Telegram theme: six tokens come from themeParams, the rest derive from them in CSS.
+ const params=tg?.themeParams||{},root=document.documentElement.style;
+ for(const [key,name] of Object.entries({bg_color:'--surface',secondary_bg_color:'--bg',text_color:'--text',hint_color:'--muted',button_color:'--accent',button_text_color:'--on-accent'})){if(params[key])root.setProperty(name,params[key]);else root.removeProperty(name);}
+ // The Telegram script defines WebApp even in a plain browser; only trust its colorScheme when a real launch (initData) is present.
+ document.body.classList.toggle('dark', tg?.initData?tg.colorScheme==='dark':matchMedia('(prefers-color-scheme: dark)').matches);
+ document.querySelector('meta[name=theme-color]').content=params.secondary_bg_color||params.bg_color||(document.body.classList.contains('dark')?'#111216':'#f1f2f6');
+ try{tg?.setHeaderColor?.(params.secondary_bg_color?'secondary_bg_color':'bg_color');tg?.setBackgroundColor?.(params.secondary_bg_color?'secondary_bg_color':'bg_color');}catch{}
  document.documentElement.style.setProperty('--safe-top',Math.max(tg?.safeAreaInset?.top||0,tg?.contentSafeAreaInset?.top||0)+'px');
  document.documentElement.style.setProperty('--safe-bottom',Math.max(tg?.safeAreaInset?.bottom||0,tg?.contentSafeAreaInset?.bottom||0)+'px');
 }
-if(tg){ tg.ready(); tg.expand(); theme(); tg.onEvent('themeChanged', theme); tg.onEvent('safeAreaChanged', theme); tg.onEvent('contentSafeAreaChanged', theme); tg.BackButton?.onClick(closeDialogs); }
+theme();matchMedia('(prefers-color-scheme: dark)').addEventListener('change',theme);
+if(tg){ tg.ready(); tg.expand(); tg.onEvent('themeChanged', theme); tg.onEvent('safeAreaChanged', theme); tg.onEvent('contentSafeAreaChanged', theme); tg.BackButton?.onClick(closeDialogs); }
 function toast(text, undo=false){ clearTimeout(toastTimer); $('toast').querySelector('span').textContent=text; $('undo').hidden=!undo; $('toast').hidden=false; toastTimer=setTimeout(()=>{$('toast').hidden=true;},undo?12000:4500); }
 async function api(path, body){
   const response=await fetch(path,{method:body===undefined?'GET':'POST',headers:{Authorization:'tma '+(tg?.initData||''),...(state.family_id?{'X-Shopping-Family':state.family_id}:{}),...(body===undefined?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});
@@ -75,13 +82,14 @@ async function api(path, body){
 async function load(quiet=false){
   if(loading){reloadNeeded=true;return;} loading=true; const startedRevision=revision;
   try{const next=demo?structuredClone(demoData):await api('/api/state');if(startedRevision!==revision){reloadNeeded=true;return;}if(state.family_id&&next.family_id!==state.family_id){closeDialogs();operations.clear();pending.clear();photos.clear();selected=null;lastEvent=null;revision++;toast('Сім’ю переключено');}if(next.language&&next.language!==currentLanguage){location.replace(languageURL(next.language));return;}const nextSignature=JSON.stringify(next);for(const [id,op] of operations){const product=next.products.find(p=>p.id===id);if(product)product.active=op.phase==='hidden'?op.action==='readd':op.previousActive;}state=next;if(nextSignature!==signature){signature=nextSignature;render();} $('connection').hidden=true;}
-  catch(error){$('connection').textContent='○ Немає зв’язку';$('connection').hidden=false;if(!signature){$('content').innerHTML=`<div class="empty"><div class="symbol">↗</div><h2>Відкрийте через Telegram</h2><p>${escape(error.message)}</p><button class="primary" id="retry">Спробувати ще раз</button></div>`;$('retry').onclick=()=>load();}else if(!quiet)toast(error.message);}
+  catch(error){$('connection').hidden=false;if(!signature){$('content').innerHTML=`<div class="empty"><div class="symbol">↗</div><h2>Відкрийте через Telegram</h2><p>${escape(error.message)}</p><button class="primary" id="retry">Спробувати ще раз</button></div>`;$('retry').onclick=()=>load();}else if(!quiet)toast(error.message);}
   finally{loading=false;if(reloadNeeded){reloadNeeded=false;queueMicrotask(()=>load(true));}}
 }
 function visible(){const term=$('search').value.trim().toLocaleLowerCase('uk');return state.products.filter(p=>(tab==='catalog'||p.active)&&(!filter||p.category===filter)&&(!term||(p.name+' '+p.note).toLocaleLowerCase('uk').includes(term)));}
 function row(p){const emoji=(state.categories[p.category]||'📦').split(' ')[0];const buying=operations.get(p.id)?.action==='buy';return `<article class="product-row ${buying?'is-buying':''}" data-product="${p.id}"><button class="product-open" data-open="${p.id}" aria-label="Відкрити ${escape(p.name)}"><span class="thumb">${p.photo?`<img data-photo="${p.id}" alt="Упаковка ${escape(p.name)}">`:escape(emoji)}</span><span class="product-copy"><strong>${escape(p.name)}</strong>${p.note?`<small>${escape(p.note)}</small>`:''}</span></button>${tab==='catalog'&&p.active?'<span class="in-list">У списку</span>':`<button class="product-check ${tab==='catalog'?'add-again':''}" data-action="${p.id}" aria-label="${tab==='catalog'?'Додати до списку':'Куплено'}: ${escape(p.name)}" ${pending.has(p.id)?'disabled':''} aria-pressed="${buying}">${tab==='catalog'?'＋':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17 19 7"/></svg>'}</button>`}</article>`;}
 function render(){
-  if(state.onboarding){$('title').textContent='Ваші покупки';$('count').hidden=true;document.querySelector('.tools').hidden=true;$('filters').hidden=true;$('content').innerHTML='<div class="empty"><h2>Як будете користуватися?</h2><p>Для себе або разом з іншими. Можна почати самостійно й запросити когось пізніше.</p><div class="usage-choices"><button id="onboarding-solo" class="primary">🙋 Для себе</button><button id="onboarding-shared" class="secondary">👥 Разом з іншими</button><button id="onboarding-family" class="text-button">У мене є запрошення</button></div></div>';$('onboarding-family').onclick=()=>openFamily();$('onboarding-solo').onclick=()=>familyAction('/api/family/create',{mode:'solo'});$('onboarding-shared').onclick=()=>familyAction('/api/family/create',{mode:'shared'});return;}
+  $('add').hidden=!!state.onboarding||tab==='history'||tab==='more';
+  if(state.onboarding){$('title').textContent='Ваші покупки';$('count').hidden=true;document.querySelector('.toolbar').hidden=true;$('content').innerHTML='<div class="empty"><h2>Як будете користуватися?</h2><p>Для себе або разом з іншими. Можна почати самостійно й запросити когось пізніше.</p><div class="usage-choices"><button id="onboarding-solo" class="primary">🙋 Для себе</button><button id="onboarding-shared" class="secondary">👥 Разом з іншими</button><button id="onboarding-family" class="text-button">У мене є запрошення</button></div></div>';$('onboarding-family').onclick=()=>openFamily();$('onboarding-solo').onclick=()=>familyAction('/api/family/create',{mode:'solo'});$('onboarding-shared').onclick=()=>familyAction('/api/family/create',{mode:'shared'});return;}
 
   photoObserver.disconnect();
   const previousRects = new Map([...document.querySelectorAll('[data-product]')].map(node=>[node.dataset.product,node.getBoundingClientRect()]));
@@ -91,8 +99,7 @@ function render(){
   $('family').textContent=members===1?'👤 Мій список':`👥 ${members}`;
   $('count').textContent=tab==='shopping'?count:state.products.length;$('count').hidden=!(tab==='shopping'||tab==='catalog');
   document.querySelectorAll('nav button').forEach(b=>b.dataset.tab===tab?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));
-  document.querySelector('.tools').hidden=tab==='history'||tab==='more';
-  $('filters').hidden=tab==='history'||tab==='more';
+  document.querySelector('.toolbar').hidden=tab==='history'||tab==='more';
   if(tab==='more'){renderMore();return;}
   if(tab==='history'){
     const verbs={added:'додав(ла)',bought:'купив(ла)',restored:'повернув(ла) у список'};
@@ -193,6 +200,7 @@ $('filters').onclick=event=>{const button=event.target.closest('[data-filter]');
 function switchTab(next){const changed=tab!==next;tab=next;filter='';$('search').value='';render();if(changed){const button=document.querySelector(`nav button[data-tab="${tab}"]`);button.classList.remove('tab-entering');void button.offsetWidth;button.classList.add('tab-entering');setTimeout(()=>button.classList.remove('tab-entering'),250);}}
 document.querySelectorAll('nav button').forEach(button=>button.onclick=()=>switchTab(button.dataset.tab));
 document.querySelectorAll('.close').forEach(button=>button.onclick=closeDialogs);
+document.querySelectorAll('.sheet-top').forEach(top=>{let startY=null;top.addEventListener('pointerdown',e=>{if(!e.target.closest('button'))startY=e.clientY;});top.addEventListener('pointermove',e=>{if(startY!==null&&e.clientY-startY>60){startY=null;closeDialogs();}});top.addEventListener('pointerup',()=>{startY=null;});});
 document.querySelectorAll('dialog').forEach(dialog=>{dialog.addEventListener('close',()=>{if(!document.querySelector('dialog[open]'))tg?.BackButton?.hide();});dialog.onclick=event=>{if(event.target===dialog){const box=dialog.getBoundingClientRect();if(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom)closeDialogs();}};});
 $('voice').onclick=()=>{if(tg?.initData)tg.close();else toast('Надішліть голосове в особистий чат із ботом.');};
 const currentLanguage=new URLSearchParams(location.search).get('lang')==='en'?'en':'uk';
@@ -206,7 +214,7 @@ function renderMore(){
     '<button class="more-row" id="more-help" type="button">📖 <span>Довідка</span><span class="chev">›</span></button>'+
     '<button class="more-row" id="more-family" type="button">👥 <span>Учасники</span><span class="chev">›</span></button>'+
     (isAdmin?'<button class="more-row" id="more-admin" type="button">📊 <span>Admin</span><span class="chev">›</span></button>':'')+
-    '</div></section><p class="hint more-note">Grocery · довідка в чаті: /help · проблема: /support</p>';
+    '</div></section><p class="hint more-note">Довідка в чаті: /help. Проблема: /support.</p>';
   wireLanguage();$('more-help').onclick=openHelp;$('more-family').onclick=()=>openFamily();if($('more-admin'))$('more-admin').onclick=()=>location.assign('/admin?lang='+currentLanguage);
 }
 async function openHelp(){
@@ -220,5 +228,5 @@ function renderHelp(){
   $('help-steps').innerHTML=h.steps[helpRole].map((step,i)=>`<section class="help-step"><div class="kicker">${i+1} / 6</div><h3>${escape(step.title)}</h3><p>${escape(step.body)}</p><p class="hint">💡 ${escape(step.tip)}</p></section>`).join('');
 }
 $('help-creator').onclick=()=>{helpRole='c';renderHelp();};$('help-invited').onclick=()=>{helpRole='j';renderHelp();};
-async function initializeLanguage(){if(demo){$('demo-banner').hidden=false;return load();}try{const preferences=await api('/api/preferences');isAdmin=!!preferences.admin;if(preferences.language&&preferences.language!==currentLanguage){location.replace(languageURL(preferences.language));return;}if(!preferences.language){document.querySelector('.tools').hidden=true;$('filters').hidden=true;$('content').innerHTML='<div class="empty"><h2>Оберіть мову / Choose your language</h2><p class="language-choice">'+languageSelect('')+'</p></div>';wireLanguage();return;}await api('/api/session',{});await load();}catch{await load();}}
+async function initializeLanguage(){if(demo){$('demo-banner').hidden=false;return load();}try{const preferences=await api('/api/preferences');isAdmin=!!preferences.admin;if(preferences.language&&preferences.language!==currentLanguage){location.replace(languageURL(preferences.language));return;}if(!preferences.language){document.querySelector('.toolbar').hidden=true;$('add').hidden=true;$('content').innerHTML='<div class="empty"><h2>Оберіть мову / Choose your language</h2><p class="language-choice">'+languageSelect('')+'</p></div>';wireLanguage();return;}await api('/api/session',{});await load();}catch{await load();}}
 initializeLanguage();setInterval(()=>{if(!document.hidden&&signature)load(true);},5000);

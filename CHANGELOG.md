@@ -1,3 +1,7 @@
+## 0.5.43
+
+- Mini App mobile redesign: colors follow the user's Telegram theme (themeParams, header and background colors), rows are 64 px with a round check in a 52 px target as the one bold element, the add button floats above the tab bar in the thumb zone, search and category chips stay at the top while scrolling, chips and controls are at least 44 px, bottom sheets have a drag handle, swipe-to-close and the primary action pinned above the keyboard (Bought first in the product card). One coherent stylesheet replaces four layers of overrides; no all-caps labels.
+
 ## 0.5.42
 
 - Mini App: compact header (title with count, members chip, refresh) so the first product sits in the top third of the screen; language, help and members moved to a new "More" tab. Help opens inside the app as a sheet fed by help.json with Telegram Back support. The family sheet shows members and Invite first, with rename, role transfer, joining another list, leave and delete folded under "Manage". The product card can take a package photo straight from the phone camera or gallery: the image is shrunk to a ≤1280 px JPEG and uploaded to a new POST /api/photo endpoint (5 MB limit, same quota as the bot); the chat card then uploads that file once and reuses Telegram's file id. Unused message and translation entries removed.

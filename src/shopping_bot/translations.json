@@ -461,5 +461,8 @@
   "Керувати": "Manage",
   "Нотатка після двох двокрапок: «картопля :: купити в Mercadona».": "A note goes after two colons: “potatoes :: buy at Mercadona”.",
   "Grocery · довідка в чаті: /help · проблема: /support": "Grocery · chat help: /help · problem: /support",
-  "Через кому або з нового рядка.": "Comma-separated or one per line."
+  "Через кому або з нового рядка.": "Comma-separated or one per line.",
+  "Зберегти зміни": "Save changes",
+  "Перегляд дизайну, демонстраційні товари": "Design preview, sample products",
+  "Довідка в чаті: /help. Проблема: /support.": "Chat help: /help. Problem: /support."
 }
