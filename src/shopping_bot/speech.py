@@ -20,9 +20,11 @@ class SpeechError(RuntimeError):
 
 def shopping_prompt(language_code, catalog=()):
     """A short context hint, not a constrained output vocabulary."""
-    base = ("Молоко, яйця, хліб, картопля, помідори, огірки, банани, сир, сметана, макарони, олія, кава, зубна паста, кондиціонер для білизни."
-            if language_code == "uk" else
-            "Milk, eggs, bread, potatoes, tomatoes, cucumbers, bananas, cheese, pasta, olive oil, coffee, toothpaste, laundry detergent.")
+    base = {
+        "uk": "Молоко, яйця, хліб, картопля, помідори, огірки, банани, сир, сметана, макарони, олія, кава, зубна паста, кондиціонер для білизни.",
+        "en": "Milk, eggs, bread, potatoes, tomatoes, cucumbers, bananas, cheese, pasta, olive oil, coffee, toothpaste, laundry detergent.",
+        "de": "Milch, Eier, Brot, Kartoffeln, Tomaten, Gurken, Bananen, Käse, Nudeln, Olivenöl, Kaffee, Zahnpasta, Waschmittel.",
+    }.get(language_code, "")
     names = []
     for value in catalog:
         value = " ".join(str(value).split())
@@ -42,7 +44,7 @@ def transcribe(
 ) -> str:
     if type(max_seconds) is not int or not 1 <= max_seconds <= 120:
         raise ValueError("Invalid audio duration limit")
-    if language_code not in ("uk", "en"):
+    if language_code not in ("uk", "en", "de"):
         raise ValueError("Invalid language")
     request_started=time.monotonic()
     with tempfile.TemporaryDirectory(prefix="shopping-voice-") as directory:
@@ -58,7 +60,7 @@ def transcribe(
                 check=True, timeout=60, capture_output=True,
             )
             if wav.stat().st_size > max_seconds * 16000 * 2 + 4096:
-                raise SpeechError(f'Audio limit: {max_seconds} seconds.' if language.get() == 'en' else f'Ліміт аудіо: {max_seconds} секунд.')
+                raise SpeechError(tr('Ліміт аудіо: {seconds} секунд.').format(seconds=max_seconds))
             prompt=shopping_prompt(language_code,vocabulary) if shopping_context else ''
             def local_recognize(path,prefix):
                 if not whisper_cli.is_file() or not whisper_model.is_file():

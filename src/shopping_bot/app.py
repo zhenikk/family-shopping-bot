@@ -8,7 +8,7 @@ from .support import Support
 from .version import release, configure_logging
 from .limits import RateLimiter, VoiceAdmission
 from .analytics import Analytics
-from .i18n import tr, language, CategoryLabels
+from .i18n import tr, language, CategoryLabels, LANGUAGES
 
 import hmac
 import json
@@ -49,6 +49,8 @@ CATEGORIES = CategoryLabels(CATEGORIES)
 
 
 def count_items(count: int, lang: str) -> str:
+    if lang == 'de':
+        return f"{count} Artikel"
     if lang == 'en':
         return f"{count} item" + ('' if count == 1 else 's')
     tail, tens = count % 10, count % 100
@@ -239,7 +241,7 @@ class ShoppingBot:
 
     def show_help(self, user_id, chosen=None, role='c', step=0, message=None):
         chosen = chosen or self.families.preference(user_id) or 'uk'
-        if chosen not in ('uk', 'en') or role not in ('c', 'j') or type(step) is not int or not 0 <= step < 6:
+        if chosen not in LANGUAGES or role not in ('c', 'j') or type(step) is not int or not 0 <= step < 6:
             return
         content = json.loads(Path(__file__).with_name('help.json').read_text())[chosen]
         item = content['steps'][role][step]
@@ -251,9 +253,9 @@ class ShoppingBot:
         if step < 5:
             navigation.append((content['next'], f'help:{chosen}:{role}:{step+1}'))
         if step == 5:
-            navigation.append(('Start again ↺' if chosen == 'en' else 'На початок ↺', f'help:{chosen}:{role}:0'))
+            navigation.append((content['again'], f'help:{chosen}:{role}:0'))
         rows.append(navigation)
-        rows.append([('🇺🇦 UA', f'help:uk:{role}:{step}'), ('🇬🇧 EN', f'help:en:{role}:{step}')])
+        rows.append([('🇺🇦 UA', f'help:uk:{role}:{step}'), ('🇬🇧 EN', f'help:en:{role}:{step}'), ('🇩🇪 DE', f'help:de:{role}:{step}')])
         markup = buttons(*(row for row in rows if row))
         url = os.getenv('SHOPPING_WEB_URL', '').rstrip('/')
         anchor = self.families.ui_panel(user_id, 'help')
@@ -310,7 +312,7 @@ class ShoppingBot:
                 LOG.info('Old panel could not be removed')
 
     def show_language(self,user_id):
-        self.send(user_id,'Оберіть мову / Choose your language',reply_markup=buttons([('🇺🇦 Українська','language:uk'),('🇬🇧 English','language:en')], [('📖 Як користуватися / Help', 'help:uk:c:0')]))
+        self.send(user_id,'Оберіть мову / Choose your language / Sprache wählen',reply_markup=buttons([('🇺🇦 Українська','language:uk'),('🇬🇧 English','language:en')], [('🇩🇪 Deutsch','language:de'), ('📖 Help / Довідка', 'help:uk:c:0')]))
 
     def menu(self) -> dict:
         return {
@@ -325,7 +327,7 @@ class ShoppingBot:
         if not url.startswith("https://"):
             return False
         try:
-            self.telegram.call('setChatMenuButton',chat_id=user_id,menu_button={'type':'web_app','text':'Shopping' if language.get()=='en' else 'Покупки','web_app':{'url':url}})
+            self.telegram.call('setChatMenuButton',chat_id=user_id,menu_button={'type':'web_app','text':tr('Покупки'),'web_app':{'url':url}})
         except TelegramError:
             LOG.warning('Could not update personal app menu')
         return True
@@ -368,24 +370,22 @@ class ShoppingBot:
         if type(user_id) is not int or user.get("is_bot") or not query_id:
             return
         registered = self.bind_user(user_id)
-        english = language.get() == "en"
         username = self.telegram.call("getMe")["username"]
         def answer(text):
             self.telegram.call("answerGuestQuery", guest_query_id=query_id, result={
                 "type": "article", "id": "shopping", "title": "Shopping list",
                 "input_message_content": {"message_text": text},
                 "reply_markup": {"inline_keyboard": [[{
-                    "text": "Open bot" if english else "Відкрити бота",
+                    "text": tr("Відкрити бота"),
                     "url": f"https://t.me/{username}",
                 }]]},
             })
         if not registered:
-            answer("Open the bot and create or join a list first." if english else
-                   "Спочатку відкрийте бота та створіть список або приєднайтеся до нього.")
+            answer(tr("Спочатку відкрийте бота та створіть список або приєднайтеся до нього."))
             return
         voice = message.get("voice") or message.get("reply_to_message", {}).get("voice")
         raw = re.sub(r"@" + re.escape(username) + r"\b", "", message.get("text") or "", flags=re.IGNORECASE).strip()
-        for prefix in ("додай ", "додати ", "add "):
+        for prefix in ("додай ", "додати ", "add ", "füge ", "kauf "):
             if raw.lower().startswith(prefix):
                 raw = raw[len(prefix):].strip()
                 break
@@ -393,11 +393,9 @@ class ShoppingBot:
             original = message.get("reply_to_message", {})
             raw = (original.get("text") or original.get("caption") or "").strip()
         if not voice and (not raw or len(raw) > 4000):
-            answer("Mention me with your items, or reply to a voice message with my @username." if english else
-                   "Згадайте мене разом зі списком товарів або відповідайте на голосове моїм @username.")
+            answer(tr("Згадайте мене разом зі списком товарів або відповідайте на голосове моїм @username."))
             return
-        answer("I’ll send a draft to your private chat with the bot. Confirm it there." if english else
-               "Надішлю чернетку в особистий чат із ботом. Підтвердьте її там.")
+        answer(tr("Надішлю чернетку в особистий чат із ботом. Підтвердьте її там."))
         self.analytics.record("guest_voice" if voice else "guest_text", user)
         if voice:
             self.queue_voice(user_id, voice["file_id"],message_id=message.get("message_id"))
@@ -651,7 +649,7 @@ class ShoppingBot:
                 submit_jev(self.analytics,user_id,draft_id,item)
 
     def purchase_label(self, uk, en):
-        return en if language.get() == 'en' else uk
+        return tr(uk)
 
     def show_purchase_draft(self, user_id, draft_id, panel_id=None):
         items = self.store.draft(user_id, draft_id) or []
@@ -727,17 +725,18 @@ class ShoppingBot:
         self.show_draft_item(user_id, draft_id, key, panel_id)
 
     def send_shopping_shortcut(self, user_id, *, instructions=True, key=None, audio=True):
-        shortcut_files = {'uk': 'Shopping.shortcut', 'en': 'Shopping-en.shortcut'}
+        # ponytail: German users get the English shortcut; it only records audio, recognition follows the bot language.
+        shortcut_files = {'uk': 'Shopping.shortcut', 'en': 'Shopping-en.shortcut', 'de': 'Shopping-en.shortcut'}
         selected_language = self.families.preference(user_id) or 'uk'
         path = Path(__file__).with_name('web') / shortcut_files.get(selected_language, shortcut_files['uk'])
-        extra = {'reply_markup': buttons([('Set up Shopping' if language.get() == 'en' else 'Налаштувати Shopping', 'shopping:key')])}
+        extra = {'reply_markup': buttons([(tr('Налаштувати Shopping'), 'shopping:key')])}
         if key:
-            extra = {'protect_content': True, 'reply_markup': {'inline_keyboard': [[{'text': 'Copy key' if language.get() == 'en' else 'Скопіювати ключ', 'copy_text': {'text': 'Bearer ' + key}}]]}}
+            extra = {'protect_content': True, 'reply_markup': {'inline_keyboard': [[{'text': tr('Скопіювати ключ'), 'copy_text': {'text': 'Bearer ' + key}}]]}}
         if audio:
-            extra['caption'] = ('Copy key, import Shopping. Siri runs Shopping → Shortcuts opens → record, tap to stop (max 60 sec). Recognition uses your bot language. New key replaces the previous one. /shoppingoff revokes access.' if language.get() == 'en' else 'Скопіюй ключ, імпортуй Shopping. Siri запускає Shopping → відкриваються Команди → говори й натисни стоп (до 60 с). Мова розпізнавання — як у боті. Новий ключ замінює попередній. /shoppingoff вимикає доступ.')
+            extra['caption'] = tr('Скопіюй ключ, імпортуй Shopping. Siri запускає Shopping → відкриваються Команди → говори й натисни стоп (до 60 с). Мова розпізнавання — як у боті. Новий ключ замінює попередній. /shoppingoff вимикає доступ.')
         custom_caption = extra.pop('caption', None)
         result = self.telegram.call('sendDocument', chat_id=user_id, document=path,
-                                    caption=custom_caption or (('1. Copy key below. 2. Open this file in Shortcuts and paste it when prompted. New key created; the previous key is revoked. Valid for 30 days. /shoppingoff revokes access.' if language.get() == 'en' else '1. Натисни «Скопіювати ключ». 2. Відкрий цей файл у Командах і встав ключ під час імпорту. Новий ключ створено, попередній відкликано. Діє 30 днів. /shoppingoff вимикає доступ.') if key else ('Tap Set up Shopping to create a key, then copy it and open this file in Shortcuts. Already configured? Open the file directly.' if language.get() == 'en' else 'Натисни «Налаштувати Shopping», створи й скопіюй ключ, потім відкрий цей файл у Командах. Якщо ключ уже є — відкрий файл одразу.')), **extra)
+                                    caption=custom_caption or (tr('1. Натисни «Скопіювати ключ». 2. Відкрий цей файл у Командах і встав ключ під час імпорту. Новий ключ створено, попередній відкликано. Діє 30 днів. /shoppingoff вимикає доступ.') if key else tr('Натисни «Налаштувати Shopping», створи й скопіюй ключ, потім відкрий цей файл у Командах. Якщо ключ уже є — відкрий файл одразу.')), **extra)
         previous = self.families.ui_panel(user_id, 'shopping-document')
         self.families.save_ui_panel(user_id, 'shopping-document', result['message_id'], True, 'template')
         if previous:
@@ -747,7 +746,7 @@ class ShoppingBot:
     def queue_voice(self,user_id,file_id,note_product_id=None,*,message_id=None,uploaded_path=None):
         if not self.voice_limits.allow(user_id) or not self.voice_admission.acquire(user_id):
             self.voice_metrics.reject()
-            self.send(user_id, 'Voice queue is busy. Try again in a minute.' if language.get() == 'en' else 'Голосова черга зайнята. Спробуй за хвилину.')
+            self.send(user_id, tr('Голосова черга зайнята. Спробуй за хвилину.'))
             return False
         metric_token=self.voice_metrics.enqueue()
         started=threading.Event()
@@ -887,7 +886,7 @@ class ShoppingBot:
 
     def save_photo(self, user_id: int, raw_name: str, file_id: str) -> None:
         if not self.photo_limits.allow(user_id):
-            self.send(user_id, 'Too many photos. Try again later.' if language.get() == 'en' else 'Забагато фото. Спробуй пізніше.')
+            self.send(user_id, tr('Забагато фото. Спробуй пізніше.'))
             return
         items = parse_items(raw_name, split_conjunctions=False)
         if len(items) != 1:
@@ -1075,10 +1074,9 @@ class ShoppingBot:
             language.set(self.families.preference(partner['user_id']) or 'uk')
             if items:
                 # Push preview: one line with the count and a few names; the full list folds inside the chat.
-                english = language.get() == 'en'
-                text = f"{html.escape(actor)}{tr(' купив(ла) ')}{count_items(len(items), 'en' if english else 'uk')}\n{html.escape(', '.join(items[:3]))}"
+                text = f"{html.escape(actor)}{tr(' купив(ла) ')}{count_items(len(items), language.get())}\n{html.escape(', '.join(items[:3]))}"
                 if len(items) > 3:
-                    text += f" + {len(items) - 3} more" if english else f" + ще {len(items) - 3}"
+                    text += f"{tr(' + ще ')}{len(items) - 3}"
                     text += "\n<blockquote expandable>" + "\n".join(html.escape(name) for name in items[:60]) + "</blockquote>"
             else:
                 text = f"{html.escape(actor)}{tr('ui_6c75f0a9b94a')}"
@@ -1220,7 +1218,7 @@ class ShoppingBot:
             return
         if query.get('data','').startswith('language:'):
             chosen=query['data'].split(':',1)[1]
-            if chosen not in ('uk','en'):
+            if chosen not in LANGUAGES:
                 return
             self.families.set_language(user_id,chosen)
             self.bind_user(user_id)
@@ -1228,7 +1226,7 @@ class ShoppingBot:
             start=self.families.pending_start(user_id)
             self.clear_pending(user_id)
             if self.families.family(user_id):
-                self.send(user_id,'Language: English' if chosen=='en' else 'Мова: українська',reply_markup=self.menu())
+                self.send(user_id,{'uk':'Мова: українська','en':'Language: English','de':'Sprache: Deutsch'}[chosen],reply_markup=self.menu())
             if self.families.family(user_id) or start.startswith('/start invite_'):
                 self.handle_message({'from':user,'chat':message['chat'],'text':start or '/start'})
                 return
@@ -1285,8 +1283,8 @@ class ShoppingBot:
                 self.send_shopping_shortcut(user_id)
                 answer = tr("Файл надіслано в чат.")
             elif data == 'shopping:key':
-                caption = 'Create a key in this private Telegram chat? It will be stored in the copy button. The previous key will stop working.' if language.get() == 'en' else 'Створити ключ у цьому особистому чаті Telegram? Він зберігатиметься в кнопці копіювання. Попередній ключ перестане працювати.'
-                markup = buttons([('Create key' if language.get() == 'en' else 'Створити ключ', 'shopping:key-confirm')])
+                caption = tr('Створити ключ у цьому особистому чаті Telegram? Він зберігатиметься в кнопці копіювання. Попередній ключ перестане працювати.')
+                markup = buttons([(tr('Створити ключ'), 'shopping:key-confirm')])
                 if message.get('document'):
                     self.telegram.call('editMessageCaption', chat_id=user_id, message_id=panel_id, caption=caption, reply_markup=markup)
                 else:

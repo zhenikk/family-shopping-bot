@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import http.client
 import json
+import re
 import tempfile
 import threading
 import time
@@ -337,7 +338,7 @@ class MiniAppTests(unittest.TestCase):
         status,body=self.request('/api/state',user=55)
         self.assertEqual(json.loads(body)['language'],'en')
         self.assertIn('vegetables',json.loads(body)['categories']['produce'])
-        self.assertEqual(self.request('/api/language',{'language':'de'},user=55)[0],400)
+        self.assertEqual(self.request('/api/language',{'language':'fr'},user=55)[0],400)
         self.assertEqual(self.request('/api/language',{'language':'en'},user=55,auth=False)[0],401)
         self.request('/api/language',{'language':'en'},user=1)
         self.assertEqual(self.bot.families.preference(2),'uk')
@@ -353,6 +354,25 @@ class MiniAppTests(unittest.TestCase):
         status,body=self.request('/app.js?lang=en',auth=False)
         self.assertEqual(status,200)
         self.assertIn(b'Add to the list?',body)
+
+    def test_german_mini_app_help_and_preference(self):
+        status,_=self.request('/api/language',{'language':'de'},user=56)
+        self.assertEqual(status,200)
+        self.assertEqual(self.bot.families.preference(56),'de')
+        status,body=self.request('/?lang=de',auth=False)
+        self.assertEqual(status,200)
+        self.assertIn(b'lang="de"',body)
+        self.assertIn('<title>Einkäufe</title>'.encode(),body)
+        self.assertIn(b'app.js?lang=de',body)
+        status,body=self.request('/app.js?lang=de',auth=False)
+        self.assertIn('Zur Liste hinzufügen?'.encode(),body)
+        # Allowed Ukrainian: the language name, the trilingual language prompt and demo member names.
+        text=body.decode()
+        for allowed in ('Українська','Оберіть мову','Олена','Іван'):
+            text=text.replace(allowed,'')
+        self.assertIsNone(re.search('[\u0400-\u04FF]',text),'German app script must not contain Ukrainian UI text')
+        for path in ('/help/de-c-3.png','/help?lang=de','/admin?lang=de'):
+            self.assertEqual(self.request(path,auth=False)[0],200,path)
 
     def test_admin_auth_sessions_privacy_and_successful_purchase_counts(self):
         self.bot.admin_ids={1}

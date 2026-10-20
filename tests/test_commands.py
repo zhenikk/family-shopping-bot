@@ -7,7 +7,7 @@ class CommandsTests(unittest.TestCase):
     def test_shortcuts_registered_in_all_private_chat_languages(self):
         telegram = FakeTelegram()
         register_commands(telegram)
-        self.assertEqual(len(telegram.calls), 3)
+        self.assertEqual(len(telegram.calls), 4)
         for method, params in telegram.calls:
             self.assertEqual(method, 'setMyCommands')
             self.assertEqual(params['scope'], {'type': 'all_private_chats'})

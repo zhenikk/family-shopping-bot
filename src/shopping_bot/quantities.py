@@ -1,8 +1,10 @@
 """Conservative quantity prefixes; packaging stays in the editable note."""
 import re
 from .product_names import LOOKUP, normalized_name
+from .i18n import language
 
-NUMBERS = {'один':'1','одна':'1','одне':'1','одну':'1','два':'2','дві':'2','три':'3','чотири':'4','п’ять':'5',"п'ять":'5','шість':'6','сім':'7','вісім':'8','дев’ять':'9','десять':'10','one':'1','two':'2','three':'3','four':'4','five':'5'}
+NUMBERS = {'один':'1','одна':'1','одне':'1','одну':'1','два':'2','дві':'2','три':'3','чотири':'4','п’ять':'5',"п'ять":'5','шість':'6','сім':'7','вісім':'8','дев’ять':'9','десять':'10','one':'1','two':'2','three':'3','four':'4','five':'5',
+           'ein':'1','eine':'1','einen':'1','eins':'1','zwei':'2','drei':'3','vier':'4','fünf':'5','sechs':'6','sieben':'7','acht':'8','neun':'9','zehn':'10'}
 UNITS = {
     'буханка':'буханки','буханку':'буханки','буханки':'буханки','буханок':'буханок',
     'пачка':'пачки','пачку':'пачки','пачки':'пачки','пачок':'пачок',
@@ -13,7 +15,12 @@ UNITS = {
     'кілограм':'кг','кілограми':'кг','кілограмів':'кг','кг':'кг','грам':'г','грамів':'г','г':'г',
     'шт':'шт.','штуки':'шт.','штук':'шт.','pack':'packs','packs':'packs',
     'loaf':'loaves','loaves':'loaves','bottle':'bottles','bottles':'bottles','litre':'l','litres':'l','kg':'kg','g':'g',
+    'flasche':'Flaschen','flaschen':'Flaschen','packung':'Packungen','packungen':'Packungen','packe':'Packungen',
+    'dose':'Dosen','dosen':'Dosen','glas':'Gläser','gläser':'Gläser','laib':'Laibe','laibe':'Laibe',
+    'liter':'l','kilo':'kg','kilogramm':'kg','gramm':'g','stück':'Stk.',
 }
+SINGULAR = {'буханки':'буханка', 'пачки':'пачка', 'упаковки':'упаковка', 'пляшки':'пляшка', 'packs':'pack', 'loaves':'loaf', 'bottles':'bottle',
+            'Flaschen':'Flasche', 'Packungen':'Packung', 'Dosen':'Dose', 'Gläser':'Glas', 'Laibe':'Laib'}
 
 def quantity_note(name, note=None):
     words = name.strip().split()
@@ -42,15 +49,16 @@ def quantity_note(name, note=None):
     if unit is None and normalized_name(base) not in LOOKUP:
         return name, note
     if amount == '1':
-        unit = {'буханки':'буханка', 'пачки':'пачка', 'упаковки':'упаковка', 'пляшки':'пляшка', 'packs':'pack', 'loaves':'loaf', 'bottles':'bottle'}.get(unit, unit)
-    quantity = amount + ' ' + (unit or ('pcs' if re.search('[a-z]', name, re.I) else 'шт.'))
+        unit = SINGULAR.get(unit, unit)
+    latin_piece = 'Stk.' if language.get() == 'de' else 'pcs'
+    quantity = amount + ' ' + (unit or (latin_piece if re.search('[a-z]', name, re.I) else 'шт.'))
     return ' '.join(words), '; '.join(value for value in (quantity, note) if value)
 
 def merge_note(incoming, existing):
     if not incoming:
         return existing or ''
     # A new quantity replaces only the old quantity, retaining descriptive notes.
-    prefix = re.compile(r'^\d+(?:[.,]\d+)?\s+(?:' + '|'.join(re.escape(x) for x in set(UNITS.values()) | {'pcs', 'буханка', 'пачка', 'упаковка', 'пляшка', 'pack', 'loaf', 'bottle'}) + r')(?=;|$)\s*;?\s*', re.I)
+    prefix = re.compile(r'^\d+(?:[.,]\d+)?\s+(?:' + '|'.join(re.escape(x) for x in set(UNITS.values()) | set(SINGULAR.values()) | {'pcs', 'Stk.'}) + r')(?=;|$)\s*;?\s*', re.I)
     if prefix.match(incoming):
         previous = prefix.sub('', existing or '')
         if previous and previous not in incoming:
@@ -61,7 +69,7 @@ def merge_note(incoming, existing):
 
 def product_variant(name, note=None):
     """Dietary requirements distinguish products, unlike packaging or store notes."""
-    pattern = r'\b(?:без\s+(?:лактози|глютену|цукру)|lactose[- ]free|gluten[- ]free|sugar[- ]free)\b'
+    pattern = r'\b(?:без\s+(?:лактози|глютену|цукру)|lactose[- ]free|gluten[- ]free|sugar[- ]free|laktosefrei|glutenfrei|zuckerfrei|ohne\s+(?:laktose|gluten|zucker))\b'
     modifiers = re.findall(pattern, note or '', flags=re.I)
     for modifier in modifiers:
         if modifier.casefold() not in name.casefold():

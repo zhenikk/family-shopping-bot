@@ -59,6 +59,25 @@ WORDS["pets"] = "корм наповнювач повідець нашийник
 WORDS["home"] = "лампочка батарейки горщик ґрунт добриво губки lamp bulb batteries pot soil fertilizer pilhas lâmpada vaso terra adubo"
 WORDS["auto"] = "омивач автошампунь антифриз двірники склоомивач washer antifreeze coolant wipers lava vidros anticongelante"
 
+GERMAN_WORDS = {
+    "produce": "kartoffel kartoffeln tomate tomaten gurke gurken karotte karotten möhre möhren zwiebel zwiebeln knoblauch brokkoli kohl salat paprika zucchini apfel äpfel banane bananen orange orangen mandarine mandarinen zitrone zitronen trauben weintrauben erdbeeren birne birnen avocado obst gemüse",
+    "dairy": "milch käse joghurt quark sahne schmand butter ei eier kefir frischkäse",
+    "meat": "hähnchen hühnchen huhn rindfleisch schweinefleisch hackfleisch fleisch fisch lachs thunfisch wurst würstchen schinken speck pute",
+    "bakery": "brot brötchen croissant toast baguette",
+    "pantry": "reis nudeln mehl zucker bohnen linsen haferflocken müsli",
+    "spices": "salz pfeffer gewürz gewürze soße sauce ketchup mayonnaise senf essig öl olivenöl",
+    "drinks": "wasser kaffee tee saft bier wein limonade",
+    "frozen": "eis speiseeis pizza tiefkühlpizza",
+    "snacks": "schokolade kekse chips nüsse bonbons süßigkeiten",
+    "cleaning": "waschmittel spülmittel weichspüler reiniger bleiche",
+    "care": "shampoo seife deodorant zahnpasta zahnbürste windeln",
+    "pets": "hundefutter katzenfutter katzenstreu tierfutter",
+    "home": "glühbirne batterien blumenerde dünger schwamm",
+    "auto": "scheibenwischer frostschutz",
+}
+for category,words in GERMAN_WORDS.items():
+    WORDS[category] += ' ' + words
+
 def normalize(text):
     return unicodedata.normalize("NFKC", text).casefold().translate(str.maketrans({"’":"", "ʼ":"", "'":"", "`":""}))
 

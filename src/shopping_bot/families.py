@@ -90,7 +90,7 @@ class Families:
             return row[0] if row else None
 
     def set_language(self,user_id,value):
-        if value not in ('uk','en'):
+        if value not in ('uk','en','de'):
             raise ValueError('Invalid language')
         with self.write(),self.db() as db:
             db.execute("INSERT INTO preferences(user_id,language) VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET language=excluded.language",(user_id,value))
@@ -151,8 +151,9 @@ class Families:
             db.execute('ATTACH DATABASE ? AS family_data',(store.path,))
             db.execute('BEGIN IMMEDIATE')
             if not legacy:
-                english = self.preference(user_id) == 'en'
-                title = (('My shopping' if english else 'Мої покупки') if mode == 'solo' else ('Shared shopping' if english else 'Спільні покупки')) if mode else ('Family ' if english else 'Сім’я ') + name[:40]
+                titles = {'uk': ('Мої покупки', 'Спільні покупки', 'Сім’я '), 'en': ('My shopping', 'Shared shopping', 'Family '), 'de': ('Meine Einkäufe', 'Gemeinsame Einkäufe', 'Familie ')}
+                solo, shared, family = titles.get(self.preference(user_id), titles['uk'])
+                title = (solo if mode == 'solo' else shared) if mode else family + name[:40]
                 db.execute('INSERT INTO families(id,invite,name,owner_id) VALUES (?,?,?,?)',(family_id,secrets.token_urlsafe(24),title,user_id))
             db.execute('INSERT OR REPLACE INTO family_data.members VALUES (?,?,?)',(user_id,name[:80],now()))
             db.execute('INSERT INTO users VALUES (?,?)',(user_id,family_id))

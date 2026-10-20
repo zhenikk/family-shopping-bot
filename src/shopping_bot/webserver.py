@@ -403,23 +403,26 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                 assets.update({'/Shopping.shortcut': ('Shopping.shortcut', 'application/octet-stream'), '/shopping-setup.css': ('shopping-setup.css', 'text/css; charset=utf-8'), '/shopping-setup': ('shopping-setup.html', 'text/html; charset=utf-8'), '/shopping-setup.js': ('shopping-setup.js', 'text/javascript; charset=utf-8')})
                 # help.json is the single source of guide text for the bot and the web page.
                 assets.update({'/help': ('help.html', 'text/html; charset=utf-8'), '/help.css': ('help.css', 'text/css; charset=utf-8'), '/help.js': ('help.js', 'text/javascript; charset=utf-8'), '/help.json': ('../help.json', 'application/json; charset=utf-8')})
-                assets.update({f'/help/{lang}-{role}-{step}.png': (f'help/{lang}-{role}-{step}.png', 'image/png') for lang in ('uk', 'en') for role in ('c', 'j') for step in range(6)})
+                assets.update({f'/help/{lang}-{role}-{step}.png': (f'help/{lang}-{role}-{step}.png', 'image/png') for lang in ('uk', 'en', 'de') for role in ('c', 'j') for step in range(6)})
                 if path in assets:
                     filename, mime = assets[path]
-                    chosen='en' if dict(parse_qsl(urlsplit(self.path).query)).get('lang')=='en' else 'uk'
-                    if chosen=='en' and filename in ('index.html','app.js','admin.html','admin.js'):
-                        filename=filename.replace('.', '.en.', 1)
+                    requested=dict(parse_qsl(urlsplit(self.path).query)).get('lang')
+                    chosen=requested if requested in ('en','de') else 'uk'
+                    # ponytail: the owner-only admin page has no German build; German falls back to English there.
+                    built=chosen if filename in ('index.html','app.js') else 'en' if chosen!='uk' else 'uk'
+                    if built!='uk' and filename in ('index.html','app.js','admin.html','admin.js'):
+                        filename=filename.replace('.', '.'+built+'.', 1)
                     data = (STATIC / filename).read_bytes()
-                    if filename in ("index.html","index.en.html","admin.html","admin.en.html"):
+                    if filename in ("index.html","index.en.html","index.de.html","admin.html","admin.en.html"):
                         for asset in (("admin.js","admin.css") if filename in ("admin.html","admin.en.html") else ("app.js", "style.css")):
-                            asset_file=asset.replace(".",".en.",1) if chosen=="en" and asset in ("app.js","admin.js") else asset
+                            asset_file=asset.replace(".","."+built+".",1) if built!="uk" and asset in ("app.js","admin.js") else asset
                             version = hashlib.sha256((STATIC / asset_file).read_bytes()).hexdigest()[:12]
                             data = data.replace(("/" + asset).encode(), ("/" + asset + "?lang=" + (chosen or "uk") + "&v=" + version).encode())
                     if filename == 'help.html':
                         for asset in ('help.css', 'help.js'):
                             version = hashlib.sha256((STATIC / asset).read_bytes()).hexdigest()[:12]
                             data = data.replace(('/' + asset).encode(), ('/' + asset + '?v=' + version).encode())
-                    self.respond(200, data, mime, "no-store" if filename == "help.html" or filename in ("index.html","index.en.html","admin.html","admin.en.html") else "public, max-age=31536000, immutable")
+                    self.respond(200, data, mime, "no-store" if filename == "help.html" or filename in ("index.html","index.en.html","index.de.html","admin.html","admin.en.html") else "public, max-age=31536000, immutable")
                     return
                 user_id=self.authenticated_user()
                 if path.startswith('/api/admin/'):

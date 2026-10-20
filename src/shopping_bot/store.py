@@ -30,10 +30,12 @@ def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str,
     raw = re.sub(r'::[^,\n]*', lambda match: match[0].replace(';', '\ue000'), raw)
     # Match whole conversational prefixes, not arbitrary words inside product names.
     greeting = r'(?:(?:привіт|добрий день|доброго дня|hi|hello)[,!. ]+)?'
+    # German requests: a greeting, "kauf bitte …" or "wir brauchen …" never become products.
+    raw = re.sub(r'^\s*(?:hallo|guten\s+(?:tag|morgen|abend))[,!. ]+', '', raw, flags=re.I)
     raw = re.sub(r'^\s*' + greeting + r'(?:(?:я|ми)\s+)?не\s+(?:хочу|хочемо|хотів|хотіла)\s+(?:б\s+)?купити\s+[^,;\n]+(?:[,;\n]|$)', '', raw, flags=re.I)
     raw = re.sub(r'^\s*' + greeting + r'(?:(?:(?:я|ми)\s+)?(?:хочу|хочемо|хотів|хотіла)\s+(?:б\s+)?купити|(?:i|we)\s+(?:want\s+to|would\s+like\s+to)\s+buy)\s+', '', raw, flags=re.I)
     trip_store = None
-    command = re.search(r"\b(?:купи|купіть|купити|buy)\s+", raw, flags=re.I)
+    command = re.search(r"\b(?:купи|купіть|купити|buy|kauf|kaufe)\s+", raw, flags=re.I)
     if command:
         prelude = raw[:command.start()]
         stores = {"Mercadona": r"меркадон\w*|міркадон\w*|mercadona", "Lidl": r"лідл\w*|lidl", "Auchan": r"ашан\w*|auchan"}
@@ -47,10 +49,10 @@ def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str,
         r"^\s*(?:сьогодні\s+)?(?:(?:мені|нам)\s+)?(?:треба|потрібно)\s+(?:купити|взяти)\s+",
         "", raw, flags=re.I,
     )
-    raw = re.sub(r"^\s*(?:(?:please\s+)?buy|(?:today\s+)?(?:we|i)\s+need(?:\s+to\s+buy)?|купи|купіть)\s+", "", raw, flags=re.I)
+    raw = re.sub(r"^\s*(?:(?:please\s+)?buy|(?:today\s+)?(?:we|i)\s+need(?:\s+to\s+buy)?|купи|купіть|(?:bitte\s+)?(?:kauf|kaufe)(?:\s+bitte)?|(?:heute\s+)?(?:wir|ich)\s+brauche[n]?(?:\s+noch)?)\s+", "", raw, flags=re.I)
     separator = r"[,;\n]+|(?<=[.!?])\s+"
     if split_conjunctions:
-        separator += r"|\s+(?:і|й|та|e|and)\s+"
+        separator += r"|\s+(?:і|й|та|e|and|und)\s+"
     parts = re.split(separator, raw, flags=re.I)
     result: list[tuple[str, str | None]] = []
     seen: set[str] = set()
@@ -58,18 +60,20 @@ def parse_items(raw: str, *, split_conjunctions: bool = True) -> list[tuple[str,
         part = part.replace('\ue000', ';').strip(" .!?:\t\r\n")
         if re.match(r"^(?:не\s+(?:купи|купуй|купуйте|треба|потрібно)|don['’]t\s+buy|do\s+not\s+buy)\b", part, re.I):
             continue
-        if re.fullmatch(r'(?:ні|no)', part, re.I):
+        if re.fullmatch(r'(?:ні|no|nein)', part, re.I):
             if result:
                 removed = result.pop()
                 seen.discard(key_for(removed[0]))
             continue
-        part = re.sub(r'^(?:краще|rather|instead)\s+', '', part, flags=re.I)
-        part = re.sub(r'^(?:купи|купіть|купити|buy|add|додай)\s+', '', part, flags=re.I)
+        part = re.sub(r'^(?:краще|rather|instead|lieber|stattdessen)\s+', '', part, flags=re.I)
+        part = re.sub(r'^(?:купи|купіть|купити|buy|add|додай|kauf|kaufe)\s+', '', part, flags=re.I)
+        if re.match(r'^(?:kein(?:e|en|er|es)?|nicht)\b', part, re.I):
+            continue
         if not part:
             continue
-        part = re.sub(r"^(?:(?:купи|купіть|додай|додайте|buy|add)\s+)?(?:будь ласка[, ]*|please\s+)", "", part, flags=re.I).strip()
+        part = re.sub(r"^(?:(?:купи|купіть|додай|додайте|buy|add)\s+)?(?:будь ласка[, ]*|please\s+|bitte[, ]+)", "", part, flags=re.I).strip()
         part = re.sub(r"\s+(?:(?:мені|нам|вони|це)\s+)*(?:дуже\s+)?(?:треба|потрібн[оі])$", "", part, flags=re.I).strip()
-        if re.fullmatch(r"(?:дуже\s+)?(?:дякую|спасибі|thank you|thanks)(?:\s+(?:тобі|вам|a lot|very much))?", part, flags=re.I) or not part:
+        if re.fullmatch(r"(?:дуже\s+)?(?:дякую|спасибі|thank you|thanks|danke|vielen dank)(?:\s+(?:тобі|вам|a lot|very much|schön|sehr))?", part, flags=re.I) or not part:
             continue
         store = None
         match = re.search(r"\s+@\s*(Mercadona|Lidl|Auchan)\s*$", part, flags=re.I)

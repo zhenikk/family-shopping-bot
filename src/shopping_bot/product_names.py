@@ -36,8 +36,17 @@ ENGLISH_ALIASES = {
     'масло': ('butter',), 'вершки': ('cream',), 'макарони': ('pasta',), 'чіпси': ('chips',),
     'лимони': ('lemon','lemons'), 'апельсини': ('orange','oranges'),
 }
-for canonical,aliases in ENGLISH_ALIASES.items():
-    ALIASES[canonical] = (*ALIASES.get(canonical,()),*aliases)
+GERMAN_ALIASES = {
+    'картопля': ('kartoffel','kartoffeln'), 'картопля фрі': ('pommes','pommes frites'),
+    'помідори': ('tomate','tomaten'), 'огірки': ('gurke','gurken'), 'яйця': ('ei','eier'),
+    'яблука': ('apfel','äpfel'), 'мандарини': ('mandarine','mandarinen'), 'банани': ('banane','bananen'),
+    'хліб': ('brot',), 'молоко': ('milch',), 'морква': ('karotte','karotten','möhre','möhren'),
+    'цибуля': ('zwiebel','zwiebeln'), 'сметана': ('saure sahne','schmand'), 'вершки': ('sahne',),
+    'макарони': ('nudeln',), 'лимони': ('zitrone','zitronen'), 'апельсини': ('orangen',),
+}
+for extra in (ENGLISH_ALIASES, GERMAN_ALIASES):
+    for canonical,aliases in extra.items():
+        ALIASES[canonical] = (*ALIASES.get(canonical,()),*aliases)
 
 def normalized_name(name):
     return " ".join(unicodedata.normalize("NFKC", name).casefold().replace("’", "'").replace("ʼ", "'").split())

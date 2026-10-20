@@ -8,7 +8,7 @@
       "c": [
         {
           "title": "Почніть із мови",
-          "body": "Відкрийте бот і натисніть Start / «Розпочати». Оберіть українську або English.",
+          "body": "Відкрийте бот і натисніть Start / «Розпочати». Оберіть українську, English або Deutsch.",
           "tip": "Мову можна змінити пізніше: /language."
         },
         {
@@ -40,7 +40,7 @@
       "j": [
         {
           "title": "Почніть із мови",
-          "body": "Відкрийте бот і натисніть Start / «Розпочати». Оберіть українську або English.",
+          "body": "Відкрийте бот і натисніть Start / «Розпочати». Оберіть українську, English або Deutsch.",
           "tip": "Мову можна змінити пізніше: /language."
         },
         {
@@ -69,7 +69,8 @@
           "tip": "Щось не працює? /support → опишіть проблему → «Надіслати». Збережіть номер звернення."
         }
       ]
-    }
+    },
+    "again": "На початок ↺"
   },
   "en": {
     "creator": "I’m creating a list",
@@ -80,7 +81,7 @@
       "c": [
         {
           "title": "Choose your language",
-          "body": "Open the bot and tap Start. Choose Ukrainian or English.",
+          "body": "Open the bot and tap Start. Choose Ukrainian, English or German.",
           "tip": "You can change it later with /language."
         },
         {
@@ -112,7 +113,7 @@
       "j": [
         {
           "title": "Choose your language",
-          "body": "Open the bot and tap Start. Choose Ukrainian or English.",
+          "body": "Open the bot and tap Start. Choose Ukrainian, English or German.",
           "tip": "You can change it later with /language."
         },
         {
@@ -139,6 +140,80 @@
           "title": "Keep the details handy",
           "body": "Send the bot a package photo with the product name in its caption. Edit notes in the product card.",
           "tip": "Something broken? /support → describe the problem → “Send”. Keep your report number."
+        }
+      ]
+    },
+    "again": "Start again ↺"
+  },
+  "de": {
+    "creator": "Ich erstelle eine Liste",
+    "invited": "Ich wurde eingeladen",
+    "back": "← Zurück",
+    "next": "Nächster Schritt →",
+    "again": "Von vorn ↺",
+    "steps": {
+      "c": [
+        {
+          "title": "Wähle deine Sprache",
+          "body": "Öffne den Bot und tippe auf Start. Wähle Deutsch.",
+          "tip": "Ändern kannst du sie später mit /language."
+        },
+        {
+          "title": "Wähle, wie du startest",
+          "body": "Tippe auf „Nur für mich“ für eine eigene Liste oder auf „Mit anderen“ für gemeinsame Einkäufe.",
+          "tip": "Beide Varianten haben alle Funktionen. Einladen kannst du später."
+        },
+        {
+          "title": "Einladen ist freiwillig",
+          "body": "Du kaufst allein ein? Füge sofort Produkte hinzu. Zum Einladen öffne „Familie“ → „Mitglied einladen“.",
+          "tip": "Eine Liste für eine Person hat alle Funktionen. Andere sehen sie erst, wenn sie deine Einladung annehmen."
+        },
+        {
+          "title": "Sag, was du brauchst",
+          "body": "Schick dem Bot einen Text oder eine Sprachnachricht: „Milch, Eier, Brot“. Prüfe den Entwurf und bestätige.",
+          "tip": "Falsch verstanden? Tippe vor dem Bestätigen auf das Produkt und korrigiere es. In der Mini App geht es auch mit +."
+        },
+        {
+          "title": "Öffne deine Einkaufsliste",
+          "body": "Tippe im Bot auf „Einkäufe“ neben dem Eingabefeld. In der Mini App tippst du auf den Kreis neben gekauften Produkten.",
+          "tip": "Das Produkt verschwindet für alle Mitglieder von der Liste. Foto und Notizen bleiben im Katalog."
+        },
+        {
+          "title": "Alles Wichtige zur Hand",
+          "body": "Schick dem Bot ein Foto der Verpackung mit dem Produktnamen als Bildunterschrift oder füge es in der Produktkarte der Mini App hinzu.",
+          "tip": "Etwas funktioniert nicht? /support → Problem beschreiben → „Senden“. Merk dir die Meldungsnummer."
+        }
+      ],
+      "j": [
+        {
+          "title": "Wähle deine Sprache",
+          "body": "Öffne den Bot und tippe auf Start. Wähle Deutsch.",
+          "tip": "Ändern kannst du sie später mit /language."
+        },
+        {
+          "title": "Öffne deine Einladung",
+          "body": "Bitte die andere Person, dir eine Einladung aus „Familie“ zu schicken. Öffne den Link in Telegram.",
+          "tip": "Tritt ihrer Familie bei, um eine Liste zu teilen. Eine zweite Familie brauchst du nicht."
+        },
+        {
+          "title": "Beitritt bestätigen",
+          "body": "Prüfe, wer dich eingeladen hat. Tippe auf „Beitreten“. Unter „Familie“ solltet ihr danach beide stehen.",
+          "tip": "Hast du schon eine eigene Familie, bietet der Bot einen Wechsel an. „Liste übernehmen“ nimmt aktive Einkäufe mit; Katalog und Verlauf bleiben zurück."
+        },
+        {
+          "title": "Sag, was du brauchst",
+          "body": "Schick dem Bot einen Text oder eine Sprachnachricht: „Milch, Eier, Brot“. Prüfe den Entwurf und bestätige.",
+          "tip": "Falsch verstanden? Tippe vor dem Bestätigen auf das Produkt und korrigiere es. In der Mini App geht es auch mit +."
+        },
+        {
+          "title": "Öffne deine Einkaufsliste",
+          "body": "Tippe im Bot auf „Einkäufe“ neben dem Eingabefeld. In der Mini App tippst du auf den Kreis neben gekauften Produkten.",
+          "tip": "Das Produkt verschwindet für alle Mitglieder von der Liste. Foto und Notizen bleiben im Katalog."
+        },
+        {
+          "title": "Alles Wichtige zur Hand",
+          "body": "Schick dem Bot ein Foto der Verpackung mit dem Produktnamen als Bildunterschrift oder füge es in der Produktkarte der Mini App hinzu.",
+          "tip": "Etwas funktioniert nicht? /support → Problem beschreiben → „Senden“. Merk dir die Meldungsnummer."
         }
       ]
     }

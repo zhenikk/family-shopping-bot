@@ -89,7 +89,7 @@ broadcast. Current working-tree implementation needs review/testing before relea
 - Bot: quick capture, confirmation, lightweight list actions, support, notifications.
 - Mini App: richer visual browsing/editing; exact division of responsibilities is
   still a design question. Do not remove it or force it without a reviewed proposal.
-- Ukrainian and English UI; saved language preference should apply consistently.
+- Ukrainian, English and German UI (German added 2026-10-20, 0.5.44); saved language preference should apply consistently.
 - Display product names with initial capital; categories visually distinct.
 - Avoid repeated onboarding for returning users and duplicate current panels.
 - Prefer compact notifications: “Оля купила 6 товарів\nМолоко, виноград, йогурт + ще 3”.

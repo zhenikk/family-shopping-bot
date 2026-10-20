@@ -1,3 +1,7 @@
+## 0.5.44
+
+- German language: Deutsch in the language picker of the bot, Mini App and help page. Every bot and Mini App text has a German translation (translations.de.json, keyed by the Ukrainian source like the English catalog), with German help steps and illustrations, German command descriptions and German family names. Voice recognition and the speech hint run in German. The parser understands German lists: und, greetings and thanks, kauf/bitte/wir brauchen, keine/nicht, nein/lieber corrections, number words, Flaschen/Packungen/Dosen/Gläser/Liter, laktosefrei/glutenfrei/zuckerfrei, "Milch und Eier gekauft". German names share products with Ukrainian and English ones (Milch = молоко = milk) and land in the right aisle. The iOS shortcut and the owner admin page stay English for German users.
+
 ## 0.5.43
 
 - Mini App mobile redesign: colors follow the user's Telegram theme (themeParams, header and background colors), rows are 64 px with a round check in a 52 px target as the one bold element, the add button floats above the tab bar in the thumb zone, search and category chips stay at the top while scrolling, chips and controls are at least 44 px, bottom sheets have a drag handle, swipe-to-close and the primary action pinned above the keyboard (Bought first in the product card). One coherent stylesheet replaces four layers of overrides; no all-caps labels.

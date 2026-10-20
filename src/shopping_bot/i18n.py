@@ -1,21 +1,34 @@
-"""Translate only source-code UI templates, never user content."""
+"""Translate only source-code UI templates, never user content.
+
+Ukrainian is the source language. Each other language has a catalog keyed by the
+Ukrainian text: translations.json (English) and translations.<code>.json.
+"""
 import json
+import re
 from contextvars import ContextVar
 from pathlib import Path
+
+LANGUAGES = ('uk', 'en', 'de')
 language = ContextVar('shopping_language', default='uk')
-MESSAGES = json.loads(Path(__file__).with_name('messages.json').read_text())
-EN = json.loads(Path(__file__).with_name('translations.json').read_text())
-PAIRS = sorted(EN.items(), key=lambda pair: len(pair[0]), reverse=True)
+_HERE = Path(__file__).parent
+MESSAGES = json.loads((_HERE / 'messages.json').read_text())
+EN = json.loads((_HERE / 'translations.json').read_text())
+# ponytail: a key missing from a newer catalog falls back to English, never to Ukrainian; tests require full coverage.
+CATALOGS = {'en': EN, 'de': {**EN, **json.loads((_HERE / 'translations.de.json').read_text())}}
+_PATTERNS = {code: re.compile('|'.join(re.escape(key) for key in sorted(catalog, key=len, reverse=True)))
+             for code, catalog in CATALOGS.items()}
+
 
 def tr(text):
-    text=MESSAGES.get(text,text)
-    if language.get() != 'en':
+    text = MESSAGES.get(text, text)
+    catalog = CATALOGS.get(language.get())
+    if catalog is None:
         return text
-    if text in EN:
-        return EN[text]
+    if text in catalog:
+        return catalog[text]
     # Template fragments may combine an emoji, whitespace and multiple labels.
-    import re
-    return re.sub('|'.join(re.escape(key) for key,_ in PAIRS),lambda match: EN[match[0]],text)
+    return _PATTERNS[language.get()].sub(lambda match: catalog[match[0]], text)
+
 
 class CategoryLabels(dict):
     def __getitem__(self,key):
