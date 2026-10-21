@@ -355,6 +355,13 @@ class MiniAppTests(unittest.TestCase):
         self.assertEqual(status,200)
         self.assertIn(b'Add to the list?',body)
 
+    def test_mini_app_addition_notifies_the_other_member(self):
+        self.bot.telegram.calls.clear()
+        self.assertEqual(self.request('/api/add',{'text':'молоко, хліб'},user=1)[0],200)
+        sent=[p for m,p in self.bot.telegram.calls if m=='sendMessage' and p['chat_id']==2]
+        self.assertEqual(len(sent),1)
+        self.assertIn('2 товари',sent[0]['text'])
+
     def test_german_mini_app_help_and_preference(self):
         status,_=self.request('/api/language',{'language':'de'},user=56)
         self.assertEqual(status,200)

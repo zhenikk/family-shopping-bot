@@ -484,5 +484,6 @@
   "Спочатку відкрийте бота та створіть список або приєднайтеся до нього.": "Öffne zuerst den Bot und erstelle eine Liste oder tritt einer bei.",
   "Згадайте мене разом зі списком товарів або відповідайте на голосове моїм @username.": "Erwähne mich mit deinen Produkten oder antworte mit meinem @username auf eine Sprachnachricht.",
   "Надішлю чернетку в особистий чат із ботом. Підтвердьте її там.": "Ich schicke dir einen Entwurf in den privaten Chat mit dem Bot. Bestätige ihn dort.",
-  "Ліміт аудіо: {seconds} секунд.": "Audio-Limit: {seconds} Sekunden."
+  "Ліміт аудіо: {seconds} секунд.": "Audio-Limit: {seconds} Sekunden.",
+  " додав(ла) ": " hat hinzugefügt: "
 }

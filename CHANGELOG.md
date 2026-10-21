@@ -1,3 +1,8 @@
+## 0.5.45
+
+- Other family members get one message when someone adds products ("Anna added 3 items · Milk, eggs, bread" with Open list); further additions by the same person within 15 minutes edit that message instead of sending new ones. Works for chat drafts, re-adding from the catalog, photos and the Mini App.
+- Fix: bottom sheets with only a body (members, help) collapsed to their header in iOS Telegram; the body no longer uses a zero flex basis.
+
 ## 0.5.44
 
 - German language: Deutsch in the language picker of the bot, Mini App and help page. Every bot and Mini App text has a German translation (translations.de.json, keyed by the Ukrainian source like the English catalog), with German help steps and illustrations, German command descriptions and German family names. Voice recognition and the speech hint run in German. The parser understands German lists: und, greetings and thanks, kauf/bitte/wir brauchen, keine/nicht, nein/lieber corrections, number words, Flaschen/Packungen/Dosen/Gläser/Liter, laktosefrei/glutenfrei/zuckerfrei, "Milch und Eier gekauft". German names share products with Ukrainian and English ones (Milch = молоко = milk) and land in the right aisle. The iOS shortcut and the owner admin page stay English for German users.

@@ -680,6 +680,31 @@ class ShoppingBotTests(unittest.TestCase):
         self.assertEqual(photos[-1]['photo'], path)
         self.assertEqual(self.store.product(product)['photo_file_id'], 'cached-id')
 
+    def test_partner_gets_one_grouped_notice_for_additions(self):
+        self.telegram.calls.clear()
+        self.bot.make_draft(1, 'молоко, яйця')
+        self.bot.handle_callback(callback(1, f'confirm:{self.draft_id_for(1)}'))
+        to_partner = [p for m, p in self.telegram.calls if m == 'sendMessage' and p['chat_id'] == 2]
+        self.assertEqual(len(to_partner), 1)
+        self.assertIn('додав(ла) 2 товари', to_partner[0]['text'])
+        self.assertIn('Молоко', to_partner[0]['text'])
+        self.assertIn('list:bottom', str(to_partner[0]['reply_markup']))
+        notice_id = self.telegram.next_message_id
+        self.telegram.calls.clear()
+        self.bot.make_draft(1, 'хліб')
+        self.bot.handle_callback(callback(1, f'confirm:{self.draft_id_for(1)}'))
+        self.assertFalse(any(m == 'sendMessage' and p['chat_id'] == 2 for m, p in self.telegram.calls), 'Further additions edit the same notice')
+        edited = [p for m, p in self.telegram.calls if m == 'editMessageText' and p.get('chat_id') == 2 and p['message_id'] == notice_id]
+        self.assertIn('3 товари', edited[-1]['text'])
+        self.assertFalse(any('додав' in p.get('text', '') for m, p in self.telegram.calls if p.get('chat_id') == 1))
+
+    def test_no_addition_notice_when_nothing_new_was_added(self):
+        self.store.add_need(self.store.ensure_product('молоко'), 2)
+        self.telegram.calls.clear()
+        self.bot.make_draft(1, 'молоко')
+        self.bot.handle_callback(callback(1, f'confirm:{self.draft_id_for(1)}'))
+        self.assertFalse(any('додав' in p.get('text', '') for m, p in self.telegram.calls if p.get('chat_id') == 2))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)

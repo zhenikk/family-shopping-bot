@@ -88,7 +88,9 @@ class ShoppingBot:
         self.note_panels: dict[int, int] = {}
         self.pending_draft_edits: dict[int, tuple] = {}
         self.pending_family_names: set[int] = set()
-        self.last_purchase: dict[int, tuple] = {}  # user -> (event_id, batch_id, name, monotonic): undo row in the list for 10 minutes
+        self.last_purchase: dict[int, tuple] = {}
+        # ponytail: in memory; after a restart the next addition starts a new notice instead of editing the old one.
+        self.addition_notices: dict[tuple, tuple] = {}  # user -> (event_id, batch_id, name, monotonic): undo row in the list for 10 minutes
         self.draft_sources: dict[int, str] = {}  # ponytail: in-memory transcript per draft; lost on restart, header just omits it
         self.notification_lock = threading.Lock()
         self.update_limits = RateLimiter(30, 1)
@@ -906,6 +908,8 @@ class ShoppingBot:
             f"{tr('ui_54a2c8dccf6a')}{name}{tr('ui_3fa58feabda5')}" +
             (tr('ui_ce35ddc7dd31') if added else tr('ui_8326f110c62b')))
         self.refresh_views()
+        if added:
+            self.notify_added(user_id, [self.store.product(product_id)['name']])
 
     def list_content(self, store_name: str = "", user_id: int | None = None) -> tuple[str, dict]:
         rows = self.store.needs()
@@ -1054,6 +1058,40 @@ class ShoppingBot:
             lines.append(f"{local:%d.%m %H:%M} — {event['actor_name']} {verbs.get(event['action'], event['action'])} "
                          f"{event['product_name']}{suffix}")
         self.panel(user_id, "\n".join(lines), back, message_id)
+
+    def notify_added(self, actor_id: int, names: list[str]) -> None:
+        """Tell the other members what was added: one message per adder, edited for 15 minutes."""
+        if not names:
+            return
+        family = self.family_context.get()
+        partners = [row for row in self.families.members(family) if row['user_id'] != actor_id]
+        actor = self.store.member_name(actor_id)
+        original_language = language.get()
+        with self.notification_lock:
+            for partner in partners:
+                key = (family, actor_id, partner['user_id'])
+                message_id, previous, at = self.addition_notices.get(key, (None, [], 0.0))
+                if time.monotonic() - at > 900:
+                    message_id, previous = None, []
+                combined = previous + [name for name in names if name not in previous]
+                language.set(self.families.preference(partner['user_id']) or 'uk')
+                text = f"{html.escape(actor)}{tr(' додав(ла) ')}{count_items(len(combined), language.get())}\n{html.escape(', '.join(combined[:3]))}"
+                if len(combined) > 3:
+                    text += f"{tr(' + ще ')}{len(combined) - 3}\n<blockquote expandable>" + "\n".join(html.escape(name) for name in combined[:60]) + "</blockquote>"
+                markup = buttons([(tr('ui_80f83082d444'), 'list:bottom')])
+                try:
+                    if message_id:
+                        try:
+                            self.telegram.call("editMessageText", chat_id=partner['user_id'], message_id=message_id, text=text, parse_mode="HTML", reply_markup=markup)
+                        except TelegramError as exc:
+                            if "message is not modified" not in str(exc).lower():
+                                message_id = None
+                    if not message_id:
+                        message_id = self.send(partner['user_id'], text, parse_mode="HTML", reply_markup=markup)['message_id']
+                    self.addition_notices[key] = (message_id, combined, time.monotonic())
+                except TelegramError:
+                    LOG.warning("Could not send addition notice")
+        language.set(original_language)
 
     def notify_partner(self, batch_id: int) -> None:
         # Web requests can arrive concurrently; keep one notification per batch.
@@ -1386,17 +1424,20 @@ class ShoppingBot:
                 if items is None:
                     answer = tr('ui_7db7dd991015')
                 else:
-                    added = 0
+                    added_names = []
                     for item in items:
                         product_id = self.store.ensure_product(item["name"])
                         self.store.set_note(product_id, item["note"])
                         self.store.set_category(product_id, item["category"])
-                        added += self.store.add_need(product_id, user_id)
+                        if self.store.add_need(product_id, user_id):
+                            added_names.append(self.store.product(product_id)['name'])
+                    added = len(added_names)
                     self.analytics.record("products_added",{"id":user_id},value=added)
                     self.panel(user_id, f"{tr('ui_34d3477683e3')}{added}{tr('ui_08e3e9dd9f8c')}{len(items) - added}.",
                                buttons([(tr('ui_80f83082d444'), "list:all")]), panel_id)
                     if items:
                         self.refresh_views()
+                    self.notify_added(user_id, added_names)
             elif action == "cancel" and len(parts) == 2:
                 self.store.cancel_draft(user_id, int(parts[1]))
                 answer = tr('ui_db28b6f53d1f')
@@ -1451,6 +1492,7 @@ class ShoppingBot:
                     self.show_item(user_id, product["id"], panel_id)
                     if added:
                         self.refresh_views()
+                        self.notify_added(user_id, [product['name']])
                 else:
                     answer = tr('ui_5383e75496a0')
             elif action == "categories" and len(parts) == 2:

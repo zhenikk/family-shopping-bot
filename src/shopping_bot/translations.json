@@ -484,5 +484,6 @@
   "Спочатку відкрийте бота та створіть список або приєднайтеся до нього.": "Open the bot and create or join a list first.",
   "Згадайте мене разом зі списком товарів або відповідайте на голосове моїм @username.": "Mention me with your items, or reply to a voice message with my @username.",
   "Надішлю чернетку в особистий чат із ботом. Підтвердьте її там.": "I’ll send a draft to your private chat with the bot. Confirm it there.",
-  "Ліміт аудіо: {seconds} секунд.": "Audio limit: {seconds} seconds."
+  "Ліміт аудіо: {seconds} секунд.": "Audio limit: {seconds} seconds.",
+  " додав(ла) ": " added "
 }

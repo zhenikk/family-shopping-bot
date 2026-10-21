@@ -559,7 +559,13 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                     items = bot.store.resolved_items(str(data.get("text", "")))
                     if not items:
                         raise ValueError("Empty list")
-                    added = sum(bot.store.add_need(bot.store.ensure_product(name, note), user_id) for name, note in items)
+                    added_names = []
+                    for name, note in items:
+                        product_id = bot.store.ensure_product(name, note)
+                        if bot.store.add_need(product_id, user_id):
+                            added_names.append(bot.store.product(product_id)['name'])
+                    added = len(added_names)
+                    bot.notify_added(user_id, added_names)
                     bot.analytics.record("products_added",self.user_profile,value=added)
                     result = {"added": added}
                 elif path == "/api/undo":
@@ -583,6 +589,8 @@ def make_server(bot, token: str, host: str = "127.0.0.1", port: int = 8080):
                         result = {"bought": bought, "event_id": event_id}
                     elif path == "/api/readd":
                         result = {"added": bot.store.add_need(product_id, user_id)}
+                        if result["added"]:
+                            bot.notify_added(user_id, [bot.store.product(product_id)['name']])
                     else:
                         note, category = data.get("note"), data.get("category")
                         if category in ("vegetables", "fruit"):
